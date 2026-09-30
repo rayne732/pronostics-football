@@ -74,6 +74,13 @@
   /* ------------------------------------------------------------ écussons aux couleurs des clubs (pas les logos officiels) */
   // [couleur principale, couleur secondaire, motif : s = uni, v = rayures, h = moitié, b = bandeau]
   var TC = {
+    'Athletico-PR': ['#c8102e', '#16161a', 'v'], 'Atletico-MG': ['#16161a', '#f4f4f4', 'v'], 'Bahia': ['#1a4fb8', '#d42027', 'b'],
+    'Botafogo RJ': ['#16161a', '#f4f4f4', 'v'], 'Bragantino': ['#d42027', '#f4f4f4', 's'], 'Chapecoense-SC': ['#0a8a3c', '#f4f4f4', 's'],
+    'Corinthians': ['#16161a', '#f4f4f4', 's'], 'Coritiba': ['#0a8a3c', '#f4f4f4', 's'], 'Cruzeiro': ['#1a4fb8', '#f4f4f4', 's'],
+    'Flamengo RJ': ['#d42027', '#16161a', 'b'], 'Fluminense': ['#0a7a3a', '#8c1d2c', 'v'], 'Gremio': ['#1a8ad8', '#16161a', 'v'],
+    'Internacional': ['#d42027', '#f4f4f4', 's'], 'Mirassol': ['#f7d117', '#0a8a3c', 's'], 'Palmeiras': ['#0a7a3a', '#f4f4f4', 's'],
+    'Remo': ['#1a3a8a', '#f4f4f4', 'v'], 'Santos': ['#f4f4f4', '#16161a', 's'], 'Sao Paulo': ['#d42027', '#16161a', 'b'],
+    'Vasco': ['#16161a', '#f4f4f4', 'b'], 'Vitoria': ['#d42027', '#16161a', 'v'],
     'Angers': ['#16161a', '#f4f4f4', 'v'], 'Auxerre': ['#1f5fbf', '#f4f4f4', 's'], 'Brest': ['#d42027', '#f4f4f4', 's'],
     'Le Havre': ['#5aa7e0', '#0c2a5a', 's'], 'Le Mans': ['#f2c200', '#d42027', 'v'], 'Lens': ['#e8b10d', '#d42027', 'v'],
     'Lille': ['#d42027', '#1a2a5c', 's'], 'Lorient': ['#f58220', '#16161a', 's'], 'Lyon': ['#1b3a8a', '#d42027', 'h'],
@@ -147,7 +154,7 @@
       '<text x="32" y="37" text-anchor="middle">' + Math.round(p * 100) + '%</text></svg>';
   }
 
-  var LMETA = { F1: ['France', '#2f6bdc', '🇫🇷'], E0: ['Angleterre', '#7c45e0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
+  var LMETA = { BRA: ['Brésil', '#1fa84f', '\uD83C\uDDE7\uD83C\uDDF7'], F1: ['France', '#2f6bdc', '🇫🇷'], E0: ['Angleterre', '#7c45e0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
                 SP1: ['Espagne', '#e2522f', '🇪🇸'], D1: ['Allemagne', '#d6383a', '🇩🇪'],
                 I1: ['Italie', '#1d9d8f', '🇮🇹'], E1: ['Angleterre', '#8a5bd0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'] };
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
@@ -375,7 +382,7 @@
       line('Les deux équipes marquent', bt[0] + ' · ' + pct(bt[1])) +
       '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
       '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
-    h += '<div class="sub">Buts attendus ' + M.lh.toFixed(2) + ' – ' + M.la.toFixed(2) + ' · corners ~' + M.corners.toFixed(1) +
+    h += '<div class="sub">Buts attendus ' + M.lh.toFixed(2) + ' – ' + M.la.toFixed(2) + (M.corners ? ' · corners ~' + M.corners.toFixed(1) : '') +
       (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
     if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
@@ -400,7 +407,7 @@
   function compareHTML(M, d) {
     var t = D.leagues[d.div].g.t, ta = t[d.home] || [0, 0], tb = t[d.away] || [0, 0];
     var f2 = function (x) { return x.toFixed(2); }, f1 = function (x) { return x.toFixed(1); }, r0 = function (x) { return String(Math.round(x)); };
-    var rows = cmpRow('Buts attendus', M.lh, M.la, f2) + cmpRow('Corners attendus', M.ch, M.ca, f1) +
+    var rows = cmpRow('Buts attendus', M.lh, M.la, f2) + (M.corners ? cmpRow('Corners attendus', M.ch, M.ca, f1) : '') +
       cmpRow('Attaque', 100 * Math.exp(ta[0]), 100 * Math.exp(tb[0]), r0) + cmpRow('Défense', 100 * Math.exp(ta[1]), 100 * Math.exp(tb[1]), r0);
     var fa = pts5(d.div, d.home), fb = pts5(d.div, d.away);
     if (fa !== null && fb !== null) rows += cmpRow('Forme (points sur 15)', fa, fb, r0);

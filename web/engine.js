@@ -92,9 +92,12 @@
     var l = lh + la;
     add('Premier but', [[home, lh / l * (1 - Math.exp(-l))], [away, la / l * (1 - Math.exp(-l))], ['Aucun but', Math.exp(-l)]], false, true);
 
-    var cc = lam(L.c, home, away), ct = cc[0] + cc[1];
-    add('Corners (plus)', [7.5, 8.5, 9.5, 10.5, 11.5].map(function (x) { return ['Plus de ' + fx(x) + ' corners', sf(x, ct)]; }));
-    add('Corners (moins)', [8.5, 9.5, 10.5, 11.5, 12.5].map(function (x) { return ['Moins de ' + fx(x) + ' corners', cdf(x, ct)]; }));
+    var cc = [0, 0], ct = 0;
+    if (L.c) {                                          // pas de corners pour tous les championnats
+      cc = lam(L.c, home, away); ct = cc[0] + cc[1];
+      add('Corners (plus)', [7.5, 8.5, 9.5, 10.5, 11.5].map(function (x) { return ['Plus de ' + fx(x) + ' corners', sf(x, ct)]; }));
+      add('Corners (moins)', [8.5, 9.5, 10.5, 11.5, 12.5].map(function (x) { return ['Moins de ' + fx(x) + ' corners', cdf(x, ct)]; }));
+    }
     return { fams: F, lh: lh, la: la, corners: ct, ch: cc[0], ca: cc[1], grid: g, p1x2: [p1, pn, p2], over25: gsum(g, function (i, j) { return i + j > 2.5; }), btts: b };
   }
 

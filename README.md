@@ -1,7 +1,7 @@
 # Pronostics football
 
-Application web installable qui affiche des probabilités et pronostics pour 6 championnats
-(Ligue 1, Premier League, La Liga, Bundesliga, Serie A, Championship), calculés par un modèle statistique
+Application web installable qui affiche des probabilités et pronostics pour 7 championnats
+(Ligue 1, Premier League, La Liga, Bundesliga, Serie A, Championship, Brasileirão ; pas de corners pour le Brésil), calculés par un modèle statistique
 (loi de Poisson, attaque / défense par équipe, avantage du domicile, pondération par date).
 
 > Analyse indicative, pas un conseil de pari. Le test de rentabilité (onglet « Fiabilité ») montre que ce

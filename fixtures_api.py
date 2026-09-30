@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-COMPETITIONS = {"F1": "FL1", "E0": "PL", "SP1": "PD", "D1": "BL1", "I1": "SA", "E1": "ELC"}
+COMPETITIONS = {"F1": "FL1", "E0": "PL", "SP1": "PD", "D1": "BL1", "I1": "SA", "E1": "ELC", "BRA": "BSA"}
 
 # noms de l'API (normalisés) -> noms des CSV
 ALIASES = {
@@ -34,6 +34,10 @@ ALIASES = {
     "fc st pauli 1910": "St Pauli", "sv werder bremen": "Werder Bremen", "fc augsburg": "Augsburg",
     "fc internazionale milano": "Inter", "ac milan": "Milan", "juventus": "Juventus", "as roma": "Roma",
     "ssc napoli": "Napoli", "ss lazio": "Lazio", "atalanta bc": "Atalanta", "hellas verona": "Verona",
+    "botafogo fr": "Botafogo RJ", "ca mineiro": "Atletico-MG", "ca paranaense": "Athletico-PR", "cr flamengo": "Flamengo RJ",
+    "cr vasco da gama": "Vasco", "chapecoense af": "Chapecoense-SC", "clube do remo": "Remo", "coritiba fbc": "Coritiba",
+    "cruzeiro ec": "Cruzeiro", "ec bahia": "Bahia", "ec vitoria": "Vitoria", "gremio fbpa": "Gremio", "rb bragantino": "Bragantino",
+    "sc corinthians paulista": "Corinthians", "sc internacional": "Internacional", "se palmeiras": "Palmeiras",
     "us lecce": "Lecce", "genoa cfc": "Genoa", "bologna fc 1909": "Bologna", "acf fiorentina": "Fiorentina",
 }
 _DROP = {"fc", "afc", "cf", "sc", "ac", "as", "us", "ss", "rc", "cd", "ud", "sv", "vfl", "vfb", "fsv", "tsg"}

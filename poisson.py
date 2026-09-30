@@ -26,11 +26,31 @@ def _stakes(pts, games_played, n_teams):
     return {t: int(min(abs(p - l) for l in lines) > DEAD_GAP) for t, p in pts.items()}
 
 
+NEW_FORMAT = {"BRA": ("BRA.csv", 2021)}                   # championnats au format « new » : un seul fichier, toutes saisons (sans tirs ni corners)
+
+
+def _read_new(div):
+    name, first = NEW_FORMAT[div]
+    rows = []
+    try:
+        fh = open(f"data/{name}", encoding="utf-8-sig", newline="")
+    except FileNotFoundError:
+        return rows
+    with fh:
+        for r in csv.DictReader(fh):
+            if not r.get("HG") or int(r["Season"]) < first:
+                continue
+            rows.append({"Div": div, "Date": datetime.strptime(r["Date"], "%d/%m/%Y"), "Time": r.get("Time", ""),
+                         "HomeTeam": r["Home"], "AwayTeam": r["Away"], "FTHG": int(r["HG"]), "FTAG": int(r["AG"]),
+                         "FTR": r["Res"], "season": r["Season"], "shots": None, "xg": None})
+    return rows
+
+
 def load(div="F1"):
     """Liste de dicts triée par date pour un championnat (F1, E0, SP1...), avec features de contexte
     calculées AVANT chaque match."""
     rows = []
-    for f in sorted(glob.glob(f"data/{div}_*.csv")):
+    for f in ([] if div in NEW_FORMAT else sorted(glob.glob(f"data/{div}_*.csv"))):
         season = os.path.basename(f).split("_")[1][:4]
         with open(f, encoding="utf-8-sig", newline="") as fh:
             for r in csv.DictReader(fh):
@@ -47,6 +67,8 @@ def load(div="F1"):
                 except (KeyError, ValueError):
                     r["xg"] = None
                 rows.append(r)
+    if div in NEW_FORMAT:
+        rows = _read_new(div)
     rows.sort(key=lambda r: r["Date"])
 
     state = {}                                    # saison -> {"pts", "played", "last"}

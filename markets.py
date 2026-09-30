@@ -19,7 +19,8 @@ def ht_share(train):
 
 def fit_all(train, ref_date):
     """Modèle de buts + modèle de corners + part de la 1re mi-temps."""
-    return dict(goals=fit(train, ref_date), corners=fit(train, ref_date, target=("HC", "AC")), ht=ht_share(train))
+    has_corners = any(r.get("HC") not in (None, "") for r in train)       # absents pour certains championnats (ex. Brésil)
+    return dict(goals=fit(train, ref_date), corners=fit(train, ref_date, target=("HC", "AC")) if has_corners else None, ht=ht_share(train))
 
 
 def _1x2(grid):

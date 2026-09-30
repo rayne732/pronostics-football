@@ -142,7 +142,7 @@ def _model_params(m, teams):
         idx = mm["idx"]
         return dict(mu=round(float(mm["mu"]), 5), ha=round(float(mm["ha"]), 5),
                     t={t: [round(float(mm["att"][idx[t]]), 4), round(float(mm["dfn"][idx[t]]), 4)] for t in teams if t in idx})
-    return dict(g=part(m["goals"]), c=part(m["corners"]), ht=round(float(m["ht"]), 5))
+    return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5))
 
 
 def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None):

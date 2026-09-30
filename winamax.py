@@ -100,11 +100,13 @@ def families(models, home, away):
                         (away, la / l * (1 - np.exp(-l)), lambda r: None),
                         ("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)], lottery=True)
 
-    _, (ch, ca) = score_grid(models["corners"], home, away)
-    add("Corners (plus)", [(f"Plus de {_f(x)} corners", poisson.sf(x, ch + ca), _cor(lambda r, x=x: r["ch"] + r["ca"] > x))
-                           for x in (7.5, 8.5, 9.5, 10.5, 11.5)])
-    add("Corners (moins)", [(f"Moins de {_f(x)} corners", poisson.cdf(x, ch + ca), _cor(lambda r, x=x: r["ch"] + r["ca"] < x))
-                            for x in (8.5, 9.5, 10.5, 11.5, 12.5)])
+    ch = ca = 0.0
+    if models.get("corners"):                                # pas de corners pour tous les championnats
+        _, (ch, ca) = score_grid(models["corners"], home, away)
+        add("Corners (plus)", [(f"Plus de {_f(x)} corners", poisson.sf(x, ch + ca), _cor(lambda r, x=x: r["ch"] + r["ca"] > x))
+                               for x in (7.5, 8.5, 9.5, 10.5, 11.5)])
+        add("Corners (moins)", [(f"Moins de {_f(x)} corners", poisson.cdf(x, ch + ca), _cor(lambda r, x=x: r["ch"] + r["ca"] < x))
+                                for x in (8.5, 9.5, 10.5, 11.5, 12.5)])
     return fams, (lh, la, ch + ca)
 
 
@@ -130,7 +132,7 @@ def format_match(models, home, away, market=None):
     fams, (lh, la, corners) = families(models, home, away)
     safe, less = classify(fams)
     line = lambda t: f"  {t[0]} : {t[1]} - {t[2]:.0%} (cote juste {1 / t[2]:.2f})" + ("" if t[3] else " ⚠")
-    out = [f"{home} - {away}", f"  Buts attendus {lh:.2f} - {la:.2f} | corners ~{corners:.1f}"]
+    out = [f"{home} - {away}", f"  Buts attendus {lh:.2f} - {la:.2f}" + (f" | corners ~{corners:.1f}" if corners else "")]
     if market is not None:
         out.append(f"  Bookmaker (1X2, sans marge) : dom {market[0]:.0%} / nul {market[1]:.0%} / ext {market[2]:.0%}")
     out.append(f"\n  SÛRS (probabilité ≥ {SAFE_MIN:.0%})")

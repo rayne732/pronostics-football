@@ -25,13 +25,13 @@ from markets import fit_all
 from page import build_page
 import tracking
 from notify import run as run_notify
-from poisson import load
+from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
 
 BASE_URL = "https://www.football-data.co.uk"
 LEAGUES = {"F1": "Ligue 1", "E0": "Premier League", "SP1": "La Liga", "D1": "Bundesliga",
-           "I1": "Serie A", "E1": "Championship"}
+           "I1": "Serie A", "E1": "Championship", "BRA": "Brasileirão"}
 FIRST_SEASON = 2021                                       # historique utilisé : depuis 2021/22
 os.chdir(os.path.dirname(os.path.abspath(__file__)))     # poisson.py lit data/ en chemin relatif
 
@@ -55,6 +55,9 @@ def update_data(today):
     os.makedirs("data", exist_ok=True)
     cur = current_season_start(today)
     for div in LEAGUES:
+        if div in NEW_FORMAT:                                    # un seul fichier, mis à jour chaque jour
+            download(f"{BASE_URL}/new/{NEW_FORMAT[div][0]}", f"data/{NEW_FORMAT[div][0]}")
+            continue
         for y in range(FIRST_SEASON, cur + 1):
             code = f"{y % 100:02d}{(y + 1) % 100:02d}"
             dest = f"data/{div}_{code}.csv"
