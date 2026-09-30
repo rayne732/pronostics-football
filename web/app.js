@@ -216,7 +216,7 @@
   function brand() {
     var dark = curTheme() === 'dark';
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics football</h1><small>Mis à jour le ' + esc(D.generated) + '</small></div>' +
-      '<button class="ibtn" data-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
+      '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
   }
   function homeHTML() {
     var fx = D.fixtures, days = [];
@@ -496,7 +496,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
     if (t.hasAttribute('data-open')) {
       var f = D.fixtures[+t.getAttribute('data-open')];
@@ -509,7 +509,7 @@
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
     else if (t.hasAttribute('data-sort')) { st.sort = st.sort === 'time' ? 'conf' : 'time'; render(); }
-    else if (t.hasAttribute('data-theme')) {
+    else if (t.hasAttribute('data-toggle-theme')) {
       var next = curTheme() === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       try { localStorage.setItem('pf-theme', next); } catch (err) { /* ignoré */ }
