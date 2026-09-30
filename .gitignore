@@ -1,0 +1,12 @@
+.env
+output/
+__pycache__/
+tmp.py
+poisson_v*.py
+# données brutes téléchargées à chaque exécution (non redistribuées)
+data/*.csv
+data/value_records.json
+# résultats calculés, conservés : backtest, test de rentabilité, suivi réel
+!data/backtest.json
+!data/value_summary.json
+!data/tracking.json

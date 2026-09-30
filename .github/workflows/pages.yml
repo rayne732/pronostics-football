@@ -1,0 +1,57 @@
+name: Pronostics football
+
+on:
+  schedule:
+    - cron: "30 5 * * *"      # chaque jour à 5h30 UTC (7h30 à Paris l'été) : régénère le site et envoie les notifications
+  workflow_dispatch:          # bouton « Run workflow » pour relancer à la main (sans notification)
+  push:
+    branches: [main]
+
+permissions:
+  contents: write             # pour sauvegarder le suivi des pronostics (data/tracking.json)
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Générer le site (et notifier si exécution quotidienne)
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python bot.py --html ${{ github.event_name == 'schedule' && '--notify' || '' }}
+      - name: Sauvegarder le suivi des pronostics
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add data/tracking.json
+          git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
+      - name: Garder uniquement les fichiers du site
+        run: rm -f output/artifact.html output/digest.txt output/digest.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: output
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
