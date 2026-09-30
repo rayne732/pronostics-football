@@ -194,9 +194,32 @@ def recent_results(today, days_back=2):
     return out
 
 
+def daily_stats(days=120):
+    """Par jour de matchs terminés : nombre de matchs, pronostics sûrs (sn) gagnés (sw), moins sûrs (ln) gagnés (lw)."""
+    data = _read(TRACK_FILE)
+    if not data:
+        return []
+    by = {}
+    for m in data["matches"].values():
+        if not m["settled"]:
+            continue
+        d = by.setdefault(m["date"], dict(date=m["date"], ms=0, sn=0, sw=0, ln=0, lw=0))
+        d["ms"] += 1
+        for p in m["picks"]:
+            if p.get("hit") is None:
+                continue
+            if p["tier"] == 0:
+                d["sn"] += 1
+                d["sw"] += int(p["hit"])
+            else:
+                d["ln"] += 1
+                d["lw"] += int(p["hit"])
+    return sorted(by.values(), key=lambda x: x["date"])[-days:]
+
+
 def reliability_data():
     bt, seasons = backtest_records()
     live, since = live_records()
     return dict(bt=summary(bt) if bt else None, seasons=seasons, live=summary(live) if live else None, since=since,
-                monthly=monthly(bt), monthly_live=monthly(live, 30),
+                monthly=monthly(bt), monthly_live=monthly(live, 30), daily=daily_stats(),
                 recent=recent_results(datetime.strptime(os.environ["TRACKING_TODAY"], "%Y-%m-%d").date() if os.environ.get("TRACKING_TODAY") else datetime.now().date()))

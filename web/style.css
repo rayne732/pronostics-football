@@ -335,3 +335,23 @@ select{font-size:.95rem;color:var(--ink);background:var(--field);border:1px soli
 details.rd{margin-top:8px}
 details.rd summary{cursor:pointer;color:var(--mute);font-size:.85rem;padding:6px 0}
 details.rd summary small{color:var(--mute);margin-left:6px}
+
+/* --- bilan de la semaine et série en cours --- */
+.wkbox{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:8px 14px;box-shadow:0 4px 14px var(--shadow)}
+.wd{display:grid;grid-template-columns:74px minmax(0,1fr) 88px;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:.84rem}
+.wd:first-child{border-top:0}
+.wl{color:var(--mute)}
+.wb{position:relative;height:9px;border-radius:5px;background:var(--surface2);overflow:visible}
+.wb i{display:block;height:100%;border-radius:5px}
+.wb i.ok{background:var(--green)}.wb i.lo{background:var(--amber)}
+.wb u{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--mute);opacity:.7;border-radius:1px}
+.wp{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.wp small{color:var(--mute);font-weight:400}
+.streak{display:flex;align-items:center;gap:16px;padding:16px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:0 6px 18px var(--shadow)}
+.streak.on{border-color:color-mix(in srgb,var(--green) 40%,var(--line));background:linear-gradient(150deg,color-mix(in srgb,var(--green) 10%,var(--surface2)),var(--surface))}
+.streak .sv{flex:none;width:64px;height:64px;border-radius:50%;display:grid;place-items:center;font-size:1.9rem;font-weight:700;background:var(--surface2);color:var(--mute);font-variant-numeric:tabular-nums}
+.streak.on .sv{background:var(--green);color:var(--on-accent);box-shadow:0 8px 20px color-mix(in srgb,var(--green) 35%,transparent)}
+.streak .st{display:flex;flex-direction:column;gap:2px;min-width:0}
+.streak .st b{font-size:.95rem}
+.streak .st span{color:var(--mute);font-size:.82rem}
+.streak .st small{color:var(--mute);font-size:.72rem;margin-top:3px}

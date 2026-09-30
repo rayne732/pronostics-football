@@ -263,13 +263,56 @@
     });
     return h;
   }
+  function isoDate(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function mondayOf(ds) { var d = parseD(ds); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; }
+  function streakInfo() {                                   // jours de matchs consécutifs où au moins 70 % des pronostics sûrs sont passés
+    var rows = D.daily.filter(function (r) { return r.sn > 0; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    var run = 0, best = 0;
+    rows.forEach(function (r) { if (r.sw / r.sn >= SAFE) { run++; if (run > best) best = run; } else run = 0; });
+    return { cur: run, best: best, days: rows.length };
+  }
+  function weekHTML() {
+    var today = D.today || isoDate(new Date()), mon = mondayOf(today), label = 'Cette semaine';
+    var lo = isoDate(mon), hi = today;                      // jusqu'à hier : les résultats du jour ne sont pas encore connus
+    var rows = D.daily.filter(function (r) { return r.date >= lo && r.date < hi; });
+    if (!rows.length) {
+      var pm = new Date(mon); pm.setDate(pm.getDate() - 7);
+      lo = isoDate(pm); hi = isoDate(mon); label = 'Semaine dernière';
+      rows = D.daily.filter(function (r) { return r.date >= lo && r.date < hi; });
+    }
+    var t = { ms: 0, sn: 0, sw: 0, ln: 0, lw: 0 };
+    rows.forEach(function (r) { t.ms += r.ms; t.sn += r.sn; t.sw += r.sw; t.ln += r.ln; t.lw += r.lw; });
+    var sp = t.sn ? t.sw / t.sn : 0, conf = sp >= SAFE ? 'high' : sp >= 0.5 ? 'mid' : 'low';
+    var h = '';
+    if (rows.length) {
+      h += '<div class="main ' + conf + '"><div class="k"><small>' + label + '</small></div><div class="hero"><div><div class="hl">Pronostics sûrs gagnés</div><div class="hn">' +
+        t.sw + ' / ' + t.sn + '</div></div>' + gauge(sp, conf) + '</div>' +
+        line('Moins sûrs gagnés', t.lw + ' / ' + t.ln) + line('Matchs terminés', String(t.ms)) + line('Jours de matchs', String(rows.length)) + '</div>';
+      h += '<div class="sec"><span class="dot g"></span>Jour par jour <small>trait = seuil de ' + Math.round(SAFE * 100) + ' %</small></div><div class="wkbox">' +
+        rows.map(function (r) {
+          var p = r.sn ? r.sw / r.sn : 0;
+          return '<div class="wd"><span class="wl">' + WD[parseD(r.date).getDay()] + ' ' + dm(r.date) + '</span><div class="wb"><i class="' + (p >= SAFE ? 'ok' : 'lo') +
+            '" style="width:' + Math.round(p * 100) + '%"></i><u style="left:' + Math.round(SAFE * 100) + '%"></u></div><span class="wp">' + pct(p) + ' <small>' + r.sw + '/' + r.sn + '</small></span></div>';
+        }).join('') + '</div>';
+    } else {
+      h += '<div class="empty">Pas encore de résultat pour ' + label.toLowerCase() + '. Les pronostics sont vérifiés le lendemain de chaque match.</div>';
+    }
+    var s = streakInfo();
+    h += '<div class="sec"><span class="dot a"></span>Série en cours</div><div class="streak ' + (s.cur ? 'on' : '') + '"><div class="sv">' + s.cur + '</div><div class="st"><b>' +
+      (s.cur ? (s.cur > 1 ? 'jours de suite' : 'jour') + ' à ' + Math.round(SAFE * 100) + ' % ou plus' : 'Pas de série en cours') + '</b><span>' +
+      (s.cur ? 'de pronostics sûrs gagnés, en jours de matchs consécutifs.' : 'Le dernier jour de matchs est passé sous ' + Math.round(SAFE * 100) + ' %.') +
+      '</span><small>Record : ' + s.best + ' · sur ' + s.days + ' jour' + (s.days > 1 ? 's' : '') + ' de matchs suivis</small></div></div>';
+    h += '<div class="sub" style="margin-top:12px">Un jour isolé ne dit pas grand-chose : le modèle annonce environ 78 % de réussite sur les pronostics sûrs, donc une journée à 60 % ou à 90 % peut arriver par hasard. ' +
+      'La série et la semaine servent surtout à suivre la tendance.</div>';
+    return h;
+  }
   function homeHTML() {
     var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
-    var h = brand(), inPast = st.day.indexOf('past:') === 0;
+    var h = brand(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week';
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
-    if (!fx.length && !past.length) {
+    if (!fx.length && !past.length && !D.daily.length) {
       return h + '<div class="empty">Aucun match à venir dans les 7 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
@@ -280,6 +323,7 @@
         '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
     }
     h += '<div class="chips">';
+    if (D.daily.length) h += '<button class="chip past' + (st.day === 'week' ? ' on' : '') + '" data-day="week">Bilan<b>' + svg(IC.check) + ' semaine</b></button>';
     past.forEach(function (d) {
       h += '<button class="chip past' + (st.day === 'past:' + d ? ' on' : '') + '" data-day="past:' + d + '">' + pastLabel(d) + '<b>' + svg(IC.check) + ' ' + dm(d) + '</b></button>';
     });
@@ -290,7 +334,7 @@
       });
     }
     h += '</div>';
-    if (inPast) return h + pastHTML(st.day.slice(5));
+    if (inPast) return h + (st.day === 'week' ? weekHTML() : pastHTML(st.day.slice(5)));
     if (!fx.length) return h + '<div class="empty">Aucun match à venir dans les prochains jours. Les résultats d’hier sont dans les pastilles ci-dessus.</div>';
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
