@@ -8,7 +8,7 @@ import sys
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-from digest import _conf, _pct, _rows
+from digest import _conf, _pct, _rows, yesterday_summary
 from winamax import families
 
 NTFY_URL = "https://ntfy.sh/"
@@ -35,6 +35,9 @@ def build(models, fixtures, now, leagues, site_url):
     if rows:
         high = sum(1 for x in rows if _conf(x["pf"]) == "high")
         top = "\n".join(f"{x['time']} {x['home']} – {x['away']} : {x['fav']} {_pct(x['pf'])}" for x in rows[:3])
+        y = yesterday_summary(f"{now - timedelta(days=1):%Y-%m-%d}")
+        if y:
+            top += f"\nHier : {y[2]}/{y[1]} pronostics sûrs gagnés"
         msgs.append(dict(title=f"Pronostics du {now:%d/%m} : {len(rows)} match{'s' if len(rows) > 1 else ''}, {high} à haute confiance",
                          message=top, priority=3, tags=["soccer"], **({"click": site_url} if site_url else {})))
     # alertes avant coup d'envoi : matchs à haute confiance qui commencent dans les prochaines 24 h

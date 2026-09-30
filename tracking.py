@@ -4,6 +4,7 @@ Deux sources de statistiques :
   - suivi réel : pronostics réellement affichés sur la page, vérifiés après les matchs (data/tracking.json).
 Un enregistrement = [championnat, date, type de marché, proba annoncée, catégorie (0 sûr / 1 moins sûr), validé, gagné]."""
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta
@@ -12,7 +13,7 @@ from markets import fit_all
 from poisson import load
 from winamax import classify, families
 
-TRACK_FILE = "data/tracking.json"
+TRACK_FILE = os.environ.get("TRACK_FILE", "data/tracking.json")
 BACKTEST_FILE = "data/backtest.json"
 EDGES = (0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.01)
 
@@ -73,7 +74,7 @@ def record(fixtures, models, today):
         if data["matches"].get(key, {}).get("settled"):
             continue
         picks = [{k: v for k, v in p.items() if k != "rule"} for p in make_picks(models[div], home, away)]
-        data["matches"][key] = dict(div=div, date=f'{r["Date"]:%Y-%m-%d}', home=home, away=away, picks=picks,
+        data["matches"][key] = dict(div=div, date=f'{r["Date"]:%Y-%m-%d}', time=r.get("Time", ""), home=home, away=away, picks=picks,
                                     recorded=today.isoformat(timespec="minutes"), settled=False)
     _write(TRACK_FILE, data)
 
@@ -175,8 +176,27 @@ def monthly(recs, min_n=100):
     return [(m, len(v), sum(x[3] for x in v) / len(v), sum(x[6] for x in v) / len(v)) for m, v in sorted(by.items()) if len(v) >= min_n]
 
 
+def recent_results(today, days_back=2):
+    """Matchs terminés des `days_back` derniers jours (hier compris) avec le résultat de chaque pronostic."""
+    data = _read(TRACK_FILE)
+    if not data:
+        return []
+    lo = f"{today - timedelta(days=days_back):%Y-%m-%d}"
+    hi = f"{today - timedelta(days=1):%Y-%m-%d}"
+    out = []
+    for key, m in data["matches"].items():
+        if m["settled"] and lo <= m["date"] <= hi:
+            picks = [dict(m=p["market"], s=p["sel"], p=p["p"], t=p["tier"], v=bool(p["validated"]), h=bool(p["hit"]))
+                     for p in m["picks"] if p.get("hit") is not None]
+            out.append(dict(id=key, div=m["div"], date=m["date"], time=m.get("time", ""), home=m["home"], away=m["away"],
+                            res=m.get("result", ""), picks=picks))
+    out.sort(key=lambda x: (x["date"], x["time"]))
+    return out
+
+
 def reliability_data():
     bt, seasons = backtest_records()
     live, since = live_records()
     return dict(bt=summary(bt) if bt else None, seasons=seasons, live=summary(live) if live else None, since=since,
-                monthly=monthly(bt), monthly_live=monthly(live, 30))
+                monthly=monthly(bt), monthly_live=monthly(live, 30),
+                recent=recent_results(datetime.strptime(os.environ["TRACKING_TODAY"], "%Y-%m-%d").date() if os.environ.get("TRACKING_TODAY") else datetime.now().date()))

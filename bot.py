@@ -148,7 +148,7 @@ def send_telegram(text):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--send", action="store_true", help="envoyer sur Telegram au lieu d'afficher")
-    ap.add_argument("--days", type=int, default=10, help="fenêtre de matchs à analyser (défaut 10)")
+    ap.add_argument("--days", type=int, default=7, help="fenêtre glissante de matchs à venir (défaut 7 jours : aujourd'hui + 6)")
     ap.add_argument("--match", nargs=2, metavar=("DOM", "EXT"), help="analyser un match précis")
     ap.add_argument("--league", default="F1", choices=list(LEAGUES), help="championnat pour --match (défaut F1)")
     ap.add_argument("--html", action="store_true", help="générer la page web output/index.html")
@@ -186,6 +186,8 @@ def main():
         rows_by_div = {d: {(r["Date"], r["HomeTeam"], r["AwayTeam"]): r for r in dfs[d]} for d in dfs}
         settled = tracking.settle(models, now, rows_by_div)              # vérifie les pronostics des matchs terminés
         fixtures = get_fixtures(now, args.days, leagues)
+        if not fixtures:                                                 # trêve : on montre les prochaines rencontres (14 jours)
+            fixtures = get_fixtures(now, 14, leagues)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
         page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs)

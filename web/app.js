@@ -218,24 +218,81 @@
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics football</h1><small>Mis à jour le ' + esc(D.generated) + '</small></div>' +
       '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
   }
+  function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
+    var seen = {}, out = [];
+    D.recent.forEach(function (m) { if (!seen[m.date]) { seen[m.date] = 1; out.push(m.date); } });
+    return out.sort().reverse();
+  }
+  function pastLabel(d) {
+    var y = new Date(); y.setDate(y.getDate() - 1);
+    var ys = y.getFullYear() + '-' + ('0' + (y.getMonth() + 1)).slice(-2) + '-' + ('0' + y.getDate()).slice(-2);
+    return d === ys ? 'Hier' : WD[parseD(d).getDay()];
+  }
+  function pickRow(p) {
+    return '<div class="pr ' + (p.h ? 'ok' : 'ko') + '"><span class="mk2">' + svg(p.h ? IC.check : IC.x) + '</span><span class="pt">' + esc(p.s) +
+      (p.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') + '</span><span class="pp">' + pct(p.p) + '</span></div>';
+  }
+  function resCard(m) {
+    var sc = m.res.split('-'), safe = m.picks.filter(function (p) { return p.t === 0; }), less = m.picks.filter(function (p) { return p.t !== 0; });
+    var sw = safe.filter(function (p) { return p.h; }).length, lw = less.filter(function (p) { return p.h; }).length;
+    var lm = LMETA[m.div] || ['', '#4f8cff', ''];
+    return '<div class="rc"><div class="rh"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[m.div].name) + '</span><small>' + esc(m.time || '') + '</small></div>' +
+      '<div class="rsc"><div class="s">' + crest(m.home, true) + '<b>' + esc(m.home) + '</b></div><div class="score">' + esc(sc[0] || '?') + ' – ' + esc(sc[1] || '?') +
+      '</div><div class="s">' + crest(m.away, true) + '<b>' + esc(m.away) + '</b></div></div>' +
+      '<div class="sec sm"><span class="dot g"></span>Pronostics sûrs <small>' + sw + ' / ' + safe.length + ' gagnés</small></div>' +
+      (safe.map(pickRow).join('') || '<div class="sub">Aucun pronostic sûr sur ce match.</div>') +
+      (less.length ? '<details class="rd"><summary>Moins sûrs <small>' + lw + ' / ' + less.length + ' gagnés</small></summary>' + less.map(pickRow).join('') + '</details>' : '') + '</div>';
+  }
+  function pastHTML(d) {
+    var ms = D.recent.filter(function (m) { return m.date === d; });
+    if (!ms.length) return '<div class="empty">Aucun résultat pour cette date.</div>';
+    var cs = [0, 0], cl = [0, 0];
+    ms.forEach(function (m) { m.picks.forEach(function (p) { var k = p.t === 0 ? cs : cl; k[0]++; if (p.h) k[1]++; }); });
+    var sp = cs[0] ? cs[1] / cs[0] : 0, conf = sp >= 0.7 ? 'high' : sp >= 0.5 ? 'mid' : 'low';
+    var h = '<div class="main ' + conf + '"><div class="k"><small>Bilan du ' + dm(d) + '</small></div><div class="hero"><div><div class="hl">Pronostics sûrs gagnés</div><div class="hn">' +
+      cs[1] + ' / ' + cs[0] + '</div></div>' + (cs[0] ? gauge(sp, conf) : '') + '</div>' +
+      line('Moins sûrs gagnés', cl[1] + ' / ' + cl[0]) + line('Matchs terminés', String(ms.length)) + '</div>';
+    h += '<div class="sub">« Sûr » veut dire probabilité annoncée d’au moins 70 %, soit environ 3 sur 4 attendus. Un jour isolé ne prouve rien dans un sens ou dans l’autre : ' +
+      'le modèle se juge sur des centaines de pronostics (onglet Fiabilité).</div>';
+    D.order.forEach(function (div) {
+      var sub = ms.filter(function (m) { return m.div === div; });
+      if (!sub.length) return;
+      var lm = LMETA[div] || ['', '#4f8cff', ''];
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + lm[0] +
+        '</small></div><span class="cnt">' + sub.length + '</span></div>' + sub.map(resCard).join('');
+    });
+    return h;
+  }
   function homeHTML() {
-    var fx = D.fixtures, days = [];
+    var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
-    var h = brand();
-    if (!fx.length) {
-      return h + '<div class="empty">Aucun match à venir dans les prochains jours pour les championnats suivis. ' +
+    var h = brand(), inPast = st.day.indexOf('past:') === 0;
+    var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
+    if (!fx.length && !past.length) {
+      return h + '<div class="empty">Aucun match à venir dans les 7 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
-    var nHigh = fx.filter(function (f) { return f.conf === 'high'; }).length;
-    var avg = fx.reduce(function (s, f) { return s + f.fav; }, 0) / fx.length;
-    h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>matchs analysés</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
-      '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
-    h += '<div class="chips"><button class="chip' + (st.day === 'all' ? ' on' : '') + '" data-day="all">Tous<b>' + fx.length + ' matchs</b></button>';
-    days.forEach(function (d) {
-      h += '<button class="chip' + (st.day === d ? ' on' : '') + '" data-day="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>';
+    if (fx.length && !inPast) {
+      var nHigh = fx.filter(function (f) { return f.conf === 'high'; }).length;
+      var avg = fx.reduce(function (s, f) { return s + f.fav; }, 0) / fx.length;
+      h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>' + (ext ? 'matchs à venir' : 'matchs cette semaine') + '</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
+        '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
+    }
+    h += '<div class="chips">';
+    past.forEach(function (d) {
+      h += '<button class="chip past' + (st.day === 'past:' + d ? ' on' : '') + '" data-day="past:' + d + '">' + pastLabel(d) + '<b>' + svg(IC.check) + ' ' + dm(d) + '</b></button>';
     });
+    if (fx.length) {
+      h += '<button class="chip' + (st.day === 'all' ? ' on' : '') + '" data-day="all">' + (ext ? 'À venir' : '7 jours') + '<b>' + fx.length + ' matchs</b></button>';
+      days.forEach(function (d) {
+        h += '<button class="chip' + (st.day === d ? ' on' : '') + '" data-day="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>';
+      });
+    }
     h += '</div>';
+    if (inPast) return h + pastHTML(st.day.slice(5));
+    if (!fx.length) return h + '<div class="empty">Aucun match à venir dans les prochains jours. Les résultats d’hier sont dans les pastilles ci-dessus.</div>';
+    if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
     h += '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
@@ -243,44 +300,6 @@
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
       return '<button class="chip pill' + (st.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
     return h + '<div id="list">' + listHTML() + '</div>';
-  }
-
-  function favsHTML() {
-    var list = D.fixtures.filter(function (f) { return favs[f.id]; });
-    var h = '<div class="top"><h1>Mes favoris</h1></div>';
-    if (!list.length) {
-      return h + '<div class="empty">Aucun favori pour l’instant. Touche l’étoile ☆ à côté d’un match dans l’onglet Découvrir pour le retrouver ici.</div>';
-    }
-    list.sort(function (a, b) { return kickoff(a) - kickoff(b); });
-    return h + '<div class="sub">' + list.length + ' match' + (list.length > 1 ? 's' : '') + ' suivi' + (list.length > 1 ? 's' : '') + ', dans l’ordre des coups d’envoi.</div>' +
-      list.map(function (f) { return '<div class="cdl">' + esc(D.leagues[f.div].name) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('');
-  }
-  function ticketProb() { return ticket.reduce(function (p, t) { return p * t.p; }, 1); }
-  function ticketHTML() {
-    var h = '<div class="top"><h1>Mon combiné</h1></div>';
-    if (!ticket.length) {
-      return h + '<div class="empty">Ton combiné est vide. Dans une fiche match, ouvre un marché et touche le <b>+</b> d’une sélection pour l’ajouter. ' +
-        'Tu verras la probabilité réelle que <b>toutes</b> tes sélections passent.</div>';
-    }
-    var cum = 1, groups = {}, dup = 0;
-    var rows = ticket.map(function (t, i) {
-      cum *= t.p;
-      var g = t.k.split('|').slice(0, 3).join('|');
-      if (groups[g]) dup++; groups[g] = 1;
-      return '<div class="tkrow"><div class="tkn">' + (i + 1) + '</div><div class="tkb"><div class="tkm">' + esc(t.mt) + '</div><div class="tks">' + esc(t.s) +
-        ' <span class="tkp">' + pct(t.p) + '</span></div><div class="tkc"><i style="width:' + Math.max(2, Math.round(cum * 100)) + '%"></i></div>' +
-        '<div class="tkd">Probabilité cumulée : ' + pct(cum) + '</div></div><button class="rm" data-rm="' + i + '" aria-label="Retirer">' + svg(IC.x) + '</button></div>';
-    }).join('');
-    var P = ticketProb(), avg = Math.pow(P, 1 / ticket.length);
-    h += '<div class="main ' + (P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '"><div class="k"><small>Probabilité que tout passe</small></div>' +
-      '<div class="hero"><div><div class="hl">' + ticket.length + ' sélection' + (ticket.length > 1 ? 's' : '') + '</div><div class="hn">' + pct(P) + '</div></div>' +
-      gauge(Math.min(P, 1), P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '</div>' +
-      line('Cote juste du combiné', P > 0.0005 ? (1 / P).toFixed(2) : '—') + line('Probabilité moyenne par sélection', pct(avg)) + '</div>';
-    h += '<div class="sub">Même avec des sélections à ' + pct(avg) + ', la probabilité fond vite : à ' + (ticket.length + 1) + ' sélections il ne resterait que ' +
-      pct(P * avg) + '. Un bookmaker applique sa marge à chaque sélection, donc la cote d’un combiné est encore moins favorable que la cote juste.</div>';
-    if (dup) h += '<div class="sub warn">' + (dup + 1) + ' sélections viennent d’un même match : elles sont liées entre elles, donc le produit des probabilités n’est qu’une approximation.</div>';
-    return h + '<div class="sec"><span class="dot g"></span>Sélections</div>' + rows +
-      '<button class="voir low wide" data-clear style="margin-top:12px">Vider le combiné</button>';
   }
 
   /* ------------------------------------------------------------ fiche match */

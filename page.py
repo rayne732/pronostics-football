@@ -145,7 +145,7 @@ def _model_params(m, teams):
     return dict(g=part(m["goals"]), c=part(m["corners"]), ht=round(float(m["ht"]), 5))
 
 
-def build_data(models, fixtures, market_probs, leagues, history, generated_at):
+def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None):
     lg = {}
     for div, info in leagues.items():
         lg[div] = dict(name=info["name"], teams=info["teams"], **_model_params(models[div], info["teams"]))
@@ -160,7 +160,7 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at):
         for r in rows:
             hist.append([div, int(f'{r["Date"]:%Y%m%d}'), r["HomeTeam"], r["AwayTeam"], r["FTHG"], r["FTAG"]])
     hist.sort(key=lambda x: x[1])
-    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, safeMin=SAFE_MIN)
+    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], safeMin=SAFE_MIN)
 
 
 def _info(reliability):
@@ -173,7 +173,7 @@ def _info(reliability):
 
 
 def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, artifact=False):
-    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at),
+    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent")),
                       ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     head = f'<title>Pronostics Football</title>{FONTS}<style>{_read("style.css")}</style>'
     body = (f'<div id="app"></div>'

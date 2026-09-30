@@ -309,3 +309,29 @@ select{font-size:.95rem;color:var(--ink);background:var(--field);border:1px soli
 #info .legend span{display:inline-flex;align-items:center;gap:6px}
 #info .legend i{display:inline-block;width:18px;height:0;border-top:3px solid var(--green)}
 #info .legend i.lg1{border-top:2px dashed var(--blue)}
+
+/* --- résultats d'hier : ce qui était bon ou raté --- */
+.chip.past{border-color:color-mix(in srgb,var(--green) 40%,var(--line))}
+.chip.past b{display:flex;align-items:center;justify-content:center;gap:4px}
+.chip.past b .ic{width:14px;height:14px;color:var(--green)}
+.chip.past.on b .ic{color:var(--on-accent)}
+.rc{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px var(--shadow)}
+.rh{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+.rh small{color:var(--mute);font-size:.75rem}
+.rsc{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}
+.rsc .s{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center}
+.rsc .s b{font-size:.84rem;font-weight:600;line-height:1.2;overflow-wrap:anywhere}
+.rsc .cr.big{width:46px;height:53px}
+.score{flex:none;align-self:center;font-size:1.9rem;font-weight:700;letter-spacing:.02em;padding:0 4px;font-variant-numeric:tabular-nums}
+.sec.sm{margin:12px 0 6px;font-size:.9rem}
+.pr{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:.86rem}
+.pr .mk2{flex:none;width:24px;height:24px;border-radius:8px;display:grid;place-items:center}
+.pr .mk2 .ic{width:14px;height:14px;stroke-width:2.6}
+.pr.ok .mk2{background:var(--green);color:var(--on-accent)}
+.pr.ko .mk2{background:var(--red);color:#fff}
+.pr .pt{flex:1;min-width:0}
+.pr.ko .pt{color:var(--mute);text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--red) 70%,transparent)}
+.pr .pp{color:var(--mute);font-variant-numeric:tabular-nums;font-size:.8rem}
+details.rd{margin-top:8px}
+details.rd summary{cursor:pointer;color:var(--mute);font-size:.85rem;padding:6px 0}
+details.rd summary small{color:var(--mute);margin-left:6px}
