@@ -6,7 +6,7 @@
   var SAFE = D.safeMin, app = document.getElementById('app'), nav = document.getElementById('nav');
   var CONF = { high: 'Haute confiance', mid: 'Confiance moyenne', low: 'Match ouvert' };
   var WD = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
+  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, bk: { day: 'all', lg: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
              an: { div: D.order[0], h: 0, a: 1 } };
   var favs = {};
   try { favs = JSON.parse(localStorage.getItem('pf-fav') || '{}'); } catch (e) { favs = {}; }
@@ -65,7 +65,7 @@
   };
   function mkIcon(name) {
     var k = /Résultat à la mi|Mi-temps/.test(name) ? 'clock' : /^Résultat du match|^Vainqueur/.test(name) ? 'trophy' : /Double/.test(name) ? 'dice' :
-      /Les deux/.test(name) ? 'users' : /Total buts|^Buts de/.test(name) ? 'ball' : /Total sets/.test(name) ? 'bars' : /Pair/.test(name) ? 'sliders' : /Tranche/.test(name) ? 'bars' :
+      /Les deux/.test(name) ? 'users' : /Total buts|^Buts de/.test(name) ? 'ball' : /Total sets|Total points/.test(name) ? 'bars' : /Pair/.test(name) ? 'sliders' : /Tranche/.test(name) ? 'bars' :
       /Handicap/.test(name) ? 'scale' : /Victoire/.test(name) ? 'shield' : /Score exact|Score en sets/.test(name) ? 'target' : /Premier but/.test(name) ? 'flag' :
       /Corners/.test(name) ? 'corner' : 'ball';
     return svg(IC[k]);
@@ -238,8 +238,8 @@
       'Le <b>tennis</b> est le prochain sur la liste.</div>';
   }
   function brand() {
-    var dark = curTheme() === 'dark', tn = st.sport === 'tennis';
-    return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + (tn ? 'tennis' : 'football') + '</h1><small>Mis à jour le ' + esc(tn && D.tennis.generated ? D.tennis.generated : D.generated) + '</small></div>' +
+    var dark = curTheme() === 'dark', tn = st.sport === 'tennis', bk = st.sport === 'basket';
+    return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + (tn ? 'tennis' : bk ? 'basket' : 'football') + '</h1><small>Mis à jour le ' + esc(tn && D.tennis.generated ? D.tennis.generated : bk && D.basket.generated ? D.basket.generated : D.generated) + '</small></div>' +
       '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
   }
   function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
@@ -508,6 +508,139 @@
       '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="a" style="width:' + p[1] * 100 + '%"></i></div>' +
       '<div class="l3"><span class="h">' + esc(last(m.a)) + ' · ' + pct(p[0]) + '</span><span class="a">' + esc(last(m.b)) + ' · ' + pct(p[1]) + '</span></div></div>';
     if (!m.known) return h + '<div class="sub warn">Pas assez d’historique sur ce joueur (qualifié, invité ou circuit inférieur) : estimation très peu fiable, aucun pronostic sûr proposé.</div>';
+    var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; };
+    h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
+      (m.safe.length ? m.safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
+    return h + '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + m.less.map(wrap).map(mkRow('a', d)).join('');
+  }
+
+  /* ------------------------------------------------------------ basket */
+  D.basket = D.basket || {};
+  var BM = [], bkBusy = false;
+  var BL = { NBA: ['NBA', '#e2522f'], EL: ['EuroLeague', '#2f6bdc'] };
+  function setBM(list) {
+    BM = list;
+    BM.forEach(function (m, i) {
+      m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.away : m.home;
+      m.key = norm(m.home + ' ' + m.away + ' ' + BL[m.lg][0]);
+    });
+  }
+  setBM(D.basket.matches || []);
+  function liveBasket() {                                   // NBA (ESPN) et EuroLeague (API officielle) en direct
+    if (bkBusy || !D.basket.model || !window.Basket || !window.Tennis || !window.fetch) return;
+    bkBusy = true;
+    Basket.setModel(D.basket.model);
+    var now = new Date(), nowIso = now.toISOString().slice(0, 16), jobs = [], i;
+    var lo = Tennis.paris(new Date(now.getTime() - 864e5).toISOString()).d, hi = Tennis.paris(new Date(now.getTime() + 8 * 864e5).toISOString()).d;
+    var get = function (u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); };
+    for (i = -1; i <= 8; i++) {
+      var d = new Date(now.getTime() + i * 864e5), ymd = Tennis.paris(d.toISOString()).d.replace(/-/g, '');
+      jobs.push(get('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + ymd).then(Basket.parseNba).catch(function () { return []; }));
+    }
+    jobs.push(get('https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/games').then(function (j) { return Basket.parseEuro(j, nowIso); }).catch(function () { return []; }));
+    Promise.all(jobs).then(function (res) {
+      var raws = [], srv = {}, seen = {};
+      res.forEach(function (l) { raws = raws.concat(l); });
+      BM.forEach(function (m) { srv[m.id] = m; });
+      var list = [];
+      raws.forEach(function (r) {
+        if (seen[r.lg + r.id] || !D.basket.model.m[r.lg]) return;
+        seen[r.lg + r.id] = 1;
+        var it = Basket.build(r, srv[r.id], Tennis.paris);
+        if (it.date >= lo && it.date <= hi) list.push(it);
+      });
+      if (!list.length) return;
+      list.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+      setBM(list);
+      var p = Tennis.paris(now.toISOString());
+      D.basket.generated = p.d.slice(8) + '/' + p.d.slice(5, 7) + '/' + p.d.slice(0, 4) + ' à ' + p.t + ' (direct)';
+      if (st.sport === 'basket' && !st.detail && st.tab === 'home') { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+    }).then(function () { bkBusy = false; }, function () { bkBusy = false; });
+  }
+  setInterval(function () { if (st.sport === 'basket' && document.visibilityState === 'visible') liveBasket(); }, 180000);
+  function bkState(m) {
+    if (m.state === 'post') return 'Terminé';
+    if (m.state === 'in') return 'En cours';
+    return countdown({ date: m.date, time: m.time });
+  }
+  function bkRow(m) {
+    var res = m.state === 'post' ? '<div class="tres">' + m.hs + ' – ' + m.as_ + ' · <b>' + esc(m.hs > m.as_ ? m.home : m.away) + '</b></div>' : '';
+    var tag = m.state === 'post' && m.hit != null ? '<span class="cfp ' + (m.hit ? 'high' : 'low') + '">' + svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté') + '</span>' :
+      m.known ? '<span class="cfp ' + m.conf + '">' + pct(m.fav) + ' · ' + esc(last(m.favName)) + '</span>' : '<span class="cfp low">' + (m.pre ? 'Présaison' : 'Peu d’historique') + '</span>';
+    return '<div class="mrow ' + m.conf + '"><div class="tm">' + esc(m.time) + '<small>' + (m.state === 'pre' ? dm(m.date) : bkState(m)) + '</small></div>' +
+      '<div class="tt">' + tn(m.home) + tn(m.away) + res + '</div>' +
+      '<div class="act">' + tag + '<button class="voir ' + m.conf + '" data-bkopen="' + m.i + '">Voir' + svg(IC.chev) + '</button></div>' +
+      '<div class="mb"><i class="h" style="width:' + m.p * 100 + '%"></i><i class="a" style="width:' + (1 - m.p) * 100 + '%"></i></div></div>';
+  }
+  function bkGroups(list) {
+    var h = '';
+    ['NBA', 'EL'].forEach(function (lg) {
+      var g = list.filter(function (m) { return m.lg === lg; });
+      if (!g.length) return;
+      h += '<div class="lgh"><span class="lb" style="--lc:' + BL[lg][1] + '">🏀</span><div class="ln">' + BL[lg][0] + '<small>' + esc(g[0].label || '') + '</small></div><span class="cnt">' + g.length + '</span></div>' + g.map(bkRow).join('');
+    });
+    return h;
+  }
+  function bkFoot() {
+    var bt = D.basket.bt || {}, h = '';
+    ['NBA', 'EL'].forEach(function (lg) {
+      var b = bt[lg];
+      if (!b || !b.n) return;
+      var rows = (b.bins || []).map(function (x) {
+        return '<tr><td>' + Math.round(x.lo * 100) + '–' + Math.round(x.hi * 100) + ' %</td><td>' + x.n + '</td><td>' + pct(x.said) + '</td><td><b>' + pct(x.real) + '</b></td></tr>'; }).join('');
+      h += '<div class="fm"><h4>' + BL[lg][0] + ' · test sur ' + b.n.toLocaleString('fr-FR') + ' matchs</h4><div class="sub">Vainqueur juste : <b>' + pct(b.acc) +
+        '</b>. Pronostics sûrs (tous marchés) : annoncés <b>' + pct(b.said) + '</b>, réalisés <b>' + pct(b.real) + '</b> sur ' + b.n_safe.toLocaleString('fr-FR') + ' sélections.</div>' +
+        '<table class="tbl"><thead><tr><th>Confiance</th><th>Matchs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    });
+    return h ? '<div class="sec"><span class="dot g"></span>Fiabilité du modèle basket</div>' + h : '';
+  }
+  function basketHTML() {
+    var h = brand() + sportsBar();
+    if (!BM.length) return h + '<div class="empty">Aucun match de basket (NBA, EuroLeague) dans la période. Réessaie un peu plus tard.</div>';
+    var T = st.bk, q = norm(st.q.trim());
+    var base = BM.filter(function (m) { return (T.lg === 'all' || m.lg === T.lg) && (!q || m.key.indexOf(q) >= 0); });
+    var upc = base.filter(function (m) { return m.state !== 'post'; }), res = base.filter(function (m) { return m.state === 'post'; });
+    var days = [];
+    upc.forEach(function (m) { if (days.indexOf(m.date) < 0) days.push(m.date); });
+    var done = res.filter(function (m) { return m.hit != null; }), ok = done.filter(function (m) { return m.hit; }).length, sp = 0, sw = 0;
+    done.forEach(function (m) { (m.picks || []).forEach(function (p) { if (p.t === 0) { sp++; if (p.h) sw++; } }); });
+    var nHigh = upc.filter(function (m) { return m.conf === 'high'; }).length;
+    h += '<div class="pulse"><div><b>' + upc.length + '</b><span>matchs à venir</span></div><div class="hi"><b>' + nHigh + '</b><span>haute confiance</span></div><div><b>' +
+      (done.length ? ok + '/' + done.length : '–') + '</b><span>vainqueurs justes</span></div></div>';
+    h += '<div class="chips">';
+    if (res.length) h += '<button class="chip past' + (T.day === 'res' ? ' on' : '') + '" data-bkday="res">Résultats<b>' + svg(IC.check) + ' ' + res.length + '</b></button>';
+    h += '<button class="chip' + (T.day === 'all' ? ' on' : '') + '" data-bkday="all">À venir<b>' + upc.length + ' matchs</b></button>';
+    days.forEach(function (d) { h += '<button class="chip' + (T.day === d ? ' on' : '') + '" data-bkday="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>'; });
+    h += '</div><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label></div>';
+    h += '<div class="chips">' + [['all', 'Tous'], ['NBA', 'NBA'], ['EL', 'EuroLeague']].map(function (x) {
+      return '<button class="chip pill' + (T.lg === x[0] ? ' on' : '') + '" data-bklg="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    if (T.day === 'res') {
+      h += '<div class="srcnote"><b>Résultats récents</b> : ' + (done.length ? 'vainqueur correct ' + ok + '/' + done.length + (sp ? ' · pronostics sûrs gagnés ' + sw + '/' + sp : '') + '. ' : '') +
+        'Chaque pronostic est calculé avec les données d’avant le match.</div>';
+      return h + (res.length ? bkGroups(res) : '<div class="empty">Aucun résultat pour ce filtre.</div>');
+    }
+    var list = upc.filter(function (m) { return T.day === 'all' || m.date === T.day; });
+    if (!list.length) return h + '<div class="empty">Aucun match à venir pour ce filtre.</div>';
+    return h + (list.some(function (m) { return m.pre; }) ? '<div class="srcnote">NBA : la saison régulière n’a pas encore commencé, ce sont des matchs de <b>présaison</b> (équipes remaniées, pas de pronostic sûr).</div>' : '') + bkGroups(list) + bkFoot();
+  }
+  function bkPage(i) {
+    var m = BM.filter(function (x) { return x.id === st.detail.id; })[0] || BM[i], d = { div: 'BSK', home: m.home, away: m.away }, conf = m.conf, p = [m.p, 1 - m.p];
+    var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
+      '<div class="who"><span class="lgchip">🏀 ' + BL[m.lg][0] + '</span><small>' + esc(m.label) + ' · ' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + bkState(m) + '</small></div></div>' + vsBlock(d);
+    if (m.state === 'post') {
+      h += '<div class="main ' + (m.hit ? 'high' : 'low') + '"><div class="k"><small>Résultat</small></div><div class="hero"><div><div class="hl">' + m.hs + ' – ' + m.as_ + '</div><div class="hn">' +
+        esc(m.hs > m.as_ ? m.home : m.away) + '</div></div></div>' + (m.hit != null ? line('Notre pronostic', (m.hit ? '✓ ' : '✗ ') + m.favName + ' · ' + pct(m.fav)) : '') +
+        line('Score attendu', Math.round(m.lh) + ' – ' + Math.round(m.la)) + '</div>';
+      if (m.picks && m.picks.length) h += '<div class="sec"><span class="dot g"></span>Nos pronostics sur ce match</div><div class="fm">' + m.picks.map(pickRow).join('') + '</div>';
+      return h;
+    }
+    h += '<div class="main ' + conf + '"><div class="k"><small>Pronostic principal</small><span class="badge ' + conf + '">' + confIcon(conf) + CONF[conf] + '</span></div>' +
+      '<div class="hero"><div><div class="hl">Vainqueur du match</div><div class="hn">' + esc(m.favName) + '</div></div>' + gauge(m.fav, conf) + '</div>' +
+      line('Score attendu', Math.round(m.lh) + ' – ' + Math.round(m.la)) + line('Total attendu', Math.round(m.lh + m.la) + ' points') + line('Écart attendu', Math.abs(Math.round(m.lh - m.la)) + ' points pour ' + m.favName) +
+      '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="a" style="width:' + p[1] * 100 + '%"></i></div>' +
+      '<div class="l3"><span class="h">' + esc(last(m.home)) + ' · ' + pct(p[0]) + '</span><span class="a">' + esc(last(m.away)) + ' · ' + pct(p[1]) + '</span></div></div>';
+    if (m.pre) return h + '<div class="sub warn">Match de présaison : effectifs remaniés et temps de jeu des titulaires limité, estimation peu fiable, aucun pronostic sûr proposé.</div>';
+    if (!m.known) return h + '<div class="sub warn">Pas d’historique sur une des équipes : estimation peu fiable.</div>';
     var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; };
     h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
       (m.safe.length ? m.safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
@@ -789,8 +922,8 @@
     }).join('') + '</div>';
   }
   function render() {
-    if (st.detail) app.innerHTML = st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
-    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? homeHTML() : st.sport === 'tennis' ? tennisHTML() : soonHTML();
+    if (st.detail) app.innerHTML = st.detail.bk != null ? bkPage(st.detail.bk) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
+    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? homeHTML() : st.sport === 'tennis' ? tennisHTML() : st.sport === 'basket' ? basketHTML() : soonHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
@@ -805,11 +938,17 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bkopen],[data-bkday],[data-bklg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
     if (t.hasAttribute('data-sport')) {
-      st.sport = t.getAttribute('data-sport'); render(); if (st.sport === 'tennis') liveTennis();
+      st.sport = t.getAttribute('data-sport'); render(); if (st.sport === 'tennis') liveTennis(); if (st.sport === 'basket') liveBasket();
       var on = app.querySelector('.sp.on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    } else if (t.hasAttribute('data-bkopen')) {
+      st.scroll = window.scrollY; st.detail = { bk: +t.getAttribute('data-bkopen'), id: BM[+t.getAttribute('data-bkopen')].id };
+      try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
+      render(); window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-bkday')) { st.bk.day = t.getAttribute('data-bkday'); render();
+    } else if (t.hasAttribute('data-bklg')) { st.bk.lg = t.getAttribute('data-bklg'); render();
     } else if (t.hasAttribute('data-tnopen')) {
       st.scroll = window.scrollY; st.detail = { tn: +t.getAttribute('data-tnopen'), id: TM[+t.getAttribute('data-tnopen')].id };
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }

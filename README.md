@@ -54,3 +54,11 @@ avec les prédictions d'API-Football, **non validées** par nos backtests.
 calendrier et résultats des tournois en cours via l'API publique d'ESPN (hier + 7 jours). Chaque pronostic n'utilise que des
 données antérieures au match. Test sur 2025-2026 : vainqueur juste ~65 %, bien calibré, mais un peu moins bon que les cotes des bookmakers.
 Le site est régénéré toutes les 2 h (cron) pour garder le tennis et les résultats à jour ; les notifications ne partent que le matin.
+
+## Basket (NBA et EuroLeague)
+
+`basket.py` : points attendus de chaque équipe (attaque / défense / avantage du terrain, moindres carrés régularisés, matchs récents
+plus pondérés), marges et totaux de points modélisés par des lois normales. Marchés : vainqueur, handicap, total de points, points
+par équipe. Historique : ESPN (NBA, 3 saisons) et API officielle de l'EuroLeague, mis en cache dans `data/basket_games.json`.
+Test sur la saison 2025-26 : vainqueur juste ~63 % (NBA) et ~66 % (EuroLeague), pronostics « sûrs » annoncés 74-76 % pour 74-75 % réels.
+Les matchs sont aussi récupérés en direct par le navigateur (comme le tennis).
