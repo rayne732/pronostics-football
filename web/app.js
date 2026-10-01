@@ -6,7 +6,7 @@
   var SAFE = D.safeMin, app = document.getElementById('app'), nav = document.getElementById('nav');
   var CONF = { high: 'Haute confiance', mid: 'Confiance moyenne', low: 'Match ouvert' };
   var WD = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  var st = { tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', detail: null, dtab: 'pred', pushed: false, scroll: 0,
+  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', detail: null, dtab: 'pred', pushed: false, scroll: 0,
              an: { div: D.order[0], h: 0, a: 1 } };
   var favs = {};
   try { favs = JSON.parse(localStorage.getItem('pf-fav') || '{}'); } catch (e) { favs = {}; }
@@ -222,6 +222,21 @@
     });
     return h;
   }
+  var SPORTS = [['foot', '⚽', 'Football'], ['tennis', '🎾', 'Tennis'], ['basket', '🏀', 'Basketball'], ['auto', '🏎️', 'Automobile'], ['baseball', '⚾', 'Baseball'],
+    ['biathlon', '🎯', 'Biathlon'], ['boxe', '🥊', 'Boxe'], ['cyclisme', '🚴', 'Cyclisme'], ['nfl', '🏈', 'Football américain'], ['f1', '🏁', 'Formule 1'],
+    ['golf', '⛳', 'Golf'], ['hand', '🤾', 'Handball'], ['hockey', '🏒', 'Hockey sur glace'], ['mma', '🥋', 'MMA'], ['moto', '🏍️', 'Moto'],
+    ['rugby15', '🏉', 'Rugby à XV'], ['rugby13', '🏉', 'Rugby à XIII'], ['ski', '⛷️', 'Ski alpin'], ['snooker', '🎱', 'Snooker'], ['tt', '🏓', 'Tennis de table'], ['volley', '🏐', 'Volley-ball']];
+  function sportsBar() {
+    return '<div class="sports">' + SPORTS.map(function (x) {
+      return '<button class="sp' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '"><span class="se">' + x[1] + '</span>' + esc(x[2]) + '</button>';
+    }).join('') + '</div>';
+  }
+  function soonHTML() {
+    var x = SPORTS.filter(function (y) { return y[0] === st.sport; })[0];
+    return brand() + sportsBar() + '<div class="empty"><div class="soon">' + x[1] + '</div><b>' + esc(x[2]) + ' : bientôt disponible.</b><br>' +
+      'Chaque sport demande son propre modèle et son propre test de fiabilité avant d’afficher des pronostics. Je ne publie pas de probabilités non vérifiées. ' +
+      'Le <b>tennis</b> est le prochain sur la liste.</div>';
+  }
   function brand() {
     var dark = curTheme() === 'dark';
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics football</h1><small>Mis à jour le ' + esc(D.generated) + '</small></div>' +
@@ -362,7 +377,7 @@
     var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
-    var h = brand(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext';
+    var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext';
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
     if (!fx.length && !past.length && !D.daily.length && !D.ext.length) {
       return h + '<div class="empty">Aucun match à venir dans les 7 prochains jours pour les championnats suivis. ' +
@@ -635,7 +650,7 @@
   }
   function render() {
     if (st.detail) app.innerHTML = st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
-    else if (st.tab === 'home') app.innerHTML = homeHTML();
+    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? homeHTML() : soonHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
@@ -650,9 +665,12 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
-    if (t.hasAttribute('data-openext')) {
+    if (t.hasAttribute('data-sport')) {
+      st.sport = t.getAttribute('data-sport'); render();
+      var on = app.querySelector('.sp.on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    } else if (t.hasAttribute('data-openext')) {
       st.scroll = window.scrollY; st.detail = { ext: +t.getAttribute('data-openext') };
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
       render(); window.scrollTo(0, 0);
