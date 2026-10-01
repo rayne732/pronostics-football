@@ -125,3 +125,9 @@ ESPN depuis 2024 (`data/golf_rounds.json`). Les règles de cut sont simplifiées
 `volleyball.py` : notes Elo par championnat (avantage du terrain compris) ; les scores en sets (3-0, 3-1, 3-2), le total de sets et le handicap en sets
 viennent du même modèle que le tennis (match au meilleur des 5 sets). Données API-Sports (clé `API_FOOTBALL_KEY`) : saisons 2022-2024 pour l'historique
 et hier à demain pour le calendrier (offre gratuite) ; les notes datent donc de mai 2025. Le test mesure un modèle figé un an plus tôt.
+
+## Bilan global
+
+L'onglet « Fiabilité » commence par un bilan des 7 derniers jours pour tous les sports. Le football vient du suivi serveur (`data/tracking.json`) ;
+les autres sports sont comptés par le navigateur à partir des résultats récupérés en direct (mémorisés sur l'appareil, 45 jours). Le bouton
+« Actualiser » (ou une mise à jour automatique toutes les 3 h à l'ouverture) charge chaque sport et enregistre ses derniers résultats.

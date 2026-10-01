@@ -389,3 +389,5 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .f1b b{position:relative;display:block;text-align:center;font-size:.68rem;line-height:20px;font-variant-numeric:tabular-nums}
 .pr small.fl{margin-left:8px}
 .pr small.sm{display:block;margin-top:2px;color:var(--mute);font-size:.68rem;font-weight:400}
+
+#info .voir[disabled]{opacity:.6}

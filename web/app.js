@@ -375,6 +375,84 @@
     return h;
   }
 
+
+  /* ------------------------------------------------------------ bilan global : résultats vus par cet appareil, tous sports */
+  var LEDGER = { s: {}, t: 0 };
+  try { var rawL = JSON.parse(localStorage.getItem('pf-ledger') || 'null'); if (rawL && rawL.s) LEDGER = rawL; } catch (e) { /* ignoré */ }
+  function ledgerSave() { try { localStorage.setItem('pf-ledger', JSON.stringify(LEDGER)); } catch (e) { /* stockage indisponible */ } }
+  function ledgerRecord(sid, items) {
+    var cut = isoDate(new Date(Date.now() - 45 * 864e5)), box = LEDGER.s[sid] || (LEDGER.s[sid] = {}), changed = false;
+    items.forEach(function (m) {
+      if (m.state !== 'post' || m.hit == null || m.date < cut) return;
+      var sw = 0, sn = 0, lw = 0, ln = 0;
+      (m.picks || []).forEach(function (q) { if (q.t === 0) { sn++; if (q.h) sw++; } else { ln++; if (q.h) lw++; } });
+      var row = [m.date, sw, sn, lw, ln, m.hit ? 1 : 0], old = box[m.id];
+      if (!old || old.join() !== row.join()) { box[m.id] = row; changed = true; }
+    });
+    Object.keys(box).forEach(function (k) { if (box[k][0] < cut) { delete box[k]; changed = true; } });
+    if (changed) ledgerSave();
+  }
+  var BILAN_SPORTS = [['tennis', '🎾', 'Tennis'], ['basket', '🏀', 'Basket'], ['rugby15', '🏉', 'Rugby à XV'], ['handball', '🤾', 'Handball'], ['hockey', '🏒', 'Hockey'],
+    ['baseball', '⚾', 'Baseball'], ['nfl', '🏈', 'Football américain'], ['mma', '🥋', 'MMA'], ['volley', '🏐', 'Volley-ball']];
+  var bilanBusy = false, bilanMsg = '';
+  function bilanRefreshAll(done) {                        // charge chaque sport, récupère les derniers résultats et les enregistre
+    if (bilanBusy) return;
+    bilanBusy = true;
+    var ids = BILAN_SPORTS.map(function (x) { return x[0]; }), i = 0;
+    function next() {
+      if (i >= ids.length) { bilanBusy = false; bilanMsg = ''; LEDGER.t = Date.now(); ledgerSave(); if (done) done(); return; }
+      var sid = ids[i++], S = spOf(sid), key = S ? S.cfg.key : sid;
+      bilanMsg = 'Mise à jour… ' + i + '/' + ids.length;
+      if (st.tab === 'info' && !st.detail) render();
+      loadLazy(key, function () {
+        var fin = function () { setTimeout(next, 150); };
+        if (S) { spInit(S); spLive(S, fin); }
+        else { setTM(D.tennis.matches || []); liveTennis(fin); }
+      });
+    }
+    next();
+  }
+  function bilanHTML() {
+    var today = D.today || isoDate(new Date()), lo = isoDate(new Date(Date.now() - 6 * 864e5)), rows = [], tot = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 }, perDay = {};
+    var add = function (d, sw, sn, lw, ln) { var o = perDay[d] || (perDay[d] = { sw: 0, sn: 0 }); o.sw += sw; o.sn += sn; };
+    var fb = (D.daily || []).filter(function (r) { return r.date >= lo && r.date < today; });
+    if (fb.length) {
+      var f = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 };
+      fb.forEach(function (r) { f.sw += r.sw; f.sn += r.sn; f.lw += r.lw; f.ln += r.ln; f.m += r.ms; add(r.date, r.sw, r.sn); });
+      rows.push(['⚽', 'Football', f, true]);
+    }
+    BILAN_SPORTS.forEach(function (sp) {
+      var box = LEDGER.s[sp[0]] || {}, o = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 };
+      Object.keys(box).forEach(function (k) {
+        var r = box[k];
+        if (r[0] < lo) return;
+        o.sw += r[1]; o.sn += r[2]; o.lw += r[3]; o.ln += r[4]; o.m++; o.h += r[5]; add(r[0], r[1], r[2]);
+      });
+      if (o.m) rows.push([sp[1], sp[2], o, false]);
+    });
+    rows.forEach(function (r) { var o = r[2]; tot.sw += o.sw; tot.sn += o.sn; tot.lw += o.lw; tot.ln += o.ln; tot.m += o.m; tot.h += o.h; });
+    var h = '<h2>Bilan des 7 derniers jours · tous sports</h2>';
+    if (!rows.length) {
+      h += '<div class="empty">Pas encore de résultat enregistré. Touche « Actualiser » : le site va chercher les derniers résultats de chaque sport et les compare à nos pronostics.</div>';
+    } else {
+      var sp = tot.sn ? tot.sw / tot.sn : 0, conf = sp >= SAFE ? 'high' : sp >= 0.5 ? 'mid' : 'low';
+      h += '<div class="main ' + conf + '"><div class="k"><small>Tous sports confondus</small></div><div class="hero"><div><div class="hl">Pronostics sûrs gagnés</div><div class="hn">' + tot.sw + ' / ' + tot.sn +
+        '</div></div>' + gauge(sp, conf) + '</div>' + line('Moins sûrs gagnés', tot.lw + ' / ' + tot.ln) + line('Matchs et combats jugés', String(tot.m)) + '</div>';
+      h += '<div class="sec"><span class="dot g"></span>Par sport</div><div class="wkbox">' + rows.map(function (r) {
+        var o = r[2], pp = o.sn ? o.sw / o.sn : 0;
+        return '<div class="wd"><span class="wl">' + r[0] + ' ' + esc(r[1]) + '</span><div class="wb"><i class="' + (pp >= SAFE ? 'ok' : 'lo') + '" style="width:' + Math.round(pp * 100) + '%"></i><u style="left:' + Math.round(SAFE * 100) + '%"></u></div>' +
+          '<span class="wp">' + (o.sn ? pct(pp) : '–') + ' <small>' + o.sw + '/' + o.sn + (r[3] || !o.m ? '' : ' · vainqueur ' + o.h + '/' + o.m) + '</small></span></div>'; }).join('') + '</div>';
+      var days = Object.keys(perDay).sort();
+      if (days.length > 1) h += '<div class="sec"><span class="dot a"></span>Jour par jour</div><div class="wkbox">' + days.map(function (d) {
+        var o = perDay[d], pp = o.sn ? o.sw / o.sn : 0;
+        return '<div class="wd"><span class="wl">' + WD[parseD(d).getDay()] + ' ' + dm(d) + '</span><div class="wb"><i class="' + (pp >= SAFE ? 'ok' : 'lo') + '" style="width:' + Math.round(pp * 100) + '%"></i><u style="left:' + Math.round(SAFE * 100) + '%"></u></div><span class="wp">' + pct(pp) + ' <small>' + o.sw + '/' + o.sn + '</small></span></div>'; }).join('') + '</div>';
+    }
+    h += '<button class="voir mid wide" data-bilan style="margin:12px 0"' + (bilanBusy ? ' disabled' : '') + '>' + (bilanBusy ? esc(bilanMsg || 'Mise à jour…') : 'Actualiser les résultats de tous les sports') + '</button>';
+    h += '<div class="sub">Le football vient du suivi du site (vérifié chaque jour). Les autres sports sont comptés à partir des résultats que <b>cet appareil</b> a pu récupérer en direct : seuls les jours où le site a été ouvert (ou actualisé ici) sont comptés. ' +
+      'Un jour ou un sport isolé ne dit pas grand-chose : le modèle annonce environ 75 % de réussite sur les pronostics sûrs.</div>';
+    return h;
+  }
+
   /* ------------------------------------------------------------ tennis */
   D.tennis = D.tennis || {};
   var TM = [];
@@ -384,10 +462,11 @@
       m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.b : m.a;
       m.key = norm(m.a + ' ' + m.b + ' ' + m.tn);
     });
+    ledgerRecord('tennis', TM);
   }
   var tnBusy = false;
-  function liveTennis() {                                   // calendrier et résultats ESPN en direct, pronostics calculés dans le navigateur
-    if (tnBusy || !D.tennis.model || !window.Tennis || !window.fetch) return;
+  function liveTennis(cb) {                                   // calendrier et résultats ESPN en direct, pronostics calculés dans le navigateur
+    if (tnBusy || !D.tennis.model || !window.Tennis || !window.fetch) { if (cb) cb(); return; }
     tnBusy = true;
     Tennis.setModel(D.tennis.model);
     Promise.all(['atp', 'wta'].map(function (f) {
@@ -405,7 +484,7 @@
       D.tennis.generated = p.d.slice(8) + '/' + p.d.slice(5, 7) + '/' + p.d.slice(0, 4) + ' à ' + p.t + ' (direct)';
       if (st.sport === 'tennis' && !st.detail && st.tab === 'home') { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
     }).catch(function () { /* pas de réseau ou source bloquée : on garde les données de la dernière mise à jour */ })
-      .then(function () { tnBusy = false; });
+      .then(function () { tnBusy = false; if (cb) cb(); });
   }
   setInterval(function () { if (st.sport === 'tennis' && document.visibilityState === 'visible') liveTennis(); }, 180000);
   var SURF = { Hard: 'Dur', Clay: 'Terre', Grass: 'Gazon', Carpet: 'Moquette' };
@@ -580,6 +659,7 @@
       m.fav = Math.max(m.p3[0], m.p3[2]); m.favIdx = m.p3[0] >= m.p3[2] ? 0 : 2; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.away : m.home;
       m.key = norm(m.home + ' ' + m.away + ' ' + (L[m.lg] ? L[m.lg][0] : ''));
     });
+    ledgerRecord(S.sid, list);
   }
   function spInit(S) {
     if (S.inited) return;
@@ -588,9 +668,9 @@
     spSet(S, d.matches || []);
     if (S.cfg.lib && window[S.cfg.lib] && d.model) window[S.cfg.lib].init(d);
   }
-  function spLive(S) {                                      // calendrier et scores en direct (si la source autorise le navigateur)
+  function spLive(S, cb) {                                      // calendrier et scores en direct (si la source autorise le navigateur)
     var lib = S.cfg.lib && window[S.cfg.lib], d = spData(S);
-    if (S.busy || !lib || !d.model || !window.Tennis || !window.fetch) return;
+    if (S.busy || !lib || !d.model || !window.Tennis || !window.fetch) { if (cb) cb(); return; }
     S.busy = true;
     var now = new Date(), P = Tennis.paris;
     var lo = P(new Date(now.getTime() - 864e5).toISOString()).d, hi = P(new Date(now.getTime() + 8 * 864e5).toISOString()).d;
@@ -610,7 +690,7 @@
       var p = P(now.toISOString());
       d.generated = p.d.slice(8) + '/' + p.d.slice(5, 7) + '/' + p.d.slice(0, 4) + ' à ' + p.t + ' (direct)';
       if (st.sport === S.sid && !st.detail && st.tab === 'home') { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
-    }).catch(function () { /* on garde les données de la dernière mise à jour */ }).then(function () { S.busy = false; });
+    }).catch(function () { /* on garde les données de la dernière mise à jour */ }).then(function () { S.busy = false; if (cb) cb(); });
   }
   setInterval(function () { var S = spOf(st.sport); if (S && document.visibilityState === 'visible') spLive(S); }, 180000);
   function spWinner(m) { return m.hs > m.as_ ? m.home : m.as_ > m.hs ? m.away : 'Match nul'; }
@@ -1118,7 +1198,7 @@
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
-    else app.innerHTML = '<div id="info">' + document.getElementById('info-html').innerHTML + '</div>';
+    else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     renderNav();
     var fab = document.getElementById('fab');
     if (!fab) { fab = document.createElement('button'); fab.id = 'fab'; fab.setAttribute('data-ticket', ''); document.body.appendChild(fab); }
@@ -1129,9 +1209,12 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
-    if (t.hasAttribute('data-sport')) {
+    if (t.hasAttribute('data-bilan')) {
+      bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+      render();
+    } else if (t.hasAttribute('data-sport')) {
       st.sport = t.getAttribute('data-sport');
       var S = spOf(st.sport), key = S ? S.cfg.key : st.sport;
       render();
@@ -1220,5 +1303,6 @@
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 
   render();
+  if (Date.now() - (LEDGER.t || 0) > 3 * 3600 * 1000) setTimeout(function () { bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) render(); }); }, 4000);
   loadLazy('hist', function () { if (st.detail && st.detail.fi != null) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });   // historique pour l'onglet « Forme », chargé en arrière-plan
 })();
