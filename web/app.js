@@ -6,7 +6,7 @@
   var SAFE = D.safeMin, app = document.getElementById('app'), nav = document.getElementById('nav');
   var CONF = { high: 'Haute confiance', mid: 'Confiance moyenne', low: 'Match ouvert' };
   var WD = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', detail: null, dtab: 'pred', pushed: false, scroll: 0,
+  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
              an: { div: D.order[0], h: 0, a: 1 } };
   var favs = {};
   try { favs = JSON.parse(localStorage.getItem('pf-fav') || '{}'); } catch (e) { favs = {}; }
@@ -64,9 +64,9 @@
     corner: '<path d="M6 21V3M6 4l11 4.5L6 13"/>'
   };
   function mkIcon(name) {
-    var k = /Résultat à la mi|Mi-temps/.test(name) ? 'clock' : /^Résultat du match/.test(name) ? 'trophy' : /Double/.test(name) ? 'dice' :
-      /Les deux/.test(name) ? 'users' : /Total buts|^Buts de/.test(name) ? 'ball' : /Pair/.test(name) ? 'sliders' : /Tranche/.test(name) ? 'bars' :
-      /Handicap/.test(name) ? 'scale' : /Victoire/.test(name) ? 'shield' : /Score exact/.test(name) ? 'target' : /Premier but/.test(name) ? 'flag' :
+    var k = /Résultat à la mi|Mi-temps/.test(name) ? 'clock' : /^Résultat du match|^Vainqueur/.test(name) ? 'trophy' : /Double/.test(name) ? 'dice' :
+      /Les deux/.test(name) ? 'users' : /Total buts|^Buts de/.test(name) ? 'ball' : /Total sets/.test(name) ? 'bars' : /Pair/.test(name) ? 'sliders' : /Tranche/.test(name) ? 'bars' :
+      /Handicap/.test(name) ? 'scale' : /Victoire/.test(name) ? 'shield' : /Score exact|Score en sets/.test(name) ? 'target' : /Premier but/.test(name) ? 'flag' :
       /Corners/.test(name) ? 'corner' : 'ball';
     return svg(IC[k]);
   }
@@ -238,8 +238,8 @@
       'Le <b>tennis</b> est le prochain sur la liste.</div>';
   }
   function brand() {
-    var dark = curTheme() === 'dark';
-    return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics football</h1><small>Mis à jour le ' + esc(D.generated) + '</small></div>' +
+    var dark = curTheme() === 'dark', tn = st.sport === 'tennis';
+    return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + (tn ? 'tennis' : 'football') + '</h1><small>Mis à jour le ' + esc(tn && D.tennis.generated ? D.tennis.generated : D.generated) + '</small></div>' +
       '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
   }
   function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
@@ -372,6 +372,119 @@
     if (e.h2h && e.h2h.length) h += '<div class="fm"><h4>Dernières confrontations</h4>' + e.h2h.map(function (m) {
       return '<div class="ml"><span>' + esc(m[0].slice(8) + '/' + m[0].slice(5, 7) + '/' + m[0].slice(2, 4)) + '</span><span>' + esc(m[1]) + '</span></div>'; }).join('') + '</div>';
     return h;
+  }
+
+  /* ------------------------------------------------------------ tennis */
+  D.tennis = D.tennis || {};
+  var TM = D.tennis.matches || [];
+  TM.forEach(function (m, i) {
+    m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.b : m.a;
+    m.key = norm(m.a + ' ' + m.b + ' ' + m.tn);
+  });
+  var SURF = { Hard: 'Dur', Clay: 'Terre', Grass: 'Gazon', Carpet: 'Moquette' };
+  function last(n) { return n.split(' ').slice(-1)[0]; }
+  function tnPlayer(name, flag) { return '<span class="tn">' + crest(name) + '<em>' + esc(name) + '</em>' + (flag ? '<small class="fl">' + esc(flag) + '</small>' : '') + '</span>'; }
+  function tnState(m) {
+    if (m.state === 'post') return m.retired ? 'Abandon' : 'Terminé';
+    if (m.state === 'in') return 'En cours';
+    return countdown({ date: m.date, time: m.time });
+  }
+  function tnRow(m) {
+    var res = '';
+    if (m.state === 'post') {
+      res = '<div class="tres">' + esc((m.sets || []).join('  ')) + (m.win != null ? ' · <b>' + esc(m.win ? m.b : m.a) + '</b>' : '') + '</div>';
+    }
+    var tag = m.state === 'post' && m.hit != null ? '<span class="cfp ' + (m.hit ? 'high' : 'low') + '">' + svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté') + '</span>' :
+      m.known ? '<span class="cfp ' + m.conf + '">' + pct(m.fav) + ' · ' + esc(last(m.favName)) + '</span>' : '<span class="cfp low">Peu d’historique</span>';
+    return '<div class="mrow ' + m.conf + '"><div class="tm">' + esc(m.time) + '<small>' + (m.state === 'pre' ? dm(m.date) : tnState(m)) + '</small></div>' +
+      '<div class="tt">' + tnPlayer(m.a, m.fa) + tnPlayer(m.b, m.fb) + res + '</div>' +
+      '<div class="act">' + tag + '<button class="voir ' + m.conf + '" data-tnopen="' + m.i + '">Voir' + svg(IC.chev) + '</button></div>' +
+      '<div class="mb"><i class="h" style="width:' + m.p * 100 + '%"></i><i class="a" style="width:' + (1 - m.p) * 100 + '%"></i></div></div>';
+  }
+  function tnGroups(list) {
+    var h = '', seen = {}, order = [];
+    list.forEach(function (m) { var k = m.tour + '|' + m.tn; if (!seen[k]) { seen[k] = []; order.push(k); } seen[k].push(m); });
+    order.forEach(function (k) {
+      var g = seen[k], m0 = g[0];
+      h += '<div class="lgh"><span class="lb" style="--lc:' + (m0.tour === 'ATP' ? '#2f6bdc' : '#d6479a') + '">🎾</span><div class="ln">' + esc(m0.tn) +
+        '<small>' + m0.tour + ' · ' + esc(SURF[m0.surf] || m0.surf) + (m0.city ? ' · ' + esc(m0.city) : '') + '</small></div><span class="cnt">' + g.length + '</span></div>' + g.map(tnRow).join('');
+    });
+    return h;
+  }
+  function tnBilan(list) {
+    var done = list.filter(function (m) { return m.state === 'post' && m.hit != null && m.known; });
+    var ok = done.filter(function (m) { return m.hit; }).length, sp = 0, sw = 0;
+    done.forEach(function (m) { (m.picks || []).forEach(function (p) { if (p.t === 0) { sp++; if (p.h) sw++; } }); });
+    return { n: done.length, ok: ok, sp: sp, sw: sw };
+  }
+  function tennisHTML() {
+    var h = brand() + sportsBar();
+    if (!TM.length) return h + '<div class="empty">Calendrier tennis indisponible pour le moment. Réessaie un peu plus tard.</div>';
+    var T = st.tn, q = norm(st.q.trim());
+    var base = TM.filter(function (m) { return (T.tour === 'all' || m.tour === T.tour) && (!q || m.key.indexOf(q) >= 0); });
+    var known = base.filter(function (m) { return m.known; }), nUnk = base.length - known.length;
+    var shown = T.unk ? base : known;
+    var upc = shown.filter(function (m) { return m.state !== 'post'; }), res = shown.filter(function (m) { return m.state === 'post'; });
+    var days = [];
+    upc.forEach(function (m) { if (days.indexOf(m.date) < 0) days.push(m.date); });
+    var b = tnBilan(known), nHigh = known.filter(function (m) { return m.state !== 'post' && m.conf === 'high'; }).length;
+    h += '<div class="pulse"><div><b>' + known.filter(function (m) { return m.state !== 'post'; }).length + '</b><span>matchs à venir</span></div><div class="hi"><b>' + nHigh +
+      '</b><span>haute confiance</span></div><div><b>' + (b.n ? b.ok + '/' + b.n : '–') + '</b><span>vainqueurs justes</span></div></div>';
+    h += '<div class="chips">';
+    if (res.length) h += '<button class="chip past' + (T.day === 'res' ? ' on' : '') + '" data-tnday="res">Résultats<b>' + svg(IC.check) + ' ' + res.length + '</b></button>';
+    h += '<button class="chip' + (T.day === 'all' ? ' on' : '') + '" data-tnday="all">À venir<b>' + upc.length + ' matchs</b></button>';
+    days.forEach(function (d) { h += '<button class="chip' + (T.day === d ? ' on' : '') + '" data-tnday="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>'; });
+    h += '</div><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher un joueur" autocomplete="off" value="' + esc(st.q) + '"></label></div>';
+    h += '<div class="chips">' + [['all', 'Tous'], ['ATP', 'ATP'], ['WTA', 'WTA']].map(function (x) {
+      return '<button class="chip pill' + (T.tour === x[0] ? ' on' : '') + '" data-tntour="' + x[0] + '">' + x[1] + '</button>'; }).join('') +
+      (nUnk ? '<button class="chip pill' + (T.unk ? ' on' : '') + '" data-tnunk>+ ' + nUnk + ' sans historique</button>' : '') + '</div>';
+    if (T.day === 'res') {
+      h += '<div class="srcnote"><b>Hier et aujourd’hui</b> : ' + (b.n ? 'vainqueur correct ' + b.ok + '/' + b.n + (b.sp ? ' · pronostics sûrs gagnés ' + b.sw + '/' + b.sp : '') + '. ' : '') +
+        'Chaque pronostic est calculé avec les données d’avant le match.</div>';
+      return h + (res.length ? tnGroups(res) : '<div class="empty">Aucun résultat pour ce filtre.</div>');
+    }
+    var list = upc.filter(function (m) { return T.day === 'all' || m.date === T.day; });
+    if (!list.length) return h + '<div class="empty">Aucun match à venir pour ce filtre.</div>';
+    var top = list.filter(function (m) { return m.known && m.state === 'pre'; }).sort(function (x, y) { return y.fav - x.fav; }).slice(0, 6);
+    if (top.length) h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(function (m) {
+      return '<div class="fcard ' + m.conf + '"><div class="lg">' + esc(m.tn) + ' · ' + dm(m.date) + ' · ' + esc(m.time) + '<span class="cd">' + svg(IC.clock) + tnState(m) + '</span></div>' +
+        '<div class="duel"><div class="s">' + crest(m.a, true) + '<b>' + esc(m.a) + '</b></div><span class="vsp">VS</span><div class="s">' + crest(m.b, true) + '<b>' + esc(m.b) + '</b></div></div>' +
+        '<div class="cfp ' + m.conf + '">' + confIcon(m.conf) + CONF[m.conf] + '</div><div class="pf">' + esc(m.favName) + ' <b>' + pct(m.fav) + '</b></div>' +
+        '<button class="voir wide ' + m.conf + '" data-tnopen="' + m.i + '">Voir le pronostic ' + svg(IC.chev) + '</button></div>'; }).join('') + '</div>';
+    return h + tnGroups(list) + tnFoot();
+  }
+  function tnFoot() {
+    var bt = D.tennis.bt || {};
+    if (!bt.n) return '';
+    var rows = (bt.bins || []).map(function (x) {
+      return '<tr><td>' + Math.round(x.lo * 100) + '–' + Math.round(x.hi * 100) + ' %</td><td>' + x.n + '</td><td>' + pct(x.said) + '</td><td><b>' + pct(x.real) + '</b></td></tr>'; }).join('');
+    return '<div class="sec"><span class="dot g"></span>Fiabilité du modèle tennis</div><div class="fm"><div class="sub">Test sur ' + bt.n.toLocaleString('fr-FR') +
+      ' matchs (du ' + dm(bt.since) + '/' + bt.since.slice(0, 4) + ' au ' + dm(bt.until) + '/' + bt.until.slice(0, 4) + '), chaque pronostic calculé sans connaître le match. ' +
+      'Vainqueur juste : <b>' + pct(bt.acc) + '</b>. Les cotes des bookmakers sans marge font un peu mieux : <b>' + pct(bt.acc_bk) + '</b> sur leurs ' + bt.n_bk.toLocaleString('fr-FR') + ' matchs. ' +
+      'Notre modèle reste donc <b>moins bon que les bookmakers</b> : à prendre comme une indication.</div>' +
+      '<table class="tbl"><thead><tr><th>Confiance</th><th>Matchs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  function tnPage(i) {
+    var m = TM[i], d = { div: 'TEN', home: m.a, away: m.b }, conf = m.conf, p = [m.p, 1 - m.p];
+    var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
+      '<div class="who"><span class="lgchip">🎾 ' + esc(m.tn) + '</span><small>' + esc(m.round) + ' · ' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + tnState(m) + '</small></div></div>' + vsBlock(d);
+    if (m.state === 'post') {
+      h += '<div class="main ' + (m.hit ? 'high' : 'low') + '"><div class="k"><small>Résultat</small></div><div class="hero"><div><div class="hl">' + esc((m.sets || []).join('  ')) + '</div><div class="hn">' +
+        esc(m.win != null ? (m.win ? m.b : m.a) : '–') + '</div></div></div>' + (m.hit != null ? line('Notre pronostic', (m.hit ? '✓ ' : '✗ ') + m.favName + ' · ' + pct(m.fav)) : '') + '</div>';
+      if (m.picks && m.picks.length) h += '<div class="sec"><span class="dot g"></span>Nos pronostics sur ce match</div><div class="fm">' + m.picks.map(pickRow).join('') + '</div>';
+      return h;
+    }
+    h += '<div class="main ' + conf + '"><div class="k"><small>Pronostic principal</small><span class="badge ' + conf + '">' + confIcon(conf) + CONF[conf] + '</span></div>' +
+      '<div class="hero"><div><div class="hl">Vainqueur du match</div><div class="hn">' + esc(m.favName) + '</div></div>' + gauge(m.fav, conf) + '</div>' +
+      line('Surface', (SURF[m.surf] || m.surf) + (m.city ? ' · ' + m.city : '')) + line('Format', 'Au meilleur des ' + m.bo + ' sets') +
+      (m.ra && m.rb ? line('Notes Elo (surface)', m.ra + ' – ' + m.rb) : '') +
+      '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="a" style="width:' + p[1] * 100 + '%"></i></div>' +
+      '<div class="l3"><span class="h">' + esc(last(m.a)) + ' · ' + pct(p[0]) + '</span><span class="a">' + esc(last(m.b)) + ' · ' + pct(p[1]) + '</span></div></div>';
+    if (!m.known) return h + '<div class="sub warn">Pas assez d’historique sur ce joueur (qualifié, invité ou circuit inférieur) : estimation très peu fiable, aucun pronostic sûr proposé.</div>';
+    var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; };
+    h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
+      (m.safe.length ? m.safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
+    return h + '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + m.less.map(wrap).map(mkRow('a', d)).join('');
   }
   function homeHTML() {
     var fx = D.fixtures, days = [], past = pastDates();
@@ -649,8 +762,8 @@
     }).join('') + '</div>';
   }
   function render() {
-    if (st.detail) app.innerHTML = st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
-    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? homeHTML() : soonHTML();
+    if (st.detail) app.innerHTML = st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
+    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? homeHTML() : st.sport === 'tennis' ? tennisHTML() : soonHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
@@ -665,11 +778,18 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
     if (t.hasAttribute('data-sport')) {
       st.sport = t.getAttribute('data-sport'); render();
       var on = app.querySelector('.sp.on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+    } else if (t.hasAttribute('data-tnopen')) {
+      st.scroll = window.scrollY; st.detail = { tn: +t.getAttribute('data-tnopen') };
+      try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
+      render(); window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-tnday')) { st.tn.day = t.getAttribute('data-tnday'); render();
+    } else if (t.hasAttribute('data-tntour')) { st.tn.tour = t.getAttribute('data-tntour'); render();
+    } else if (t.hasAttribute('data-tnunk')) { st.tn.unk = !st.tn.unk; render();
     } else if (t.hasAttribute('data-openext')) {
       st.scroll = window.scrollY; st.detail = { ext: +t.getAttribute('data-openext') };
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }

@@ -47,3 +47,10 @@ Données : résultats © football-data.co.uk, calendrier © football-data.org (o
 Clé gratuite de <https://dashboard.api-football.com> (secret `API_FOOTBALL_KEY`, en local dans `.env`). L'offre gratuite
 (100 requêtes/jour) ne donne que les matchs du jour : l'onglet « Autres matchs » liste ~30 matchs (sélections, coupes, amicaux…)
 avec les prédictions d'API-Football, **non validées** par nos backtests.
+
+## Tennis
+
+`tennis.py` : notes Elo (globale + bonus par surface) calculées sur les résultats ATP/WTA de tennis-data.co.uk (depuis 2022),
+calendrier et résultats des tournois en cours via l'API publique d'ESPN (hier + 7 jours). Chaque pronostic n'utilise que des
+données antérieures au match. Test sur 2025-2026 : vainqueur juste ~65 %, bien calibré, mais un peu moins bon que les cotes des bookmakers.
+Le site est régénéré toutes les 2 h (cron) pour garder le tennis et les résultats à jour ; les notifications ne partent que le matin.

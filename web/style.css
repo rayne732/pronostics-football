@@ -368,3 +368,11 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .sp .se{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--bg);font-size:.95rem;line-height:1}
 .sp.on{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber) inset}
 .soon{font-size:2.6rem;margin-bottom:8px}
+
+.fl{flex:none;margin-left:6px;padding:1px 5px;border-radius:6px;background:var(--line);color:var(--mute);font-size:.62rem;font-weight:600;letter-spacing:.04em}
+.tres{margin-top:4px;color:var(--mute);font-size:.78rem;font-variant-numeric:tabular-nums}
+.tres b{color:var(--ink);font-weight:600}
+.fm .tbl{width:100%;border-collapse:collapse;font-size:.82rem;font-variant-numeric:tabular-nums;margin-top:8px}
+.fm .tbl th,.fm .tbl td{padding:6px 8px;text-align:right;border-top:1px solid var(--line)}
+.fm .tbl th:first-child,.fm .tbl td:first-child{text-align:left}
+@media(max-width:480px){.fl{display:none}}

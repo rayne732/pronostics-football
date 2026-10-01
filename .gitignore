@@ -10,3 +10,4 @@ data/value_records.json
 !data/backtest.json
 !data/value_summary.json
 !data/tracking.json
+data/*.xlsx

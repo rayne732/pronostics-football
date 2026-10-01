@@ -14,7 +14,7 @@ BASE = "https://v3.football.api-sports.io/"
 CACHE = "data/apif_cache.json"
 MAX_PRED = 30                   # 31 requêtes par exécution : 3 exécutions possibles par jour sous la limite de 100
 PAUSE = 6.5                     # 10 requêtes par minute maximum
-MAX_AGE = 6 * 3600              # un cache plus récent que 6 h est réutilisé (évite de gaspiller le quota)
+MAX_AGE = 9 * 3600              # un cache plus récent que 9 h est réutilisé (évite de gaspiller le quota)
 
 # (morceau du nom de la compétition, priorité) : les plus suivies d'abord
 PRIORITY = [("uefa nations league", 100), ("champions league", 96), ("europa league", 94), ("conference league", 92),

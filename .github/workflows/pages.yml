@@ -3,6 +3,7 @@ name: Pronostics football
 on:
   schedule:
     - cron: "30 5 * * *"      # chaque jour à 5h30 UTC (7h30 à Paris l'été) : régénère le site et envoie les notifications
+    - cron: "0 7-21/2 * * *"  # toutes les 2 h dans la journée : tennis et résultats à jour (sans notification)
   workflow_dispatch:          # bouton « Run workflow » pour relancer à la main (sans notification)
   push:
     branches: [main]
@@ -33,7 +34,7 @@ jobs:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python bot.py --html ${{ github.event_name == 'schedule' && '--notify' || '' }}
+        run: python bot.py --html ${{ github.event.schedule == '30 5 * * *' && '--notify' || '' }}
       - name: Sauvegarder le suivi des pronostics
         run: |
           git config user.name "github-actions"

@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from apifootball import external_matches
+import tennis
 from digest import build_digest
 from fixtures_api import fetch_fixtures
 from markets import fit_all
@@ -120,6 +121,15 @@ def build_message(models, fixtures):
     return "\n".join(parts)
 
 
+def tennis_data(now):
+    """Pronostics tennis (modèle Elo + calendrier ESPN) ; une panne ne doit pas empêcher de publier le football."""
+    try:
+        return tennis.build(now)
+    except Exception as exc:
+        print(f"[avertissement] tennis indisponible : {exc}", file=sys.stderr)
+        return {}
+
+
 def load_env():
     if os.path.exists(".env"):
         with open(".env", encoding="utf-8-sig") as fh:
@@ -194,7 +204,7 @@ def main():
             fixtures = get_fixtures(now, 14, leagues)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now))
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
