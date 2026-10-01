@@ -74,6 +74,13 @@
     }
     return it;
   }
+
+  function getJson(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function days(now, parisFn, from, to) {                     // dates AAAAMMJJ (heure de Paris) de J+from à J+to
+    var out = [];
+    for (var i = from; i <= to; i++) out.push(parisFn(new Date(now.getTime() + i * 864e5).toISOString()).d.replace(/-/g, ''));
+    return out;
+  }
   function parse(json) {
     var out = [];
     (json.dates || []).forEach(function (d) {
@@ -86,5 +93,10 @@
     return out;
   }
 
-  root.Baseball = { setModel: function (m) { M = m; SAFE = m.safe; LESS = m.less; }, ready: function () { return !!M; }, build: build, parse: parse };
+  function fetchRaw(now, parisFn) {                          // un seul appel pour toute la fenêtre (API officielle MLB)
+    var d = days(now, parisFn, -2, 9), f = function (s) { return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6); };
+    return getJson('https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R,F,D,L,W&startDate=' + f(d[0]) + '&endDate=' + f(d[d.length - 1])).then(parse).catch(function () { return []; });
+  }
+
+  root.Baseball = { init: function (d) { M = d.model; SAFE = d.model.safe; LESS = d.model.less; }, fetchRaw: fetchRaw, setModel: function (m) { M = m; SAFE = m.safe; LESS = m.less; }, ready: function () { return !!M; }, build: build, parse: parse };
 })(typeof window !== 'undefined' ? window : globalThis);

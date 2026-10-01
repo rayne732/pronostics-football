@@ -77,6 +77,13 @@
     }
     return it;
   }
+
+  function getJson(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function days(now, parisFn, from, to) {                     // dates AAAAMMJJ (heure de Paris) de J+from à J+to
+    var out = [];
+    for (var i = from; i <= to; i++) out.push(parisFn(new Date(now.getTime() + i * 864e5).toISOString()).d.replace(/-/g, ''));
+    return out;
+  }
   function parse(json) {
     return (json.events || []).map(function (e) {
       var c = e.competitions[0], h = c.competitors.filter(function (x) { return x.homeAway === 'home'; })[0], a = c.competitors.filter(function (x) { return x.homeAway === 'away'; })[0];
@@ -85,7 +92,14 @@
     });
   }
 
+  function fetchRaw(now, parisFn) {
+    return Promise.all(days(now, parisFn, -1, 8).map(function (ymd) {
+      return getJson('https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=' + ymd).then(parse).catch(function () { return []; });
+    })).then(function (r) { return [].concat.apply([], r); });
+  }
+
   root.Hockey = {
+    init: function (d) { var m = d.model; M = m; SAFE = m.safe; LESS = m.less; ALIAS = m.alias || {}; }, fetchRaw: fetchRaw,
     setModel: function (m) { M = m; SAFE = m.safe; LESS = m.less; ALIAS = m.alias || {}; },
     ready: function () { return !!M; }, build: build, parse: parse
   };

@@ -7,6 +7,15 @@ Application web installable qui affiche des probabilités et pronostics pour 7 c
 > Analyse indicative, pas un conseil de pari. Le test de rentabilité (onglet « Fiabilité ») montre que ce
 > modèle **ne bat pas les bookmakers**. Réservé aux adultes. Joueurs Info Service : 09 74 75 13 13.
 
+## Architecture
+
+- `bot.py --html` assemble tout : football (modèle propre), puis un module par sport (`tennis.py`, `basket.py`, `rugby.py`, `handball.py`,
+  `hockey.py`, `baseball.py`, `nfl.py`, `f1.py`). Un sport en panne n'empêche pas la publication des autres.
+- `page.py` écrit `output/index.html` (léger : football + coque) et un fichier `output/data/<sport>.json` par sport, chargé à l'ouverture
+  du sport. `web/app.js` contient **une seule** interface pour tous les sports d'équipe (`SPORT_CFG`) ; chaque `web/<sport>.js` expose
+  `init`, `fetchRaw` (calendrier et scores en direct, via le navigateur) et `build` (mêmes calculs que le module Python).
+- `selfcheck.py` vérifie le site généré (fichiers, probabilités valides) à chaque exécution du workflow.
+
 ## Comment ça marche
 
 - `bot.py` télécharge les résultats (football-data.co.uk) et le calendrier (football-data.org), entraîne le

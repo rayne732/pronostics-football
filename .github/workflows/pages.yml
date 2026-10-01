@@ -35,6 +35,9 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python bot.py --html ${{ github.event.schedule == '30 5 * * *' && '--notify' || '' }}
+      - name: Contrôle du site généré
+        run: python selfcheck.py
+        continue-on-error: true       # avertit sans bloquer le déploiement
       - name: Sauvegarder le suivi des pronostics
         run: |
           git config user.name "github-actions"

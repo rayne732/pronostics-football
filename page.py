@@ -172,9 +172,21 @@ def _info(reliability):
     return intro + _reliability(reliability) + _value()
 
 
-def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, artifact=False):
-    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl),
-                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "nfl")      # données lourdes : un fichier par sport, chargé à l'ouverture du sport
+
+
+def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, artifact=False, lazy_dir=None):
+    d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl)
+    if lazy_dir and not artifact:
+        os.makedirs(lazy_dir, exist_ok=True)
+        stamp = f"{generated_at:%Y%m%d%H%M}"
+        d["lazy"] = {}
+        for key in LAZY:
+            with open(os.path.join(lazy_dir, f"{key}.json"), "w", encoding="utf-8") as fh:
+                json.dump(d[key], fh, ensure_ascii=False, separators=(",", ":"))
+            d[key] = [] if key == "hist" else {}
+            d["lazy"][key] = f"data/{key}.json?v={stamp}"
+    data = json.dumps(d, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     head = f'<title>Pronostics Football</title>{FONTS}<style>{_read("style.css")}</style>'
     body = (f'<div id="app"></div>'
             f'<nav id="nav" aria-label="Navigation"></nav>'

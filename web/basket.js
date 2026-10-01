@@ -72,6 +72,13 @@
     return m.slice(-6) === '(plus)' ? pts > ln : pts < ln;
   }
 
+
+  function getJson(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function days(now, parisFn, from, to) {                     // dates AAAAMMJJ (heure de Paris) de J+from à J+to
+    var out = [];
+    for (var i = from; i <= to; i++) out.push(parisFn(new Date(now.getTime() + i * 864e5).toISOString()).d.replace(/-/g, ''));
+    return out;
+  }
   /* un match brut {lg, id, d (UTC, ISO), home, away, state, hs, as, pre, label} -> structure de basket.py */
   function build(raw, base, parisFn) {
     var w = parisFn(raw.d), e = expected(raw.lg, raw.home, raw.away), known = !!e && !raw.pre, lg = M[raw.lg];
@@ -109,7 +116,17 @@
     });
   }
 
+  function fetchRaw(now, parisFn) {                          // NBA (ESPN, jour par jour) + EuroLeague (API officielle)
+    var nowIso = now.toISOString().slice(0, 16);
+    var jobs = days(now, parisFn, -1, 8).map(function (ymd) {
+      return getJson('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + ymd).then(parseNba).catch(function () { return []; });
+    });
+    jobs.push(getJson('https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/games').then(function (j) { return parseEuro(j, nowIso); }).catch(function () { return []; }));
+    return Promise.all(jobs).then(function (r) { return [].concat.apply([], r); });
+  }
+
   root.Basket = {
+    init: function (d) { M = d.model.m; SAFE = d.model.safe; LESS = d.model.less; }, fetchRaw: fetchRaw,
     setModel: function (m) { M = m.m; SAFE = m.safe; LESS = m.less; },
     ready: function () { return !!M; }, build: build, parseNba: parseNba, parseEuro: parseEuro,
     _families: families, _classify: classify, _expected: expected

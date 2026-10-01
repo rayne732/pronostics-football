@@ -276,7 +276,7 @@ def main():
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
         page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
-            fh.write(build_page(*page_args))
+            fh.write(build_page(*page_args, lazy_dir="output/data"))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
             fh.write(build_page(*page_args, artifact=True))
         write_site("output")                                             # manifeste, icônes, service worker (application installable)

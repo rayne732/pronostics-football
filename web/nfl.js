@@ -91,6 +91,13 @@
     return it;
   }
 
+
+  function getJson(u) { return fetch(u).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }); }
+  function days(now, parisFn, from, to) {                     // dates AAAAMMJJ (heure de Paris) de J+from à J+to
+    var out = [];
+    for (var i = from; i <= to; i++) out.push(parisFn(new Date(now.getTime() + i * 864e5).toISOString()).d.replace(/-/g, ''));
+    return out;
+  }
   /* scoreboard ESPN NFL (un jour) -> matchs bruts */
   function parseNfl(json) {
     return (json.events || []).map(function (e) {
@@ -100,7 +107,14 @@
     });
   }
 
+  function fetchRaw(now, parisFn) {
+    return Promise.all(days(now, parisFn, -1, 8).map(function (ymd) {
+      return getJson('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=' + ymd).then(parseNfl).catch(function () { return []; });
+    })).then(function (r) { return [].concat.apply([], r); });
+  }
+
   root.Nfl = {
+    init: function (d) { var m = d.model; M = { NFL: m }; SAFE = m.safe; LESS = m.less; }, fetchRaw: fetchRaw,
     setModel: function (m) { M = { NFL: m }; SAFE = m.safe; LESS = m.less; },
     ready: function () { return !!M; }, build: build, parse: parseNfl,
     _families: families, _classify: classify, _expected: expected
