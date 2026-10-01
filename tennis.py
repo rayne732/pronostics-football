@@ -344,17 +344,45 @@ def surface_of(raw, matches, default="Hard"):
 
 
 # ------------------------------------------------------------------ assemblage
+MODEL_FILE = os.path.join(DATA, "tennis_model.json")
+
+
+def export_model(cut, matches):
+    """Notes arrondies des joueurs (au moins 10 matchs) + surfaces des tournois : le navigateur calcule avec, en direct."""
+    out = {}
+    for tour, e in cut.items():
+        players = {n: [round(e.r.get(n, 1500.0), 1), c, {sf: round(v, 1) for (nm, sf), v in e.s.items() if nm == n}]
+                   for n, c in e.n.items() if c >= 10}
+        out[tour] = dict(p=players, idx={f"{k[0]}|{k[1]}": v[1] for k, v in build_index({tour: e}).items() if v[1] in players})
+    by_city, by_tn = {}, {}
+    for m in matches:
+        if m["d"].year >= date.today().year - 3:
+            by_city[_norm(m["city"])] = m["surf"]
+            by_tn[_norm(m["tn"])] = m["surf"]
+    out["surf"] = dict(city=by_city, tn={k: v for k, v in by_tn.items() if len(k) > 5})
+    out.update(surf_w=SURF_W, safe=SAFE_MIN, less=LESS_SAFE_MIN)
+    return out
+
+
 def build(now, days=7):
-    """Données tennis pour la page : matchs d'hier à J+days (pronostic calculé avec les données d'avant hier minuit)."""
+    """Données tennis pour la page : modèle exporté + matchs d'hier à J+days (pronostic calculé avec les données d'avant hier)."""
     matches = load_matches(now)
-    if not matches:
-        return {}
+    if not matches:                                           # tennis-data indisponible : dernier modèle sauvegardé
+        try:
+            with open(MODEL_FILE, encoding="utf-8") as fh:
+                saved = json.load(fh)
+            return dict(matches=[], bt=saved.get("bt", {}), model=saved["model"], generated=f"{now:%d/%m/%Y à %H:%M}")
+        except (OSError, ValueError, KeyError):
+            return {}
     start = now.date() - timedelta(days=1)
     end = now.date() + timedelta(days=days)
     models, recs = train(matches, backtest=True)
     bt = backtest_summary(recs)
     cut = train(matches, before=start)                       # notes connues avant le premier jour affiché
     idx = build_index(cut)
+    model = export_model(cut, matches)
+    with open(MODEL_FILE, "w", encoding="utf-8") as fh:
+        json.dump(dict(model=model, bt=bt), fh, ensure_ascii=False, separators=(",", ":"))
     items = []
     for raw in espn_matches(now):
         if not (start <= raw["d"] <= end):
@@ -366,7 +394,7 @@ def build(now, days=7):
         e = cut[raw["tour"]]
         p = e.prob(tdn[0], tdn[1], surf) if all(tdn) else 0.5
         if not all(known):
-            p = 0.5 + (p - 0.5) * 0.4                         # historique insuffisant : on se tient près de 50 %
+            p = 0.5                                           # historique insuffisant : aucune opinion
         F = families(raw["names"][0], raw["names"][1], p, bo)
         safe, less = classify(F) if all(known) else ([], [])
         item = dict(id=raw["id"], tour=raw["tour"], tn=raw["tn"], city=raw["city"], surf=surf, round=raw["round"], bo=bo,
@@ -384,7 +412,7 @@ def build(now, days=7):
                 item["picks"] += [dict(m=r["m"], s=r["s"], p=r["p"], h=_won(r, raw, F, a_sets, b_sets), t=1) for r in less]
         items.append(item)
     items.sort(key=lambda x: (x["date"], x["time"], x["tour"]))
-    return dict(matches=items, bt=bt, generated=f"{now:%d/%m/%Y à %H:%M}")
+    return dict(matches=items, bt=bt, model=model, generated=f"{now:%d/%m/%Y à %H:%M}")
 
 
 def _won(rec, raw, F, a_sets, b_sets):

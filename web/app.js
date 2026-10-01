@@ -376,11 +376,38 @@
 
   /* ------------------------------------------------------------ tennis */
   D.tennis = D.tennis || {};
-  var TM = D.tennis.matches || [];
-  TM.forEach(function (m, i) {
-    m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.b : m.a;
-    m.key = norm(m.a + ' ' + m.b + ' ' + m.tn);
-  });
+  var TM = [];
+  function setTM(list) {
+    TM = list;
+    TM.forEach(function (m, i) {
+      m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.b : m.a;
+      m.key = norm(m.a + ' ' + m.b + ' ' + m.tn);
+    });
+  }
+  setTM(D.tennis.matches || []);
+  var tnBusy = false;
+  function liveTennis() {                                   // calendrier et résultats ESPN en direct, pronostics calculés dans le navigateur
+    if (tnBusy || !D.tennis.model || !window.Tennis || !window.fetch) return;
+    tnBusy = true;
+    Tennis.setModel(D.tennis.model);
+    Promise.all(['atp', 'wta'].map(function (f) {
+      return fetch('https://site.api.espn.com/apis/site/v2/sports/tennis/' + f + '/scoreboard').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+    })).then(function (res) {
+      var seen = {}, raws = [], srv = {}, now = new Date(), y = new Date(now.getTime() - 864e5), e = new Date(now.getTime() + 8 * 864e5);
+      var lo = Tennis.paris(y.toISOString()).d, hi = Tennis.paris(e.toISOString()).d;
+      res.forEach(function (j) { raws = raws.concat(Tennis.parseEspn(j, seen)); });
+      TM.forEach(function (m) { srv[m.id] = m; });
+      var list = raws.filter(function (r) { return r.d >= lo && r.d <= hi; }).map(function (r) { return Tennis.build(r, srv[r.id]); });
+      if (!list.length) return;
+      list.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+      setTM(list);
+      var p = Tennis.paris(now.toISOString());
+      D.tennis.generated = p.d.slice(8) + '/' + p.d.slice(5, 7) + '/' + p.d.slice(0, 4) + ' à ' + p.t + ' (direct)';
+      if (st.sport === 'tennis' && !st.detail && st.tab === 'home') { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+    }).catch(function () { /* pas de réseau ou source bloquée : on garde les données de la dernière mise à jour */ })
+      .then(function () { tnBusy = false; });
+  }
+  setInterval(function () { if (st.sport === 'tennis' && document.visibilityState === 'visible') liveTennis(); }, 180000);
   var SURF = { Hard: 'Dur', Clay: 'Terre', Grass: 'Gazon', Carpet: 'Moquette' };
   function last(n) { return n.split(' ').slice(-1)[0]; }
   function tnPlayer(name, flag) { return '<span class="tn">' + crest(name) + '<em>' + esc(name) + '</em>' + (flag ? '<small class="fl">' + esc(flag) + '</small>' : '') + '</span>'; }
@@ -465,7 +492,7 @@
       '<table class="tbl"><thead><tr><th>Confiance</th><th>Matchs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function tnPage(i) {
-    var m = TM[i], d = { div: 'TEN', home: m.a, away: m.b }, conf = m.conf, p = [m.p, 1 - m.p];
+    var m = TM.filter(function (x) { return x.id === st.detail.id; })[0] || TM[i], d = { div: 'TEN', home: m.a, away: m.b }, conf = m.conf, p = [m.p, 1 - m.p];
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">🎾 ' + esc(m.tn) + '</span><small>' + esc(m.round) + ' · ' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + tnState(m) + '</small></div></div>' + vsBlock(d);
     if (m.state === 'post') {
@@ -781,10 +808,10 @@
     var t = e.target.closest('[data-open],[data-openext],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
     if (t.hasAttribute('data-sport')) {
-      st.sport = t.getAttribute('data-sport'); render();
+      st.sport = t.getAttribute('data-sport'); render(); if (st.sport === 'tennis') liveTennis();
       var on = app.querySelector('.sp.on'); if (on && on.scrollIntoView) on.scrollIntoView({ inline: 'center', block: 'nearest' });
     } else if (t.hasAttribute('data-tnopen')) {
-      st.scroll = window.scrollY; st.detail = { tn: +t.getAttribute('data-tnopen') };
+      st.scroll = window.scrollY; st.detail = { tn: +t.getAttribute('data-tnopen'), id: TM[+t.getAttribute('data-tnopen')].id };
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-tnday')) { st.tn.day = t.getAttribute('data-tnday'); render();
