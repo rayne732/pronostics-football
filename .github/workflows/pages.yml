@@ -39,7 +39,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/basket_games.json data/rugby_games.json 2>/dev/null || git add data/tracking.json
+          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json 2>/dev/null || git add data/tracking.json
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
       - name: Garder uniquement les fichiers du site
         run: rm -f output/artifact.html output/digest.txt output/digest.html
