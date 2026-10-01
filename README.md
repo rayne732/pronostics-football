@@ -86,3 +86,9 @@ total de buts, buts par équipe, handicap ±1,5. Le hockey est très aléatoire 
 `f1.py` : modèle de classement de Plackett-Luce (pilote + voiture, pondération récente) sur les résultats depuis 2023 (API Jolpica),
 20 000 courses simulées. Après les qualifications, la grille est prise en compte. Marchés : vainqueur, podium, top 6, top 10, pole, duels
 de coéquipiers. Le site se régénère toutes les 2 h, donc la prédiction est affinée peu après les qualifications.
+
+## Baseball (MLB)
+
+`baseball.py` : points marqués par équipe ~ binomiales négatives (attaque / défense / avantage du terrain, pondération récente), historique et
+calendrier de l'API officielle de la MLB (`statsapi.mlb.com`, sans clé). Marchés : vainqueur, total de points, points par équipe, handicap ±1,5.
+Test sur 2025-26 (4 800 matchs) : vainqueur juste ~54 %, très ouvert comme le hockey ; calendrier et scores en direct dans le navigateur.

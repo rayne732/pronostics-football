@@ -94,7 +94,8 @@ def update(games, today):
 
 
 # ------------------------------------------------------------------ modèle
-def fit(games, asof):
+def fit(games, asof, l2=None):
+    L2_ = L2 if l2 is None else l2
     rows = [g for g in games if g[1][:10] < asof.isoformat()]
     if len(rows) < 200:
         return None
@@ -112,15 +113,15 @@ def fit(games, asof):
         lh = np.exp(mu + ha + att[h] - dfn[a])
         la = np.exp(mu + att[a] - dfn[h])
         ll = w * (gh * np.log(lh) - lh + ga * np.log(la) - la)
-        val = -ll.sum() + L2 * (att @ att + dfn @ dfn)
+        val = -ll.sum() + L2_ * (att @ att + dfn @ dfn)
         rh, ra = w * (gh - lh), w * (ga - la)
         g = np.zeros_like(p)
         np.add.at(g, h, -rh)
         np.add.at(g, a, -ra)
         np.add.at(g, n + a, rh)
         np.add.at(g, n + h, ra)
-        g[:n] += 2 * L2 * att
-        g[n:2 * n] += 2 * L2 * dfn
+        g[:n] += 2 * L2_ * att
+        g[n:2 * n] += 2 * L2_ * dfn
         g[2 * n] = -(rh.sum() + ra.sum())
         g[2 * n + 1] = -rh.sum()
         return val, g
