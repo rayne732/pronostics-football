@@ -92,3 +92,9 @@ de coéquipiers. Le site se régénère toutes les 2 h, donc la prédiction est 
 `baseball.py` : points marqués par équipe ~ binomiales négatives (attaque / défense / avantage du terrain, pondération récente), historique et
 calendrier de l'API officielle de la MLB (`statsapi.mlb.com`, sans clé). Marchés : vainqueur, total de points, points par équipe, handicap ±1,5.
 Test sur 2025-26 (4 800 matchs) : vainqueur juste ~54 %, très ouvert comme le hockey ; calendrier et scores en direct dans le navigateur.
+
+## Football américain (NFL)
+
+`nfl.py` : même moteur que le basket (points attendus par équipe, marges et totaux ~ lois normales, 4 saisons d'historique ESPN). Marchés :
+vainqueur, handicap, total de points, points par équipe. Test sur 2025-26 (320 matchs) : vainqueur juste ~60 %, « sûrs » bien calibrés.
+Blessures, météo et quarterbacks ne sont pas pris en compte.
