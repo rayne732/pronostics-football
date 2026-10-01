@@ -37,7 +37,7 @@ for key, url in (D.get("lazy") or {}).items():
         continue
     ms = data.get("matches", [])
     check("generated" in data, f"{key} : date de mise à jour absente")
-    check(bool(data.get("model")) or key == "handball" or key == "tennis", f"{key} : modèle absent (pas de direct dans le navigateur)")
+    check(bool(data.get("model")) or key in ("handball", "tennis", "golf"), f"{key} : modèle absent (pas de direct dans le navigateur)")
     for x in ms:
         if not valid_p(x["p"]):
             problems.append(f"{key} : probabilité invalide pour {x.get('home') or x.get('a')} - {x.get('away') or x.get('b')}")

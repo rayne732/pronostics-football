@@ -238,8 +238,8 @@
       'Le <b>tennis</b> est le prochain sur la liste.</div>';
   }
   function brand() {
-    var dark = curTheme() === 'dark', S = spOf(st.sport), key = S ? S.cfg.key : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'f1' : null;
-    var title = S ? S.cfg.title : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'Formule 1' : 'football', gen = key && D[key] && D[key].generated ? D[key].generated : D.generated;
+    var dark = curTheme() === 'dark', S = spOf(st.sport), key = S ? S.cfg.key : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'f1' : st.sport === 'golf' ? 'golf' : null;
+    var title = S ? S.cfg.title : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'Formule 1' : st.sport === 'golf' ? 'golf' : 'football', gen = key && D[key] && D[key].generated ? D[key].generated : D.generated;
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + title + '</h1><small>Mis à jour le ' + esc(gen) + '</small></div>' +
       '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
   }
@@ -706,6 +706,56 @@
     return h + '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + m.less.map(wrap).map(mkRow('a', d)).join('');
   }
 
+
+  /* ------------------------------------------------------------ golf */
+  var GM = { win: 'Vainqueur du tournoi', top5: 'Top 5', top10: 'Top 10', top20: 'Top 20', cut: 'Passe le cut' };
+  function gScore(x) { return x === 0 ? 'E' : (x > 0 ? '+' : '−') + Math.abs(x); }
+  function gState(ev) {
+    return ev.state === 'in' ? 'En cours · tour ' + ev.round : 'À venir · du ' + dm(ev.start) + ' au ' + dm(ev.end);
+  }
+  function gPicks(ev) {
+    var safe = [], less = [], nCut = 0;
+    ev.players.forEach(function (pl) {
+      ['win', 'top5', 'top10', 'top20'].forEach(function (k) {
+        var r = { m: GM[k], s: pl.n, p: pl[k] };
+        if (pl[k] >= SAFE) safe.push(r); else if (pl[k] >= 0.3 && k !== 'top20') less.push(r);
+      });
+      if (pl.cut >= SAFE && ev.state === 'pre' && pl.known) nCut++;
+    });
+    var by = function (a, b) { return b.p - a.p; };
+    return { safe: safe.sort(by).slice(0, 14), less: less.sort(by).slice(0, 10), nCut: nCut };
+  }
+  function gRow(r) { return '<div class="pr"><span class="pt">' + esc(r.s) + '<small class="sm">' + esc(r.m) + '</small></span><span class="pp">' + pct(r.p) + '</span></div>'; }
+  function golfHTML() {
+    var h = brand() + sportsBar(), G = D.golf;
+    if (!G.events || !G.events.length) return h + '<div class="empty">Aucun tournoi de golf (PGA, DP World Tour, LPGA) cette semaine.</div>';
+    G.events.forEach(function (ev) {
+      var P = gPicks(ev), top = ev.players.slice(0, 15);
+      h += '<div class="main mid"><div class="k"><small>' + esc(ev.tour) + '</small><span class="badge mid">' + gState(ev) + '</span></div><div class="hero"><div><div class="hl">' + ev.n + ' joueurs</div><div class="hn">' + esc(ev.name) + '</div></div></div>' +
+        (ev.state === 'in' ? line('Cut', ev.cut_known ? 'passé' : 'à venir (65 premiers et ex æquo)') : line('Cut', 'après 2 tours (65 premiers et ex æquo)')) + '</div>';
+      h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
+        (P.safe.length ? '<div class="fm">' + P.safe.map(gRow).join('') + (P.nCut ? '<div class="sub">+ ' + P.nCut + ' joueurs ont au moins 70 % de passer le cut.</div>' : '') + '</div>' :
+          '<div class="empty">Aucun pronostic n’atteint ce seuil : au golf même le favori gagne rarement.</div>');
+      h += '<div class="sec"><span class="dot a"></span>Moins sûrs</div><div class="fm">' + P.less.map(gRow).join('') + '</div>';
+      h += '<div class="sec"><span class="dot g"></span>Favoris</div><div class="fm f1t"><div class="f1h"><span>Joueur</span><span>Victoire</span><span>Top 5</span><span>Top 10</span><span>Top 20</span></div>' +
+        top.map(function (d) {
+          return '<div class="f1r"><span class="f1n">' + esc(d.n) + '<small>' + (ev.state === 'in' ? gScore(d.cur) + (d.out ? ' · éliminé' : d.h ? ' · trou ' + d.h : '') : (d.known ? '' : 'peu connu')) + '</small></span>' +
+            f1Bar(d.win, 'g') + f1Bar(d.top5, 'g') + f1Bar(d.top10, 'a') + f1Bar(d.top20, 'a') + '</div>'; }).join('') + '</div>';
+    });
+    (G.last || []).forEach(function (l) {
+      var w = l.results[0];
+      h += '<div class="sec"><span class="dot g"></span>Dernier tournoi ' + esc(l.tour) + '</div><div class="srcnote"><b>' + esc(l.name) + '</b> (' + dm(l.date) + ') : vainqueur <b>' + esc(w.n) + '</b>, que nous donnions à ' + pct(w.win) +
+        ' avant le tournoi. Notre top 10 contenait <b>' + l.top10_hits + ' des 10</b> premiers.</div>';
+    });
+    var bt = G.bt;
+    if (bt && bt.events) {
+      h += '<div class="sec"><span class="dot g"></span>Fiabilité du modèle golf</div><div class="fm"><div class="sub">Test sur <b>' + bt.events + ' tournois</b> depuis 2025, pronostics faits avant le premier tour.</div>' +
+        '<table class="tbl"><thead><tr><th>Marché</th><th>Sûrs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + Object.keys(GM).map(function (k) {
+          var m = bt.markets[k]; return '<tr><td>' + GM[k] + '</td><td>' + m.n_safe + '</td><td>' + (m.said != null ? pct(m.said) : '–') + '</td><td><b>' + (m.real != null ? pct(m.real) : '–') + '</b></td></tr>'; }).join('') + '</tbody></table></div>';
+    }
+    return h + '<div class="srcnote">Le golf est très aléatoire. Les probabilités sont recalculées toutes les 2 h avec le score du tournoi en cours.</div>';
+  }
+
   /* ------------------------------------------------------------ Formule 1 */
   D.f1 = D.f1 || {};
   var F1M = { win: 'Vainqueur du GP', pod: 'Podium', top6: 'Top 6', top10: 'Top 10 (points)' };
@@ -1051,10 +1101,10 @@
   function sportHTML() {
     var sp = st.sport, S = spOf(sp), key = S ? S.cfg.key : sp;
     if (sp === 'foot') return homeHTML();
-    if (!SPORTS.some(function (x) { return x[0] === sp; }) || (!S && sp !== 'tennis' && sp !== 'f1')) return soonHTML();
+    if (!SPORTS.some(function (x) { return x[0] === sp; }) || (!S && sp !== 'tennis' && sp !== 'f1' && sp !== 'golf')) return soonHTML();
     if (!isLoaded(key)) return loadingHTML();
     if (S) { spInit(S); return spHome(S); }
-    return sp === 'tennis' ? tennisHTML() : f1HTML();
+    return sp === 'tennis' ? tennisHTML() : sp === 'golf' ? golfHTML() : f1HTML();
   }
   function render() {
     if (st.detail) app.innerHTML = st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
