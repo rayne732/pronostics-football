@@ -62,3 +62,9 @@ plus pondérés), marges et totaux de points modélisés par des lois normales. 
 par équipe. Historique : ESPN (NBA, 3 saisons) et API officielle de l'EuroLeague, mis en cache dans `data/basket_games.json`.
 Test sur la saison 2025-26 : vainqueur juste ~63 % (NBA) et ~66 % (EuroLeague), pronostics « sûrs » annoncés 74-76 % pour 74-75 % réels.
 Les matchs sont aussi récupérés en direct par le navigateur (comme le tennis).
+
+## Rugby à XV (Top 14, Premiership, URC)
+
+`rugby.py` : même modèle de points que le basket (attaque / défense / avantage du terrain), avec le match nul. Marchés : résultat,
+double chance, handicap, total de points, points par équipe. Historique ESPN depuis 2024 (`data/rugby_games.json`), calendrier et
+scores récupérés en direct par le navigateur. Test sur 2025-26 : vainqueur juste ~78 % (Top 14), ~68-69 % (Premiership, URC).

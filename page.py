@@ -145,7 +145,7 @@ def _model_params(m, teams):
     return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5))
 
 
-def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None, tennis=None, basket=None):
+def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None, tennis=None, basket=None, rugby=None):
     lg = {}
     for div, info in leagues.items():
         lg[div] = dict(name=info["name"], teams=info["teams"], **_model_params(models[div], info["teams"]))
@@ -160,7 +160,7 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
         for r in rows:
             hist.append([div, int(f'{r["Date"]:%Y%m%d}'), r["HomeTeam"], r["AwayTeam"], r["FTHG"], r["FTAG"]])
     hist.sort(key=lambda x: x[1])
-    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], ext=ext or [], tennis=tennis or {}, basket=basket or {}, today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
+    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], ext=ext or [], tennis=tennis or {}, basket=basket or {}, rugby=rugby or {}, today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
 
 
 def _info(reliability):
@@ -172,15 +172,15 @@ def _info(reliability):
     return intro + _reliability(reliability) + _value()
 
 
-def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, artifact=False):
-    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket),
+def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, artifact=False):
+    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby),
                       ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     head = f'<title>Pronostics Football</title>{FONTS}<style>{_read("style.css")}</style>'
     body = (f'<div id="app"></div>'
             f'<nav id="nav" aria-label="Navigation"></nav>'
             f'<script id="data" type="application/json">{data}</script>'
             f'<template id="info-html">{_info(reliability)}</template>'
-            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("app.js")}</script>')
+            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("rugby.js")}</script><script>{_read("app.js")}</script>')
     if artifact:
         return head + body
     desc = "Probabilités et pronostics de 6 championnats de football (modèle statistique). Analyse indicative, pas un conseil de pari."

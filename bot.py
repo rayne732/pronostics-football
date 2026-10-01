@@ -21,6 +21,7 @@ import numpy as np
 
 from apifootball import external_matches
 import basket
+import rugby
 import tennis
 from digest import build_digest
 from fixtures_api import fetch_fixtures
@@ -131,6 +132,15 @@ def tennis_data(now):
         return {}
 
 
+def rugby_data(now):
+    """Pronostics rugby à XV (Top 14, Premiership, URC) ; une panne ne doit pas empêcher de publier le reste."""
+    try:
+        return rugby.build(now)
+    except Exception as exc:
+        print(f"[avertissement] rugby indisponible : {exc}", file=sys.stderr)
+        return {}
+
+
 def basket_data(now):
     """Pronostics basket (NBA, EuroLeague) ; une panne ne doit pas empêcher de publier le reste."""
     try:
@@ -214,7 +224,7 @@ def main():
             fixtures = get_fixtures(now, 14, leagues)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now))
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now), rugby_data(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
