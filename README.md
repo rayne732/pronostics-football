@@ -131,3 +131,9 @@ et hier à demain pour le calendrier (offre gratuite) ; les notes datent donc de
 L'onglet « Fiabilité » commence par un bilan des 7 derniers jours pour tous les sports. Le football vient du suivi serveur (`data/tracking.json`) ;
 les autres sports sont comptés par le navigateur à partir des résultats récupérés en direct (mémorisés sur l'appareil, 45 jours). Le bouton
 « Actualiser » (ou une mise à jour automatique toutes les 3 h à l'ouverture) charge chaque sport et enregistre ses derniers résultats.
+
+## Onglet « Aujourd'hui » et notifications multi-sports
+
+- L'onglet **Aujourd'hui** (premier de la barre du bas) charge tous les sports et liste les pronostics les plus sûrs du jour et les favoris les plus nets.
+- `notify.py` envoie en plus du football, chaque matin : un résumé « autres sports » (les 5 pronostics les plus sûrs) et des alertes 45 minutes avant
+  les favoris nets (≥ 72 %, 8 au maximum). Le tennis n'y figure que si le serveur peut lire tennis-data.co.uk (bloqué depuis GitHub : voir `health.json`).

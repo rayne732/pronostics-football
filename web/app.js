@@ -34,6 +34,7 @@
   /* ------------------------------------------------------------ icônes */
   function svg(path, cls) { return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>'; }
   var IC = {
+    today: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>',
     flame: '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.7.8-2.9 1.8-3.9C9.4 10.9 10.7 11 11 9.6 11.3 7.6 10.6 5.3 12 3z"/>',
     bolt: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
     chev: '<path d="M9 6l6 6-6 6"/>',
@@ -891,6 +892,79 @@
     return h + '<div class="srcnote">Le golf est très aléatoire. Les probabilités sont recalculées toutes les 2 h avec le score du tournoi en cours.</div>';
   }
 
+
+  /* ------------------------------------------------------------ aujourd'hui : les meilleurs pronostics, tous sports */
+  var TODAY = { ts: 0, busy: false, step: 0, total: 0 };
+  function parisToday() { return window.Tennis ? Tennis.paris(new Date().toISOString()).d : isoDate(new Date()); }
+  function todayLoad() {                                  // charge chaque sport, récupère ses matchs en direct, puis redessine l'onglet
+    if (TODAY.busy || Date.now() - TODAY.ts < 3 * 60 * 1000) return;
+    TODAY.busy = true; TODAY.step = 0;
+    var jobs = [['tennis', null]].concat(Object.keys(SPORT_CFG).map(function (sid) { return [SPORT_CFG[sid].key, spOf(sid)]; }));
+    TODAY.total = jobs.length;
+    var left = jobs.length;
+    var finish = function () {
+      TODAY.step++; left--;
+      if (st.tab === 'today' && !st.detail) render();
+      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+    };
+    jobs.forEach(function (j) {
+      loadLazy(j[0], function (err) {
+        if (err) { finish(); return; }
+        if (j[1]) { spInit(j[1]); spLive(j[1], finish); }
+        else { setTM(D.tennis.matches || []); liveTennis(finish); }
+      });
+    });
+  }
+  function todayRows() {
+    var T = parisToday(), picks = [], favs2 = [], counts = [];
+    // football : marchés calculés par le moteur du navigateur
+    var nf = 0;
+    D.fixtures.forEach(function (f) {
+      if (f.date !== T) return;
+      nf++;
+      var C = Engine.classify(Engine.families(f.div, f.home, f.away).fams), ref = 'data-open="' + f.i + '"';
+      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
+      if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
+    });
+    if (nf) counts.push(['⚽', 'Football', nf]);
+    var add = function (icon, name, items, refOf) {
+      var n = 0;
+      items.forEach(function (m) {
+        if (m.date !== T || m.state === 'post' || !m.known) return;
+        n++;
+        var home = m.home || m.a, away = m.away || m.b, ref = refOf(m);
+        (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
+        if (m.conf === 'high') favs2.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: m.favName, p: m.fav, ref: ref });
+      });
+      if (n) counts.push([icon, name, n]);
+    };
+    add('🎾', 'Tennis', TM, function (m) { return 'data-tnopen="' + m.i + '"'; });
+    Object.keys(SPORT_CFG).forEach(function (sid) {
+      var S = spOf(sid);
+      if (S.inited) add(S.cfg.icon, S.cfg.title.charAt(0).toUpperCase() + S.cfg.title.slice(1), S.items, function (m) { return 'data-spopen="' + sid + '|' + m.i + '"'; });
+    });
+    var by = function (a, b) { return b.p - a.p; };
+    return { picks: picks.sort(by), favs: favs2.sort(by), counts: counts, T: T };
+  }
+  function todayRow(r) {
+    return '<div class="mrow high" style="grid-template-columns:44px 1fr auto"><div class="tm">' + esc(r.time || '–') + '</div><div class="tt"><b style="font-weight:600">' + r.icon + ' ' + esc(r.match) + '</b>' +
+      '<div class="tres" style="color:var(--ink)">' + esc(r.pick) + '</div></div><div class="act"><span class="cfp high">' + pct(r.p) + '</span><button class="voir high" ' + r.ref + '>Voir' + svg(IC.chev) + '</button></div></div>';
+  }
+  function todayHTML() {
+    todayLoad();
+    var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
+      (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
+    if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' match' + (c[2] > 1 ? 's' : '') + '</b></span>'; }).join('') + '</div>';
+    if (!R.counts.length) return h + '<div class="empty">' + (TODAY.busy ? 'Chargement des matchs du jour…' : 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>';
+    h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
+    var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
+    h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
+    var seenF = {};
+    var fv = R.favs.filter(function (r) { if (seenF[r.match]) return false; seenF[r.match] = 1; return true; }).slice(0, 10);
+    if (fv.length) h += '<div class="sec"><span class="dot a"></span>Les favoris les plus nets <small>vainqueur à haute confiance</small></div>' + fv.map(todayRow).join('');
+    return h + '<div class="sub" style="margin-top:14px">Les pronostics sûrs d’un même sport restent des estimations : environ 75 % de réussite en moyenne, jamais une certitude. Analyse indicative, pas un conseil de pari.</div>';
+  }
+
   /* ------------------------------------------------------------ Formule 1 */
   D.f1 = D.f1 || {};
   var F1M = { win: 'Vainqueur du GP', pod: 'Podium', top6: 'Top 6', top10: 'Top 10 (points)' };
@@ -1228,7 +1302,7 @@
 
   /* ------------------------------------------------------------ navigation */
   function renderNav() {
-    var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['info', 'Fiabilité']];
+    var items = [['today', 'Aujourd’hui'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + '<span>' + x[1] + '</span></button>';
     }).join('') + '</div>';
@@ -1244,6 +1318,7 @@
   function render() {
     if (st.detail) app.innerHTML = st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = sportHTML();
+    else if (st.tab === 'today') app.innerHTML = todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();

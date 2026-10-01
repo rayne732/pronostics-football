@@ -63,6 +63,57 @@ def build(models, fixtures, now, leagues, site_url):
     return msgs
 
 
+SPORT_ICONS = {"tennis": "🎾", "basket": "🏀", "rugby": "🏉", "handball": "🤾", "hockey": "🏒", "baseball": "⚾", "nfl": "🏈", "mma": "🥋", "volley": "🏐"}
+SPORT_TAGS = {"tennis": "tennis", "basket": "basketball", "rugby": "rugby_football", "handball": "handball", "hockey": "ice_hockey", "baseball": "baseball",
+              "nfl": "football", "mma": "boxing_glove", "volley": "volleyball"}
+MAX_EXTRA_ALERTS = 8
+EXTRA_MIN_FAV = 0.72                # favori net : probabilité du vainqueur d'au moins 72 %
+
+
+def _paris_date(now):
+    """Date (Paris) du moment `now` (heure locale de la machine)."""
+    from tennis import paris
+    return paris(datetime.fromtimestamp(now.timestamp(), timezone.utc).replace(tzinfo=None)).date()
+
+
+def _fav(it):
+    """(nom du favori, probabilité) d'un match de n'importe quel sport (p scalaire = victoire du premier, ou liste 1 / N / 2)."""
+    p = it["p"]
+    h, a = (p[0], p[2]) if isinstance(p, list) else (p, 1 - p)
+    return (it.get("home") or it.get("a"), h) if h >= a else (it.get("away") or it.get("b"), a)
+
+
+def build_extra(sports, now, site_url):
+    """Notifications des autres sports : un résumé du matin (pronostics les plus sûrs du jour) et des alertes avant les favoris nets."""
+    msgs = []
+    today = _paris_date(now).isoformat()
+    tomorrow = (_paris_date(now) + timedelta(days=1)).isoformat()
+    picks, n_matches, alerts = [], 0, []
+    t0, horizon = now.timestamp(), now.timestamp() + 24 * 3600
+    for key, data in (sports or {}).items():
+        icon = SPORT_ICONS.get(key)
+        for it in (data or {}).get("matches", []):
+            if not icon or it.get("state") != "pre" or not it.get("known") or it["date"] not in (today, tomorrow):
+                continue
+            home, away = it.get("home") or it.get("a"), it.get("away") or it.get("b")
+            if it["date"] == today:
+                n_matches += 1
+                for r in it.get("safe", [])[:2]:
+                    picks.append((r["p"], f"{icon} {it['time']} {home} – {away} : {r['s']} ({_pct(r['p'])})"))
+            name, pf = _fav(it)
+            fire = paris_ts(datetime.strptime(it["date"], "%Y-%m-%d"), it["time"]) - ALERT_MINUTES * 60
+            if pf >= EXTRA_MIN_FAV and t0 + 600 < fire < horizon:
+                alerts.append((pf, fire, key, icon, home, away, name))
+    if picks:
+        picks.sort(key=lambda x: -x[0])
+        msgs.append(dict(title=f"Autres sports aujourd'hui : {n_matches} match{'s' if n_matches > 1 else ''}, {len(picks)} pronostics sûrs",
+                         message=chr(10).join(line for _, line in picks[:5]), priority=3, tags=["tada"], **({"click": site_url} if site_url else {})))
+    for pf, fire, key, icon, home, away, name in sorted(alerts, key=lambda a: -a[0])[:MAX_EXTRA_ALERTS]:
+        msgs.append(dict(title=f"Dans {ALERT_MINUTES} min : {icon} {home} – {away}", message=f"Favori : {name} {_pct(pf)}", priority=3,
+                         tags=[SPORT_TAGS.get(key, "sports"), "fire"], delay=str(fire), **({"click": site_url} if site_url else {})))
+    return msgs
+
+
 def send(msgs, topic, dry=False):
     for m in msgs:
         when = f" (programmée {datetime.fromtimestamp(int(m['delay']), timezone.utc):%d/%m %H:%M} UTC)" if "delay" in m else ""
@@ -78,10 +129,10 @@ def send(msgs, topic, dry=False):
             print(f"[avertissement] envoi ntfy impossible : {exc}", file=sys.stderr)
 
 
-def run(models, fixtures, now, leagues, dry=False):
+def run(models, fixtures, now, leagues, dry=False, sports=None):
     topic = os.environ.get("NTFY_TOPIC", "")
     if not topic and not dry:
         print("[notif] NTFY_TOPIC absent : aucune notification envoyée.", file=sys.stderr)
         return
     site = os.environ.get("SITE_URL", "")
-    send(build(models, fixtures, now, leagues, site), topic, dry)
+    send(build(models, fixtures, now, leagues, site) + build_extra(sports, now, site), topic, dry)

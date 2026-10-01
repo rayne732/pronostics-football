@@ -311,7 +311,9 @@ def main():
         print(f"Page générée : {os.path.abspath('output/index.html')}")
         if args.notify or args.notify_dry:
             n_now = datetime.strptime(args.digest_date, "%Y-%m-%d").replace(hour=6) if args.digest_date else now   # --digest-date : simulation
-            run_notify(models, fixtures, n_now, leagues, dry=args.notify_dry)
+            sports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
+            sports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
+            run_notify(models, fixtures, n_now, leagues, dry=args.notify_dry, sports=sports)
         d_now = datetime.strptime(args.digest_date, "%Y-%m-%d").replace(hour=9) if args.digest_date else now
         digest = build_digest(models, fixtures, d_now, leagues, page_args[6])          # mail du matin (s'il y a des matchs aujourd'hui)
         if digest:
