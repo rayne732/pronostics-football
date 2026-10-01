@@ -557,6 +557,12 @@
     groupKey: function (m) { return m.ev; },
     lines: function (m) { return line('Format', m.rounds + ' rounds') + (m.rec && m.rec[0] ? line('Bilans (V-D-N)', m.rec[0] + ' · ' + m.rec[1]) : ''); },
     note: function () { return 'MMA : un combat peut basculer sur un coup. Le modèle se base sur les résultats UFC passés (notes Elo) et ne voit ni blessures, ni styles, ni pesée.'; } };
+  SPORT_CFG.volley = { key: 'volley', icon: '🏐', title: 'volley-ball', lib: null, dec: 0, unit: '',
+    leaguesFn: function (d) { var o = {}; Object.keys(d.names || {}).forEach(function (k) { o[k] = [d.names[k], '#d6479a']; }); return o; },
+    empty: 'Aucun match de volley-ball dans la période. Réessaie un peu plus tard.',
+    lines: function (m) { return line('Format', 'Au meilleur des 5 sets'); },
+    note: function (list, d) { return 'Calendrier limité à <b>hier, aujourd’hui et demain</b> (offre gratuite de la source de données). Les notes des équipes datent de <b>' + (d.last || '').slice(0, 4) + '</b> : le modèle n’a pas vu la saison en cours. Le test ci-dessous mesure cette situation.'; },
+    btNote: ' (modèle figé un an plus tôt)' };
   var SP = {};
   function spOf(sid) {
     var c = SPORT_CFG[sid];

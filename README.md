@@ -119,3 +119,9 @@ vainqueur juste ~61 %. Les combattants avec moins de 2 combats UFC n'ont pas de 
 `golf.py` : niveau de chaque joueur = coups gagnés par tour sur le reste du plateau (moyenne pondérée par la date), 20 000 tournois simulés
 (avec le cut, et à partir du score actuel pour un tournoi en cours). Marchés : vainqueur, top 5, top 10, top 20, passe le cut. Historique
 ESPN depuis 2024 (`data/golf_rounds.json`). Les règles de cut sont simplifiées (65 premiers et ex æquo après 2 tours), recalcul toutes les 2 h.
+
+## Volley-ball
+
+`volleyball.py` : notes Elo par championnat (avantage du terrain compris) ; les scores en sets (3-0, 3-1, 3-2), le total de sets et le handicap en sets
+viennent du même modèle que le tennis (match au meilleur des 5 sets). Données API-Sports (clé `API_FOOTBALL_KEY`) : saisons 2022-2024 pour l'historique
+et hier à demain pour le calendrier (offre gratuite) ; les notes datent donc de mai 2025. Le test mesure un modèle figé un an plus tôt.
