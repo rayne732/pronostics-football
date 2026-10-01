@@ -74,3 +74,15 @@ scores récupérés en direct par le navigateur. Test sur 2025-26 : vainqueur ju
 `handball.py` : même modèle de points que le rugby, données API-Sports (clé `API_FOOTBALL_KEY`). L'offre gratuite ne donne que les
 saisons 2022-2024 et les matchs d'hier à demain : les notes des équipes datent de juin 2025 et le calendrier ne couvre que 3 jours.
 Le test mesure un modèle figé un an plus tôt (vainqueur juste ~63-79 % selon le championnat, « sûrs » bien calibrés).
+
+## Hockey sur glace (NHL)
+
+`hockey.py` : buts du temps réglementaire ~ lois de Poisson par équipe (comme le football), historique ESPN (`data/hockey_games.json`),
+calendrier et scores en direct dans le navigateur. Marchés : résultat temps réglementaire, vainqueur (prolongations incluses), double chance,
+total de buts, buts par équipe, handicap ±1,5. Le hockey est très aléatoire : vainqueur juste ~52-54 % seulement.
+
+## Formule 1
+
+`f1.py` : modèle de classement de Plackett-Luce (pilote + voiture, pondération récente) sur les résultats depuis 2023 (API Jolpica),
+20 000 courses simulées. Après les qualifications, la grille est prise en compte. Marchés : vainqueur, podium, top 6, top 10, pole, duels
+de coéquipiers. Le site se régénère toutes les 2 h, donc la prédiction est affinée peu après les qualifications.

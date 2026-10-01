@@ -376,3 +376,16 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .fm .tbl th,.fm .tbl td{padding:6px 8px;text-align:right;border-top:1px solid var(--line)}
 .fm .tbl th:first-child,.fm .tbl td:first-child{text-align:left}
 @media(max-width:480px){.fl{display:none}}
+
+.f1t{padding:6px 0}
+.f1h,.f1r{display:grid;grid-template-columns:minmax(0,1.5fr) repeat(4,minmax(0,1fr));gap:6px;align-items:center;padding:7px 12px;font-size:.78rem}
+.f1h{color:var(--mute);font-size:.66rem;text-transform:uppercase;letter-spacing:.04em}
+.f1r{border-top:1px solid var(--line)}
+.f1n{display:flex;flex-direction:column;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.f1n small{color:var(--mute);font-weight:400;font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f1b{position:relative;height:20px;border-radius:7px;background:var(--line);overflow:hidden}
+.f1b i{position:absolute;inset:0 auto 0 0;opacity:.55}
+.f1b.g i{background:var(--green)}.f1b.a i{background:var(--amber)}
+.f1b b{position:relative;display:block;text-align:center;font-size:.68rem;line-height:20px;font-variant-numeric:tabular-nums}
+.pr small.fl{margin-left:8px}
+.pr small.sm{display:block;margin-top:2px;color:var(--mute);font-size:.68rem;font-weight:400}
