@@ -137,3 +137,9 @@ les autres sports sont comptés par le navigateur à partir des résultats récu
 - L'onglet **Aujourd'hui** (premier de la barre du bas) charge tous les sports et liste les pronostics les plus sûrs du jour et les favoris les plus nets.
 - `notify.py` envoie en plus du football, chaque matin : un résumé « autres sports » (les 5 pronostics les plus sûrs) et des alertes 45 minutes avant
   les favoris nets (≥ 72 %, 8 au maximum). Le tennis n'y figure que si le serveur peut lire tennis-data.co.uk (bloqué depuis GitHub : voir `health.json`).
+
+### Tennis sans tennis-data (serveur GitHub)
+
+Le site tennis-data.co.uk refuse les connexions depuis GitHub (403). `tennis.py` garde donc une copie compacte de l'historique
+(`data/tennis_matches.json`, rafraîchie à chaque exécution où tennis-data répond) et la complète toutes les 2 h avec les matchs terminés d'ESPN :
+les notes de joueurs restent à jour sans tennis-data. Les joueurs absents de tennis-data sont suivis sous leur nom ESPN.

@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta, timezone
 DATA = "data"
 TD_PAGE = "https://tennis-data.co.uk/data.php"
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/tennis/{tour}/scoreboard"
-FIRST_YEAR = 2022
+FIRST_YEAR = 2023
 BACKTEST_FROM = date(2025, 1, 1)
 SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
 SURF_W = 0.3                    # poids du bonus propre à la surface dans la note
@@ -89,8 +89,8 @@ def _num(x):
         return None
 
 
-def load_matches(now):
-    """Matchs terminés des deux circuits, triés par date. Chaque match : dict(tour, d, surf, w, l, bo, psw, psl)."""
+def _load_td(now):
+    """Matchs terminés lus sur tennis-data.co.uk (vide si le site est injoignable). Chaque match : dict(tour, d, surf, w, l, bo, psw, psl)."""
     out = []
     for (tour, year), path in _download(now).items():
         try:
@@ -110,6 +110,88 @@ def load_matches(now):
                             bo=int(_num(r.get("Best of")) or 3), psw=ow, psl=ol, wr=_num(r.get("WRank")), lr=_num(r.get("LRank"))))
     out.sort(key=lambda m: (m["d"], m["tn"]))
     return out
+
+
+CACHE = os.path.join(DATA, "tennis_matches.json")
+
+
+def _name_index(rows):
+    """(circuit, nom de famille, initiale) -> nom au format tennis-data (« Sinner J. »)."""
+    idx = {}
+    for r in rows:
+        for n in (r["w"], r["l"]):
+            m = re.match(r"^(.*?)\s+((?:[A-Z]\.)+)$", n)
+            if m:
+                first = m.group(2)[0].lower()
+                for sur in {m.group(1), m.group(1).split()[0]}:
+                    idx[(r["tour"], _norm(sur), first)] = n
+    return idx
+
+
+def _resolve(idx, full, tour):
+    """Nom tennis-data d'un joueur ESPN ; à défaut le nom ESPN lui-même (joueur absent de tennis-data : qualifié, invité…)."""
+    toks = full.replace("-", " ").split()
+    tries = [(_norm("".join(toks[i:])), _norm(toks[0])[:1]) for i in range(1, len(toks))]
+    if len(toks) >= 2:
+        tries.append((_norm(toks[0]), _norm(toks[-1])[:1]))
+    for sur, ini in tries:
+        hit = idx.get((tour, sur, ini))
+        if hit:
+            return hit
+    return full
+
+
+def _read_cache():
+    try:
+        with open(CACHE, encoding="utf-8") as fh:
+            c = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    rows = [dict(tour="ATP" if r[0] == 0 else "WTA", d=date.fromisoformat(r[1]), city=c["t"][r[2]][0], tn=c["t"][r[2]][1], surf=c["t"][r[2]][2], w=r[3], l=r[4], bo=r[5],
+                 psw=None, psl=None, wr=None, lr=None) for r in c["rows"]]
+    return rows, date.fromisoformat(c["td_last"]), set(c.get("espn", []))
+
+
+def _write_cache(rows, td_last, ids):
+    t_index, tl, out = {}, [], []
+    for r in rows:
+        key = (r["city"], r["tn"], r["surf"])
+        if key not in t_index:
+            t_index[key] = len(tl)
+            tl.append(list(key))
+        out.append([0 if r["tour"] == "ATP" else 1, r["d"].isoformat(), t_index[key], r["w"], r["l"], r["bo"]])
+    os.makedirs(DATA, exist_ok=True)
+    with open(CACHE, "w", encoding="utf-8") as fh:
+        json.dump(dict(td_last=td_last.isoformat(), t=tl, rows=out, espn=sorted(ids)), fh, ensure_ascii=False, separators=(",", ":"))
+
+
+def load_matches(now):
+    """Historique des deux circuits : tennis-data.co.uk quand il répond (copie compacte gardée dans data/), sinon la copie ; dans les deux cas
+    complété par les matchs terminés d'ESPN depuis la dernière date de tennis-data (il a quelques jours de retard)."""
+    rows = _load_td(now)
+    if rows:
+        base, td_last, ids = rows, max(r["d"] for r in rows), set()
+    else:
+        cached = _read_cache()
+        if not cached:
+            return []
+        base, td_last, ids = cached
+    names = _name_index(base)
+    try:
+        raws = espn_matches(now)
+    except Exception as exc:
+        print(f"[avertissement] ESPN tennis : {exc}", file=sys.stderr)
+        raws = []
+    for raw in raws:
+        if raw["state"] != "post" or raw["win"] is None or not raw["sets"] or raw["id"] in ids or raw["d"] <= td_last:
+            continue
+        res = [_resolve(names, n, raw["tour"]) for n in raw["names"]]
+        base.append(dict(tour=raw["tour"], d=raw["d"], surf=surface_of(raw, base), city=raw["city"], tn=raw["tn"], w=res[raw["win"]], l=res[1 - raw["win"]],
+                         bo=5 if raw["major"] else 3, psw=None, psl=None, wr=None, lr=None))
+        ids.add(raw["id"])
+    base.sort(key=lambda m: (m["d"], m["tn"]))
+    _write_cache(base, td_last, ids)
+    return base
 
 
 # ------------------------------------------------------------------ modèle Elo
@@ -378,6 +460,12 @@ def build(now, days=5):
     end = now.date() + timedelta(days=days)
     models, recs = train(matches, backtest=True)
     bt = backtest_summary(recs)
+    if not any(m["psw"] for m in matches):                    # sans cotes (copie du serveur) : on garde le dernier test complet
+        try:
+            with open(MODEL_FILE, encoding="utf-8") as fh:
+                bt = json.load(fh).get("bt") or bt
+        except (OSError, ValueError):
+            pass
     cut = train(matches, before=start)                       # notes connues avant le premier jour affiché
     idx = build_index(cut)
     model = export_model(cut, matches)
@@ -387,7 +475,7 @@ def build(now, days=5):
     for raw in espn_matches(now):
         if not (start <= raw["d"] <= end):
             continue
-        tdn = [td_name(idx, n, raw["tour"]) for n in raw["names"]]
+        tdn = [td_name(idx, n, raw["tour"]) or (n if cut[raw["tour"]].n.get(n, 0) else None) for n in raw["names"]]
         known = [bool(n) and cut[raw["tour"]].n.get(n, 0) >= 10 for n in tdn]
         surf = surface_of(raw, matches)
         bo = 5 if raw["major"] else 3

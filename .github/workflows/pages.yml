@@ -42,7 +42,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/mma_fights.json data/golf_rounds.json data/golf_backtest.json data/volley_games.json data/volley_window.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
+          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/tennis_matches.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/mma_fights.json data/golf_rounds.json data/golf_backtest.json data/volley_games.json data/volley_window.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
       - name: Garder uniquement les fichiers du site (le mail du matin est lu depuis digest.txt / digest.html)
         run: rm -f output/artifact.html

@@ -7,6 +7,7 @@
   function fx(x) { return String(x).replace('.', ','); }
 
   function tdName(full, tour) {
+    if (M[tour].p[full]) return full;                          // joueur connu sous son nom ESPN (absent de tennis-data)
     var toks = full.replace(/-/g, ' ').split(/\s+/).filter(Boolean), idx = M[tour].idx, tries = [], i;
     for (i = 1; i < toks.length; i++) tries.push(norm(toks.slice(i).join('')) + '|' + norm(toks[0]).slice(0, 1));
     if (toks.length >= 2) tries.push(norm(toks[0]) + '|' + norm(toks[toks.length - 1]).slice(0, 1));
