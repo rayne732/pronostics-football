@@ -177,6 +177,7 @@ LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "
 
 def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None, artifact=False, lazy_dir=None):
     d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl, mma, golf, volley)
+    d["mk"] = (reliability or {}).get("mk", [])
     if lazy_dir and not artifact:
         os.makedirs(lazy_dir, exist_ok=True)
         stamp = f"{generated_at:%Y%m%d%H%M}"

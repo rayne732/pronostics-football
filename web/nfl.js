@@ -108,7 +108,7 @@
   }
 
   function fetchRaw(now, parisFn) {
-    return Promise.all(days(now, parisFn, -1, 8).map(function (ymd) {
+    return Promise.all(days(now, parisFn, -1, 5).map(function (ymd) {
       return getJson('https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=' + ymd).then(parseNfl).catch(function () { return []; });
     })).then(function (r) { return [].concat.apply([], r); });
   }

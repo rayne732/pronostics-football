@@ -94,7 +94,7 @@
   }
 
   function fetchRaw(now, parisFn) {                          // un seul appel pour toute la fenêtre (API officielle MLB)
-    var d = days(now, parisFn, -2, 9), f = function (s) { return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6); };
+    var d = days(now, parisFn, -2, 6), f = function (s) { return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6); };
     return getJson('https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R,F,D,L,W&startDate=' + f(d[0]) + '&endDate=' + f(d[d.length - 1])).then(parse).catch(function () { return []; });
   }
 

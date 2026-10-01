@@ -93,7 +93,7 @@
   }
 
   function fetchRaw(now, parisFn) {
-    return Promise.all(days(now, parisFn, -1, 8).map(function (ymd) {
+    return Promise.all(days(now, parisFn, -1, 5).map(function (ymd) {
       return getJson('https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard?dates=' + ymd).then(parse).catch(function () { return []; });
     })).then(function (r) { return [].concat.apply([], r); });
   }

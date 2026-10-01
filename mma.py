@@ -254,7 +254,7 @@ def _rec_rating(s):
     return 1500 + 250 * (w - l) / (w + l + 4)
 
 
-def build(now, days=7):
+def build(now, days=5):
     fights = _load()
     today = now.date()
     start, end = today - timedelta(days=1), today + timedelta(days=days)

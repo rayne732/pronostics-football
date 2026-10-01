@@ -152,7 +152,7 @@ def _window(start, end):
     return out
 
 
-def build(now, days=7):
+def build(now, days=5):
     games = _load()
     today = now.date()
     start, end = today - timedelta(days=1), today + timedelta(days=days)

@@ -306,7 +306,7 @@ def _model_json(M):
                 att=r(M["att"]), dfn=r(M["dfn"]))
 
 
-def build(now, days=7):
+def build(now, days=5):
     """Données basket pour la page : modèles exportés + matchs d'hier à J+days (pronostic avec les données d'avant hier)."""
     from tennis import paris
     cache = _load_cache()

@@ -364,7 +364,7 @@ def export_model(cut, matches):
     return out
 
 
-def build(now, days=7):
+def build(now, days=5):
     """Données tennis pour la page : modèle exporté + matchs d'hier à J+days (pronostic calculé avec les données d'avant hier)."""
     matches = load_matches(now)
     if not matches:                                           # tennis-data indisponible : dernier modèle sauvegardé

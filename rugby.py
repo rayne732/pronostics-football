@@ -212,7 +212,7 @@ def _model_json(M):
     return dict(mu=round(M["mu"], 3), ha=round(M["ha"], 3), sdm=round(M["sdm"], 2), sdt=round(M["sdt"], 2), sdp=round(M["sdp"], 2), att=r(M["att"]), dfn=r(M["dfn"]))
 
 
-def build(now, days=7):
+def build(now, days=5):
     cache = _load_cache()
     today = now.date()
     start, end = today - timedelta(days=1), today + timedelta(days=days)

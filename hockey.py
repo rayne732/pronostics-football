@@ -274,7 +274,7 @@ def _model_json(M):
     return dict(mu=round(M["mu"], 4), ha=round(M["ha"], 4), att=r(M["att"]), dfn=r(M["dfn"]), safe=SAFE_MIN, less=LESS_SAFE_MIN, alias=ALIAS)
 
 
-def build(now, days=7):
+def build(now, days=5):
     games = _load()
     today = now.date()
     start, end = today - timedelta(days=1), today + timedelta(days=days)

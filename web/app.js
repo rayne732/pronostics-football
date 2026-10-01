@@ -222,10 +222,9 @@
     });
     return h;
   }
-  var SPORTS = [['foot', '⚽', 'Football'], ['tennis', '🎾', 'Tennis'], ['basket', '🏀', 'Basketball'], ['auto', '🏎️', 'Automobile'], ['baseball', '⚾', 'Baseball'],
-    ['biathlon', '🎯', 'Biathlon'], ['boxe', '🥊', 'Boxe'], ['cyclisme', '🚴', 'Cyclisme'], ['nfl', '🏈', 'Football américain'], ['f1', '🏁', 'Formule 1'],
-    ['golf', '⛳', 'Golf'], ['handball', '🤾', 'Handball'], ['hockey', '🏒', 'Hockey sur glace'], ['mma', '🥋', 'MMA'], ['moto', '🏍️', 'Moto'],
-    ['rugby15', '🏉', 'Rugby à XV'], ['rugby13', '🏉', 'Rugby à XIII'], ['ski', '⛷️', 'Ski alpin'], ['snooker', '🎱', 'Snooker'], ['tt', '🏓', 'Tennis de table'], ['volley', '🏐', 'Volley-ball']];
+  var SPORTS = [['foot', '⚽', 'Football'], ['tennis', '🎾', 'Tennis'], ['basket', '🏀', 'Basketball'], ['baseball', '⚾', 'Baseball'], ['nfl', '🏈', 'Football américain'],
+    ['f1', '🏁', 'Formule 1'], ['golf', '⛳', 'Golf'], ['handball', '🤾', 'Handball'], ['hockey', '🏒', 'Hockey sur glace'], ['mma', '🥋', 'MMA'],
+    ['rugby15', '🏉', 'Rugby à XV'], ['volley', '🏐', 'Volley-ball']];
   function sportsBar() {
     return '<div class="sports">' + SPORTS.map(function (x) {
       return '<button class="sp' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '"><span class="se">' + x[1] + '</span>' + esc(x[2]) + '</button>';
@@ -377,17 +376,28 @@
 
 
   /* ------------------------------------------------------------ bilan global : résultats vus par cet appareil, tous sports */
-  var LEDGER = { s: {}, t: 0 };
-  try { var rawL = JSON.parse(localStorage.getItem('pf-ledger') || 'null'); if (rawL && rawL.s) LEDGER = rawL; } catch (e) { /* ignoré */ }
+  var LEDGER = { v: 2, s: {}, k: [], t: 0 };
+  try { var rawL = JSON.parse(localStorage.getItem('pf-ledger') || 'null'); if (rawL && rawL.v === 2) LEDGER = rawL; } catch (e) { /* ignoré */ }
   function ledgerSave() { try { localStorage.setItem('pf-ledger', JSON.stringify(LEDGER)); } catch (e) { /* stockage indisponible */ } }
+  function pickKey(sid, q, home, away) {                  // « famille · sélection sans nom d'équipe », propre à chaque sport
+    var sel = String(q.s).split(home).join('').split(away).join('').replace(/^[\s-]+|[\s-]+$/g, '');
+    return sid + '|' + q.m + (sel ? ' · ' + sel : '');
+  }
   function ledgerRecord(sid, items) {
     var cut = isoDate(new Date(Date.now() - 45 * 864e5)), box = LEDGER.s[sid] || (LEDGER.s[sid] = {}), changed = false;
     items.forEach(function (m) {
       if (m.state !== 'post' || m.hit == null || m.date < cut) return;
-      var sw = 0, sn = 0, lw = 0, ln = 0;
-      (m.picks || []).forEach(function (q) { if (q.t === 0) { sn++; if (q.h) sw++; } else { ln++; if (q.h) lw++; } });
-      var row = [m.date, sw, sn, lw, ln, m.hit ? 1 : 0], old = box[m.id];
-      if (!old || old.join() !== row.join()) { box[m.id] = row; changed = true; }
+      var sw = 0, sn = 0, lw = 0, ln = 0, picks = [], home = m.home || m.a, away = m.away || m.b;
+      (m.picks || []).forEach(function (q) {
+        if (q.t === 0) { sn++; if (q.h) sw++; } else { ln++; if (q.h) lw++; }
+        if (q.p >= 0.5) {
+          var k = pickKey(sid, q, home, away), i = LEDGER.k.indexOf(k);
+          if (i < 0) { i = LEDGER.k.length; LEDGER.k.push(k); }
+          picks.push([i, q.h ? 1 : 0, Math.round(q.p * 100)]);
+        }
+      });
+      var row = [m.date, sw, sn, lw, ln, m.hit ? 1 : 0, picks], old = box[m.id];
+      if (!old || JSON.stringify(old) !== JSON.stringify(row)) { box[m.id] = row; changed = true; }
     });
     Object.keys(box).forEach(function (k) { if (box[k][0] < cut) { delete box[k]; changed = true; } });
     if (changed) ledgerSave();
@@ -411,6 +421,44 @@
       });
     }
     next();
+  }
+  var SPORT_ICON = { foot: '⚽', tennis: '🎾', basket: '🏀', rugby15: '🏉', handball: '🤾', hockey: '🏒', baseball: '⚾', nfl: '🏈', mma: '🥋', volley: '🏐' };
+  function diagRows(lo, minN) {                           // pronostics regroupés par type de sélection, tous sports
+    var agg = {};
+    var add = function (k, n, w, sp) { var a = agg[k] || (agg[k] = { n: 0, w: 0, p: 0 }); a.n += n; a.w += w; a.p += sp; };
+    (D.mk || []).forEach(function (r) { if (r[0] >= lo) add('foot|' + r[1], r[2], r[3], r[4]); });
+    Object.keys(LEDGER.s).forEach(function (sid) {
+      var box = LEDGER.s[sid];
+      Object.keys(box).forEach(function (id) {
+        var r = box[id];
+        if (r[0] < lo) return;
+        (r[6] || []).forEach(function (q) { add(LEDGER.k[q[0]], 1, q[1], q[2] / 100); });
+      });
+    });
+    return Object.keys(agg).filter(function (k) { return agg[k].n >= minN; }).map(function (k) {
+      var a = agg[k], sid = k.split('|')[0], lbl = k.slice(sid.length + 1);
+      return { label: (SPORT_ICON[sid] || '') + ' ' + lbl, n: a.n, rate: a.w / a.n, said: a.p / a.n, w: a.w };
+    });
+  }
+  function diagLine(r) {
+    var gap = r.rate - r.said;
+    return '<div class="pr ' + (gap >= 0 ? 'ok' : r.rate < 0.5 ? 'ko' : '') + '"><span class="pt">' + esc(r.label) + '<small class="sm">annoncé ' + pct(r.said) + ' · ' + r.w + '/' + r.n + '</small></span><span class="pp">' + pct(r.rate) + '</span></div>';
+  }
+  function diagHTML(lo7) {
+    var h = '', all = diagRows(isoDate(new Date(Date.now() - 45 * 864e5)), 1);
+    var week = diagRows(lo7, 5).sort(function (a, b) { return b.rate - a.rate || b.n - a.n; });
+    var long = diagRows(isoDate(new Date(Date.now() - 45 * 864e5)), 15);
+    var best = long.slice().sort(function (a, b) { return b.rate - a.rate || b.n - a.n; }).filter(function (r) { return r.rate >= 0.7; }).slice(0, 6);
+    var weak = long.slice().sort(function (a, b) { return (a.rate - a.said) - (b.rate - b.said); }).filter(function (r) { return r.rate - r.said < -0.05; }).slice(0, 4);
+    var nAll = all.reduce(function (s0, r) { return s0 + r.n; }, 0), wAll = all.reduce(function (s0, r) { return s0 + r.w; }, 0), pAll = all.reduce(function (s0, r) { return s0 + r.said * r.n; }, 0);
+    h += '<h2>Diagnostic : est-ce que ça marche ?</h2>';
+    if (nAll < 30) return h + '<div class="empty">Pas encore assez de pronostics vérifiés (' + nAll + '). Le diagnostic apparaît après quelques jours de résultats.</div>';
+    h += '<div class="srcnote">Sur <b>' + nAll + ' pronostics vérifiés</b> (45 derniers jours, tous sports) : annoncés en moyenne à <b>' + pct(pAll / nAll) + '</b>, réussis à <b>' + pct(wAll / nAll) + '</b>. ' +
+      (wAll / nAll >= pAll / nAll - 0.03 ? 'Le modèle tient ses promesses.' : 'Le modèle est un peu trop optimiste.') + '</div>';
+    if (week.length) h += '<div class="sec"><span class="dot g"></span>Cette semaine <small>types de pronostics avec au moins 5 résultats</small></div><div class="fm">' + week.slice(0, 8).map(diagLine).join('') + '</div>';
+    if (best.length) h += '<div class="sec"><span class="dot g"></span>Ce qui marche le mieux <small>45 jours, au moins 15 résultats</small></div><div class="fm">' + best.map(diagLine).join('') + '</div>';
+    if (weak.length) h += '<div class="sec"><span class="dot a"></span>À surveiller <small>réussite sous l’annonce</small></div><div class="fm">' + weak.map(diagLine).join('') + '</div>';
+    return h;
   }
   function bilanHTML() {
     var today = D.today || isoDate(new Date()), lo = isoDate(new Date(Date.now() - 6 * 864e5)), rows = [], tot = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 }, perDay = {};
@@ -447,6 +495,7 @@
         var o = perDay[d], pp = o.sn ? o.sw / o.sn : 0;
         return '<div class="wd"><span class="wl">' + WD[parseD(d).getDay()] + ' ' + dm(d) + '</span><div class="wb"><i class="' + (pp >= SAFE ? 'ok' : 'lo') + '" style="width:' + Math.round(pp * 100) + '%"></i><u style="left:' + Math.round(SAFE * 100) + '%"></u></div><span class="wp">' + pct(pp) + ' <small>' + o.sw + '/' + o.sn + '</small></span></div>'; }).join('') + '</div>';
     }
+    h += diagHTML(lo);
     h += '<button class="voir mid wide" data-bilan style="margin:12px 0"' + (bilanBusy ? ' disabled' : '') + '>' + (bilanBusy ? esc(bilanMsg || 'Mise à jour…') : 'Actualiser les résultats de tous les sports') + '</button>';
     h += '<div class="sub">Le football vient du suivi du site (vérifié chaque jour). Les autres sports sont comptés à partir des résultats que <b>cet appareil</b> a pu récupérer en direct : seuls les jours où le site a été ouvert (ou actualisé ici) sont comptés. ' +
       'Un jour ou un sport isolé ne dit pas grand-chose : le modèle annonce environ 75 % de réussite sur les pronostics sûrs.</div>';
@@ -472,7 +521,7 @@
     Promise.all(['atp', 'wta'].map(function (f) {
       return fetch('https://site.api.espn.com/apis/site/v2/sports/tennis/' + f + '/scoreboard').then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
     })).then(function (res) {
-      var seen = {}, raws = [], srv = {}, now = new Date(), y = new Date(now.getTime() - 864e5), e = new Date(now.getTime() + 8 * 864e5);
+      var seen = {}, raws = [], srv = {}, now = new Date(), y = new Date(now.getTime() - 864e5), e = new Date(now.getTime() + 5 * 864e5);
       var lo = Tennis.paris(y.toISOString()).d, hi = Tennis.paris(e.toISOString()).d;
       res.forEach(function (j) { raws = raws.concat(Tennis.parseEspn(j, seen)); });
       TM.forEach(function (m) { srv[m.id] = m; });
@@ -673,7 +722,7 @@
     if (S.busy || !lib || !d.model || !window.Tennis || !window.fetch) { if (cb) cb(); return; }
     S.busy = true;
     var now = new Date(), P = Tennis.paris;
-    var lo = P(new Date(now.getTime() - 864e5).toISOString()).d, hi = P(new Date(now.getTime() + 8 * 864e5).toISOString()).d;
+    var lo = P(new Date(now.getTime() - 864e5).toISOString()).d, hi = P(new Date(now.getTime() + 5 * 864e5).toISOString()).d;
     lib.fetchRaw(now, P).then(function (raws) {
       var srv = {}, seen = {}, list = [];
       S.items.forEach(function (m) { srv[m.id] = m; });
@@ -916,13 +965,13 @@
     var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext';
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
     if (!fx.length && !past.length && !D.daily.length && !D.ext.length) {
-      return h + '<div class="empty">Aucun match à venir dans les 7 prochains jours pour les championnats suivis. ' +
+      return h + '<div class="empty">Aucun match à venir dans les 5 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
     if (fx.length && !inPast) {
       var nHigh = fx.filter(function (f) { return f.conf === 'high'; }).length;
       var avg = fx.reduce(function (s, f) { return s + f.fav; }, 0) / fx.length;
-      h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>' + (ext ? 'matchs à venir' : 'matchs cette semaine') + '</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
+      h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>' + 'matchs à venir' + '</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
         '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
     }
     h += '<div class="chips">';
@@ -931,7 +980,7 @@
       h += '<button class="chip past' + (st.day === 'past:' + d ? ' on' : '') + '" data-day="past:' + d + '">' + pastLabel(d) + '<b>' + svg(IC.check) + ' ' + dm(d) + '</b></button>';
     });
     if (fx.length) {
-      h += '<button class="chip' + (st.day === 'all' ? ' on' : '') + '" data-day="all">' + (ext ? 'À venir' : '7 jours') + '<b>' + fx.length + ' matchs</b></button>';
+      h += '<button class="chip' + (st.day === 'all' ? ' on' : '') + '" data-day="all">' + (ext ? 'À venir' : 'Prochains jours') + '<b>' + fx.length + ' matchs</b></button>';
       days.forEach(function (d) {
         h += '<button class="chip' + (st.day === d ? ' on' : '') + '" data-day="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>';
       });

@@ -176,7 +176,7 @@ def monthly(recs, min_n=100):
     return [(m, len(v), sum(x[3] for x in v) / len(v), sum(x[6] for x in v) / len(v)) for m, v in sorted(by.items()) if len(v) >= min_n]
 
 
-def recent_results(today, days_back=2):
+def recent_results(today, days_back=1):
     """Matchs terminés des `days_back` derniers jours (hier compris) avec le résultat de chaque pronostic."""
     data = _read(TRACK_FILE)
     if not data:
@@ -217,9 +217,31 @@ def daily_stats(days=120):
     return sorted(by.values(), key=lambda x: x["date"])[-days:]
 
 
+def market_stats(days=45):
+    """Pronostics vérifiés par jour et par type de sélection : [date, clé, nombre, gagnés, somme des probabilités annoncées]."""
+    data = _read(TRACK_FILE)
+    if not data:
+        return []
+    lo = f"{datetime.now().date() - timedelta(days=days):%Y-%m-%d}"
+    agg = {}
+    for m in data["matches"].values():
+        if not m["settled"] or m["date"] < lo:
+            continue
+        for p in m["picks"]:
+            if p.get("hit") is None or p["p"] < 0.5:
+                continue
+            sel = p["sel"].replace(m["home"], "").replace(m["away"], "").strip(" -")
+            key = f'{p.get("kind") or p["market"]} · {sel}' if sel else (p.get("kind") or p["market"])
+            a = agg.setdefault((m["date"], key), [0, 0, 0.0])
+            a[0] += 1
+            a[1] += int(bool(p["hit"]))
+            a[2] += p["p"]
+    return [[d, k, v[0], v[1], round(v[2], 3)] for (d, k), v in sorted(agg.items())]
+
+
 def reliability_data():
     bt, seasons = backtest_records()
     live, since = live_records()
     return dict(bt=summary(bt) if bt else None, seasons=seasons, live=summary(live) if live else None, since=since,
-                monthly=monthly(bt), monthly_live=monthly(live, 30), daily=daily_stats(),
+                monthly=monthly(bt), monthly_live=monthly(live, 30), daily=daily_stats(), mk=market_stats(),
                 recent=recent_results(datetime.strptime(os.environ["TRACKING_TODAY"], "%Y-%m-%d").date() if os.environ.get("TRACKING_TODAY") else datetime.now().date()))

@@ -118,7 +118,7 @@
 
   function fetchRaw(now, parisFn) {                          // NBA (ESPN, jour par jour) + EuroLeague (API officielle)
     var nowIso = now.toISOString().slice(0, 16);
-    var jobs = days(now, parisFn, -1, 8).map(function (ymd) {
+    var jobs = days(now, parisFn, -1, 5).map(function (ymd) {
       return getJson('https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=' + ymd).then(parseNba).catch(function () { return []; });
     });
     jobs.push(getJson('https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/games').then(function (j) { return parseEuro(j, nowIso); }).catch(function () { return []; }));

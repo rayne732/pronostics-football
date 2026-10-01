@@ -113,7 +113,7 @@
   function fetchRaw(now, parisFn) {                          // un championnat après l'autre, jour par jour (ESPN)
     var jobs = [];
     Object.keys(IDS).forEach(function (lg) {
-      days(now, parisFn, -1, 8).forEach(function (ymd) {
+      days(now, parisFn, -1, 5).forEach(function (ymd) {
         jobs.push(getJson('https://site.api.espn.com/apis/site/v2/sports/rugby/' + IDS[lg] + '/scoreboard?dates=' + ymd).then(function (j) { return parse(lg, j); }).catch(function () { return []; }));
       });
     });
