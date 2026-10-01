@@ -46,5 +46,23 @@ for key, url in (D.get("lazy") or {}).items():
 
 f1 = D.get("f1") or {}
 check(bool(f1.get("next")) or bool(f1.get("last")), "f1 : aucune donnée")
+
+# Diagnostic de joignabilité depuis le serveur de calcul (écrit output/health.json, publié avec le site)
+import urllib.request
+health = {}
+for name, url in (("espn_site", "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"),
+                  ("espn_web", "https://site.web.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard"),
+                  ("espn_core", "https://sports.core.api.espn.com/v2/sports/hockey/leagues/nhl?lang=en&region=us"),
+                  ("mlb", "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-10-01"),
+                  ("euroleague", "https://api-live.euroleague.net/v2/competitions/E/seasons/E2026/games?limit=1"),
+                  ("tennis_data", "https://tennis-data.co.uk/data.php"),
+                  ("jolpica", "https://api.jolpi.ca/ergast/f1/current.json?limit=1")):
+    for ua in ("Mozilla/5.0", "curl/8.4.0"):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": ua}), timeout=25) as r:
+                health[f"{name}|{ua[:7]}"] = r.status
+        except Exception as exc:
+            health[f"{name}|{ua[:7]}"] = str(exc)[:60]
+json.dump(health, open("output/health.json", "w"), indent=1)
 print("problèmes :", problems or "aucun")
 sys.exit(1 if problems else 0)
