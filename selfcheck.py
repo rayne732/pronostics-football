@@ -22,7 +22,7 @@ def valid_p(p):
 html = open("output/index.html", encoding="utf-8").read()
 m = re.search(r'<script id="data" type="application/json">(.*?)</script>', html, re.S)
 check(bool(m), "index.html : bloc de données introuvable")
-D = json.loads(m.group(1).replace("<\/", "</")) if m else {}
+D = json.loads(m.group(1).replace("<\\/", "</")) if m else {}
 check(len(html) < 600_000, f"index.html trop lourd ({len(html) // 1024} Ko) : les données doivent rester dans output/data/")
 check(bool(D.get("fixtures")) or bool(D.get("ext")) or bool(D.get("leagues")), "football : aucune donnée")
 
