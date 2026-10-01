@@ -107,3 +107,9 @@ Test sur 2025-26 (4 800 matchs) : vainqueur juste ~54 %, très ouvert comme le h
 `nfl.py` : même moteur que le basket (points attendus par équipe, marges et totaux ~ lois normales, 4 saisons d'historique ESPN). Marchés :
 vainqueur, handicap, total de points, points par équipe. Test sur 2025-26 (320 matchs) : vainqueur juste ~60 %, « sûrs » bien calibrés.
 Blessures, météo et quarterbacks ne sont pas pris en compte.
+
+## MMA (UFC)
+
+`mma.py` : notes Elo des combattants (historique ESPN depuis 2022) et fréquences d'arrêt par round selon l'écart de niveau et le nombre de
+rounds. Marchés : vainqueur, va à la décision, plus / moins de 1,5 et 2,5 rounds, méthode de victoire. Test depuis 2025 (660 combats) :
+vainqueur juste ~61 %. Les combattants avec moins de 2 combats UFC n'ont pas de pronostic sûr.

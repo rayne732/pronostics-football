@@ -25,6 +25,7 @@ import basket
 import f1
 import handball
 import hockey
+import mma
 import nfl
 import rugby
 import tennis
@@ -134,6 +135,15 @@ def tennis_data(now):
         return tennis.build(now)
     except Exception as exc:
         print(f"[avertissement] tennis indisponible : {exc}", file=sys.stderr)
+        return {}
+
+
+def mma_data(now):
+    """Pronostics MMA (UFC) ; une panne ne doit pas empêcher de publier le reste."""
+    try:
+        return mma.build(now)
+    except Exception as exc:
+        print(f"[avertissement] MMA indisponible : {exc}", file=sys.stderr)
         return {}
 
 
@@ -274,7 +284,7 @@ def main():
             fixtures = get_fixtures(now, 14, leagues)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now))
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args, lazy_dir="output/data"))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)

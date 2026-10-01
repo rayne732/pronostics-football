@@ -552,6 +552,11 @@
       empty: 'Aucun match de football américain (NFL) dans la période. Réessaie un peu plus tard.',
       note: function () { return 'NFL : peu de matchs par équipe (17 par saison), les notes évoluent vite. Blessures et météo ne sont pas pris en compte.'; } }
   };
+  SPORT_CFG.mma = { key: 'mma', icon: '🥋', title: 'MMA', lib: 'Mma', single: ['UFC', '#d6383a'], dec: 0, unit: '',
+    empty: 'Aucune soirée UFC dans la période. Réessaie un peu plus tard.',
+    groupKey: function (m) { return m.ev; },
+    lines: function (m) { return line('Format', m.rounds + ' rounds') + (m.rec && m.rec[0] ? line('Bilans (V-D-N)', m.rec[0] + ' · ' + m.rec[1]) : ''); },
+    note: function () { return 'MMA : un combat peut basculer sur un coup. Le modèle se base sur les résultats UFC passés (notes Elo) et ne voit ni blessures, ni styles, ni pesée.'; } };
   var SP = {};
   function spOf(sid) {
     var c = SPORT_CFG[sid];
@@ -605,8 +610,8 @@
   function spWinner(m) { return m.hs > m.as_ ? m.home : m.as_ > m.hs ? m.away : 'Match nul'; }
   function spState(m) { return m.state === 'post' ? 'Terminé' : m.state === 'in' ? 'En cours' : countdown({ date: m.date, time: m.time }); }
   function spRow(S, m) {
-    var post = m.state === 'post' && m.hs != null;
-    var res = post ? '<div class="tres">' + m.hs + ' – ' + m.as_ + ' · <b>' + esc(spWinner(m)) + '</b>' + (m.ot ? ' (prolong.)' : '') + '</div>' : '';
+    var post = m.state === 'post' && (m.hs != null || !!m.res);
+    var res = post ? (m.res ? '<div class="tres"><b>' + esc(m.res) + '</b></div>' : '<div class="tres">' + m.hs + ' – ' + m.as_ + ' · <b>' + esc(spWinner(m)) + '</b>' + (m.ot ? ' (prolong.)' : '') + '</div>') : '';
     var tag = post && m.hit != null ? '<span class="cfp ' + (m.hit ? 'high' : 'low') + '">' + svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté') + '</span>' :
       m.known ? '<span class="cfp ' + m.conf + '">' + pct(m.fav) + ' · ' + esc(last(m.favName)) + '</span>' : '<span class="cfp low">' + (m.pre ? 'Présaison' : 'Peu d’historique') + '</span>';
     return '<div class="mrow ' + m.conf + '"><div class="tm">' + esc(m.time) + '<small>' + (m.state === 'pre' ? dm(m.date) : spState(m)) + '</small></div>' +
@@ -615,6 +620,12 @@
   }
   function spGroups(S, list) {
     var h = '', L = spLeagues(S);
+    if (S.cfg.groupKey) {                                   // regroupement par événement (MMA : une soirée = un groupe)
+      var seen = {}, order = [];
+      list.forEach(function (m) { var k = S.cfg.groupKey(m); if (!seen[k]) { seen[k] = []; order.push(k); } seen[k].push(m); });
+      order.forEach(function (k) { h += '<div class="lgh"><span class="lb" style="--lc:' + Object.values(L)[0][1] + '">' + S.cfg.icon + '</span><div class="ln">' + esc(k) + '<small>' + dm(seen[k][0].date) + '</small></div><span class="cnt">' + seen[k].length + '</span></div>' + seen[k].map(function (m) { return spRow(S, m); }).join(''); });
+      return h;
+    }
     Object.keys(L).forEach(function (lg) {
       var g = list.filter(function (m) { return String(m.lg) === lg; });
       if (!g.length) return;
@@ -676,9 +687,9 @@
     var c = S.cfg, L = spLeagues(S), m = S.items.filter(function (x) { return x.id === ref.id; })[0] || S.items[ref.i], d = { div: S.sid, home: m.home, away: m.away }, conf = m.conf, p = m.p3;
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">' + c.icon + ' ' + esc(L[m.lg] ? L[m.lg][0] : c.title) + '</span><small>' + (m.label ? esc(m.label) + ' · ' : '') + dm(m.date) + ' · ' + esc(m.time) + ' · ' + spState(m) + '</small></div></div>' + vsBlock(d);
-    if (m.state === 'post' && m.hs != null) {
-      h += '<div class="main ' + (m.hit ? 'high' : 'low') + '"><div class="k"><small>Résultat</small></div><div class="hero"><div><div class="hl">' + m.hs + ' – ' + m.as_ + '</div><div class="hn">' +
-        esc(spWinner(m)) + (m.ot ? ' (prolong.)' : '') + '</div></div></div>' + (m.hit != null ? line('Notre pronostic', (m.hit ? '✓ ' : '✗ ') + m.favName + ' · ' + pct(m.fav)) : '') + spLines(S, m) + '</div>';
+    if (m.state === 'post' && (m.hs != null || m.res)) {
+      h += '<div class="main ' + (m.hit ? 'high' : 'low') + '"><div class="k"><small>Résultat</small></div><div class="hero"><div><div class="hl">' + (m.res ? esc(m.res.split(' · ')[1] || '') : m.hs + ' – ' + m.as_) + '</div><div class="hn">' +
+        esc(m.res ? m.res.split(' · ')[0] : spWinner(m) + (m.ot ? ' (prolong.)' : '')) + '</div></div></div>' + (m.hit != null ? line('Notre pronostic', (m.hit ? '✓ ' : '✗ ') + m.favName + ' · ' + pct(m.fav)) : '') + spLines(S, m) + '</div>';
       if (m.picks && m.picks.length) h += '<div class="sec"><span class="dot g"></span>Nos pronostics sur ce match</div><div class="fm">' + m.picks.map(pickRow).join('') + '</div>';
       return h;
     }

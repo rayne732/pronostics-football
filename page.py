@@ -145,7 +145,7 @@ def _model_params(m, teams):
     return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5))
 
 
-def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None):
+def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None):
     lg = {}
     for div, info in leagues.items():
         lg[div] = dict(name=info["name"], teams=info["teams"], **_model_params(models[div], info["teams"]))
@@ -160,7 +160,7 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
         for r in rows:
             hist.append([div, int(f'{r["Date"]:%Y%m%d}'), r["HomeTeam"], r["AwayTeam"], r["FTHG"], r["FTAG"]])
     hist.sort(key=lambda x: x[1])
-    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], ext=ext or [], tennis=tennis or {}, basket=basket or {}, rugby=rugby or {}, handball=handball or {}, hockey=hockey or {}, f1=f1 or {}, baseball=baseball or {}, nfl=nfl or {}, today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
+    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], ext=ext or [], tennis=tennis or {}, basket=basket or {}, rugby=rugby or {}, handball=handball or {}, hockey=hockey or {}, f1=f1 or {}, baseball=baseball or {}, nfl=nfl or {}, mma=mma or {}, today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
 
 
 def _info(reliability):
@@ -172,11 +172,11 @@ def _info(reliability):
     return intro + _reliability(reliability) + _value()
 
 
-LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "nfl")      # données lourdes : un fichier par sport, chargé à l'ouverture du sport
+LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "nfl", "mma")      # données lourdes : un fichier par sport, chargé à l'ouverture du sport
 
 
-def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, artifact=False, lazy_dir=None):
-    d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl)
+def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, artifact=False, lazy_dir=None):
+    d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl, mma)
     if lazy_dir and not artifact:
         os.makedirs(lazy_dir, exist_ok=True)
         stamp = f"{generated_at:%Y%m%d%H%M}"
@@ -192,7 +192,7 @@ def build_page(models, fixtures, market_probs, generated_at, days, leagues, reli
             f'<nav id="nav" aria-label="Navigation"></nav>'
             f'<script id="data" type="application/json">{data}</script>'
             f'<template id="info-html">{_info(reliability)}</template>'
-            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("rugby.js")}</script><script>{_read("hockey.js")}</script><script>{_read("baseball.js")}</script><script>{_read("nfl.js")}</script><script>{_read("app.js")}</script>')
+            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("rugby.js")}</script><script>{_read("hockey.js")}</script><script>{_read("baseball.js")}</script><script>{_read("nfl.js")}</script><script>{_read("mma.js")}</script><script>{_read("app.js")}</script>')
     if artifact:
         return head + body
     desc = "Probabilités et pronostics de 6 championnats de football (modèle statistique). Analyse indicative, pas un conseil de pari."
