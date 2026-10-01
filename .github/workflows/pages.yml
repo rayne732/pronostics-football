@@ -44,8 +44,8 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
-      - name: Garder uniquement les fichiers du site
-        run: rm -f output/artifact.html output/digest.txt output/digest.html
+      - name: Garder uniquement les fichiers du site (le mail du matin est lu depuis digest.txt / digest.html)
+        run: rm -f output/artifact.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
