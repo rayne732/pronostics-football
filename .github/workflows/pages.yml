@@ -31,13 +31,14 @@ jobs:
       - name: Générer le site (et notifier si exécution quotidienne)
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python bot.py --html ${{ github.event_name == 'schedule' && '--notify' || '' }}
       - name: Sauvegarder le suivi des pronostics
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add data/tracking.json
+          git add -f data/tracking.json data/apif_cache.json 2>/dev/null || git add data/tracking.json
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
       - name: Garder uniquement les fichiers du site
         run: rm -f output/artifact.html output/digest.txt output/digest.html

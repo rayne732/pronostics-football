@@ -41,3 +41,9 @@ python bot.py --html --notify-dry # affiche les notifications sans les envoyer
 ```
 
 Données : résultats © football-data.co.uk, calendrier © football-data.org (offre gratuite, usage non commercial).
+
+## Autres compétitions du jour (API-Football)
+
+Clé gratuite de <https://dashboard.api-football.com> (secret `API_FOOTBALL_KEY`, en local dans `.env`). L'offre gratuite
+(100 requêtes/jour) ne donne que les matchs du jour : l'onglet « Autres matchs » liste ~30 matchs (sélections, coupes, amicaux…)
+avec les prédictions d'API-Football, **non validées** par nos backtests.

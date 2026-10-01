@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
+from apifootball import external_matches
 from digest import build_digest
 from fixtures_api import fetch_fixtures
 from markets import fit_all
@@ -121,7 +122,7 @@ def build_message(models, fixtures):
 
 def load_env():
     if os.path.exists(".env"):
-        with open(".env", encoding="utf-8") as fh:
+        with open(".env", encoding="utf-8-sig") as fh:
             for line in fh:
                 if "=" in line and not line.lstrip().startswith("#"):
                     k, v = line.strip().split("=", 1)
@@ -193,7 +194,7 @@ def main():
             fixtures = get_fixtures(now, 14, leagues)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs)
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)

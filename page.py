@@ -145,7 +145,7 @@ def _model_params(m, teams):
     return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5))
 
 
-def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None):
+def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None):
     lg = {}
     for div, info in leagues.items():
         lg[div] = dict(name=info["name"], teams=info["teams"], **_model_params(models[div], info["teams"]))
@@ -160,7 +160,7 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
         for r in rows:
             hist.append([div, int(f'{r["Date"]:%Y%m%d}'), r["HomeTeam"], r["AwayTeam"], r["FTHG"], r["FTAG"]])
     hist.sort(key=lambda x: x[1])
-    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
+    return dict(generated=f"{generated_at:%d/%m/%Y à %H:%M}", order=list(leagues), leagues=lg, fixtures=fx, hist=hist, recent=recent or [], daily=daily or [], ext=ext or [], today=os.environ.get("TRACKING_TODAY") or f"{generated_at:%Y-%m-%d}", safeMin=SAFE_MIN)
 
 
 def _info(reliability):
@@ -172,8 +172,8 @@ def _info(reliability):
     return intro + _reliability(reliability) + _value()
 
 
-def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, artifact=False):
-    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily")),
+def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, artifact=False):
+    data = json.dumps(build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external),
                       ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     head = f'<title>Pronostics Football</title>{FONTS}<style>{_read("style.css")}</style>'
     body = (f'<div id="app"></div>'

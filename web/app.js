@@ -160,6 +160,8 @@
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
     '<circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".6"/><circle cx="16" cy="16" r="2.6" fill="var(--amber)"/></svg>';
 
+  D.ext = D.ext || [];
+  D.ext.forEach(function (e, i) { e.i = i; e.fav = Math.max.apply(null, e.p); e.favIdx = e.p.indexOf(e.fav); e.conf = confOf(e.fav); });
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
     var M = Engine.families(f.div, f.home, f.away);
     f.i = i; f.p = M.p1x2; f.fav = Math.max.apply(null, f.p); f.favIdx = f.p.indexOf(f.fav); f.conf = confOf(f.fav);
@@ -313,13 +315,56 @@
       'La série et la semaine servent surtout à suivre la tendance.</div>';
     return h;
   }
+  function extRow(e) {
+    var fn = [e.home, 'Nul', e.away][e.favIdx];
+    return '<div class="mrow ' + e.conf + ' ext"><div class="tm">' + esc(e.time) + '<small>' + countdown(e) + '</small></div>' +
+      '<div class="tt">' + tn(e.home) + tn(e.away) + '</div>' +
+      '<div class="act"><span class="cfp ' + e.conf + '">' + pct(e.fav) + ' · ' + esc(fn) + '</span>' +
+      '<button class="voir ' + e.conf + '" data-openext="' + e.i + '">Voir' + svg(IC.chev) + '</button></div>' + miniBar(e.p) + '</div>';
+  }
+  function extHTML() {
+    var h = '<div class="srcnote"><b>Autres compétitions du jour</b> (équipes nationales, coupes, amicaux…). Ces prédictions viennent d’<b>API-Football</b>, un modèle différent du nôtre : ' +
+      'elles ne sont <b>pas testées</b> par nos backtests et restent indicatives.</div>';
+    var groups = [], idx = {};
+    D.ext.forEach(function (e) {
+      var k = e.lg + '|' + e.country;
+      if (!(k in idx)) { idx[k] = groups.length; groups.push({ lg: e.lg, country: e.country, items: [] }); }
+      groups[idx[k]].items.push(e);
+    });
+    groups.forEach(function (g) {
+      h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(g.lg) + '<small>' + esc(g.country) +
+        '</small></div><span class="cnt">' + g.items.length + '</span></div>' + g.items.map(extRow).join('');
+    });
+    return h;
+  }
+  function extPage(i) {
+    var e = D.ext[i], names = [e.home, 'Match nul', e.away], mx = e.fav, conf = e.conf, p = e.p;
+    var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
+      '<div class="who"><span class="lgchip">' + esc(e.lg) + '</span><small>' + dm(e.date) + ' · ' + esc(e.time) + ' · ' + countdown(e) + '</small></div></div>' +
+      vsBlock({ home: e.home, away: e.away });
+    h += '<div class="srcnote">Source : <b>API-Football</b> (modèle différent du nôtre, non testé). À prendre comme une indication, pas comme un pronostic validé.</div>';
+    h += '<div class="main ' + conf + '"><div class="k"><small>Prédiction API-Football</small><span class="badge ' + conf + '">' + confIcon(conf) + CONF[conf] + '</span></div>' +
+      '<div class="hero"><div><div class="hl">Résultat le plus probable</div><div class="hn">' + esc(names[e.favIdx]) + '</div></div>' + gauge(mx, conf) + '</div>' +
+      (e.advice ? line('Conseil', e.advice) : '') + (e.uo ? line('Buts', e.uo) : '') +
+      '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
+      '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
+    var labels = { form: 'Forme', att: 'Attaque', def: 'Défense', h2h: 'Confrontations', total: 'Indice global' }, rows = '';
+    Object.keys(labels).forEach(function (k) {
+      var c = e.cmp[k]; if (c && c[0] !== null && c[1] !== null) rows += cmpRow(labels[k], c[0] * 100, c[1] * 100, function (x) { return Math.round(x) + '%'; });
+    });
+    if (rows) h += '<div class="sec"><span class="dot g"></span>Comparatif <small>source API-Football</small></div><div class="cmpbox"><div class="cmph"><span class="tn">' + crest(e.home) +
+      '<em>' + esc(e.home) + '</em></span><span class="tn r"><em>' + esc(e.away) + '</em>' + crest(e.away) + '</span></div>' + rows + '</div>';
+    if (e.h2h && e.h2h.length) h += '<div class="fm"><h4>Dernières confrontations</h4>' + e.h2h.map(function (m) {
+      return '<div class="ml"><span>' + esc(m[0].slice(8) + '/' + m[0].slice(5, 7) + '/' + m[0].slice(2, 4)) + '</span><span>' + esc(m[1]) + '</span></div>'; }).join('') + '</div>';
+    return h;
+  }
   function homeHTML() {
     var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
-    var h = brand(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week';
+    var h = brand(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext';
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
-    if (!fx.length && !past.length && !D.daily.length) {
+    if (!fx.length && !past.length && !D.daily.length && !D.ext.length) {
       return h + '<div class="empty">Aucun match à venir dans les 7 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
@@ -340,8 +385,9 @@
         h += '<button class="chip' + (st.day === d ? ' on' : '') + '" data-day="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>';
       });
     }
+    if (D.ext.length) h += '<button class="chip' + (st.day === 'ext' ? ' on' : '') + '" data-day="ext">Autres matchs<b>' + D.ext.length + ' aujourd’hui</b></button>';
     h += '</div>';
-    if (inPast) return h + (st.day === 'week' ? weekHTML() : pastHTML(st.day.slice(5)));
+    if (inPast) return h + (st.day === 'ext' ? extHTML() : st.day === 'week' ? weekHTML() : pastHTML(st.day.slice(5)));
     if (!fx.length) return h + '<div class="empty">Aucun match à venir dans les prochains jours. Les résultats d’hier sont dans les pastilles ci-dessus.</div>';
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
@@ -351,6 +397,44 @@
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
       return '<button class="chip pill' + (st.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
     return h + '<div id="list">' + listHTML() + '</div>';
+  }
+
+  function favsHTML() {
+    var list = D.fixtures.filter(function (f) { return favs[f.id]; });
+    var h = '<div class="top"><h1>Mes favoris</h1></div>';
+    if (!list.length) {
+      return h + '<div class="empty">Aucun favori pour l’instant. Touche l’étoile ☆ à côté d’un match dans l’onglet Découvrir pour le retrouver ici.</div>';
+    }
+    list.sort(function (a, b) { return kickoff(a) - kickoff(b); });
+    return h + '<div class="sub">' + list.length + ' match' + (list.length > 1 ? 's' : '') + ' suivi' + (list.length > 1 ? 's' : '') + ', dans l’ordre des coups d’envoi.</div>' +
+      list.map(function (f) { return '<div class="cdl">' + esc(D.leagues[f.div].name) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('');
+  }
+  function ticketProb() { return ticket.reduce(function (p, t) { return p * t.p; }, 1); }
+  function ticketHTML() {
+    var h = '<div class="top"><h1>Mon combiné</h1></div>';
+    if (!ticket.length) {
+      return h + '<div class="empty">Ton combiné est vide. Dans une fiche match, ouvre un marché et touche le <b>+</b> d’une sélection pour l’ajouter. ' +
+        'Tu verras la probabilité réelle que <b>toutes</b> tes sélections passent.</div>';
+    }
+    var cum = 1, groups = {}, dup = 0;
+    var rows = ticket.map(function (t, i) {
+      cum *= t.p;
+      var g = t.k.split('|').slice(0, 3).join('|');
+      if (groups[g]) dup++; groups[g] = 1;
+      return '<div class="tkrow"><div class="tkn">' + (i + 1) + '</div><div class="tkb"><div class="tkm">' + esc(t.mt) + '</div><div class="tks">' + esc(t.s) +
+        ' <span class="tkp">' + pct(t.p) + '</span></div><div class="tkc"><i style="width:' + Math.max(2, Math.round(cum * 100)) + '%"></i></div>' +
+        '<div class="tkd">Probabilité cumulée : ' + pct(cum) + '</div></div><button class="rm" data-rm="' + i + '" aria-label="Retirer">' + svg(IC.x) + '</button></div>';
+    }).join('');
+    var P = ticketProb(), avg = Math.pow(P, 1 / ticket.length);
+    h += '<div class="main ' + (P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '"><div class="k"><small>Probabilité que tout passe</small></div>' +
+      '<div class="hero"><div><div class="hl">' + ticket.length + ' sélection' + (ticket.length > 1 ? 's' : '') + '</div><div class="hn">' + pct(P) + '</div></div>' +
+      gauge(Math.min(P, 1), P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '</div>' +
+      line('Cote juste du combiné', P > 0.0005 ? (1 / P).toFixed(2) : '—') + line('Probabilité moyenne par sélection', pct(avg)) + '</div>';
+    h += '<div class="sub">Même avec des sélections à ' + pct(avg) + ', la probabilité fond vite : à ' + (ticket.length + 1) + ' sélections il ne resterait que ' +
+      pct(P * avg) + '. Un bookmaker applique sa marge à chaque sélection, donc la cote d’un combiné est encore moins favorable que la cote juste.</div>';
+    if (dup) h += '<div class="sub warn">' + (dup + 1) + ' sélections viennent d’un même match : elles sont liées entre elles, donc le produit des probabilités n’est qu’une approximation.</div>';
+    return h + '<div class="sec"><span class="dot g"></span>Sélections</div>' + rows +
+      '<button class="voir low wide" data-clear style="margin-top:12px">Vider le combiné</button>';
   }
 
   /* ------------------------------------------------------------ fiche match */
@@ -550,7 +634,7 @@
     }).join('') + '</div>';
   }
   function render() {
-    if (st.detail) app.innerHTML = detailPage(st.detail);
+    if (st.detail) app.innerHTML = st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = homeHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
@@ -566,9 +650,13 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
     if (!t) return;
-    if (t.hasAttribute('data-open')) {
+    if (t.hasAttribute('data-openext')) {
+      st.scroll = window.scrollY; st.detail = { ext: +t.getAttribute('data-openext') };
+      try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
+      render(); window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-open')) {
       var f = D.fixtures[+t.getAttribute('data-open')];
       st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = 'pred';
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }

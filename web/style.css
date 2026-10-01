@@ -355,3 +355,9 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .streak .st b{font-size:.95rem}
 .streak .st span{color:var(--mute);font-size:.82rem}
 .streak .st small{color:var(--mute);font-size:.72rem;margin-top:3px}
+
+/* --- autres matchs du jour (source externe) --- */
+.srcnote{background:color-mix(in srgb,var(--blue) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--blue) 30%,var(--line));border-radius:14px;padding:11px 14px;margin:0 0 12px;font-size:.8rem;color:var(--mute)}
+.srcnote b{color:var(--ink)}
+.mrow .tm small{white-space:nowrap}
+.mrow .act .cfp{max-width:190px;overflow:hidden;text-overflow:ellipsis}
