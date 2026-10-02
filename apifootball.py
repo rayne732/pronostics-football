@@ -104,11 +104,14 @@ def external_matches(now, key=None):
     if not key:
         return []
     today = f"{now:%Y-%m-%d}"
+    stale = []                      # cache du jour, plus ancien : sert de secours si l'API refuse (limite quotidienne atteinte)
     try:
         with open(CACHE, encoding="utf-8") as fh:
             cache = json.load(fh)
-        if cache.get("date") == today and time.time() - cache.get("fetched", 0) < MAX_AGE:
-            return cache["items"]
+        if cache.get("date") == today:
+            if time.time() - cache.get("fetched", 0) < MAX_AGE:
+                return cache["items"]
+            stale = cache.get("items", [])
     except (FileNotFoundError, ValueError, KeyError):
         pass
     items = []
@@ -116,7 +119,7 @@ def external_matches(now, key=None):
         d = _call(key, f"fixtures?date={today}&timezone=Europe/Paris")
         if d.get("errors"):
             print(f"[avertissement] API-Football : {d['errors']}", file=sys.stderr)
-            return []
+            return stale
         fixtures = [f for f in d.get("response", []) if f["fixture"]["status"]["short"] in ("NS", "TBD")]
         fixtures.sort(key=lambda f: (-_prio(f), f["fixture"]["date"]))
         for f in fixtures[:MAX_PRED]:
@@ -135,7 +138,9 @@ def external_matches(now, key=None):
             items.append(_normalize(f, r["response"][0]))
     except Exception as exc:
         print(f"[avertissement] API-Football indisponible : {exc}", file=sys.stderr)
-        return items
+        return items or stale
+    if len(items) < len(stale):     # rafraîchissement incomplet (limite atteinte) : on garde le cache complet
+        return stale
     items.sort(key=lambda x: (-next((_prio({"league": {"name": x["lg"]}}) for _ in [0]), 0), x["time"]))
     os.makedirs("data", exist_ok=True)
     with open(CACHE, "w", encoding="utf-8") as fh:
