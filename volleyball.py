@@ -23,6 +23,12 @@ MAX_HISTORY_CALLS = 30             # requêtes d'historique par exécution (quot
 FINISHED = ("FT", "AOT")
 LIVE = ("S1", "S2", "S3", "S4", "S5", "LIVE")
 MIN_GAMES = 3
+SAFE_V = 0.75                      # le test (modèle figé un an) montre ~5 points d'optimisme : un pronostic n'est « sûr » qu'à partir de 75 % annoncé
+
+
+def _split(safe, less):
+    keep = [r for r in safe if r["p"] >= SAFE_V]
+    return keep, sorted(less + [r for r in safe if r["p"] < SAFE_V], key=lambda r: -r["p"])
 
 
 def _key():
@@ -152,7 +158,8 @@ def backtest(rows):
         p = e.p(g[2], g[3])
         recs.append((p, g[4] > g[5]))
         F = families(g[2], g[3], p, 5)
-        safe, _ = classify(F)
+        safe, _l = classify(F)
+        safe, _ = _split(safe, _l)
         raw = dict(names=[g[2], g[3]], win=0 if g[4] > g[5] else 1)
         picks += [(r["p"], _won(r, raw, F, g[4], g[5])) for r in safe]
     if len(recs) < 40:
@@ -200,7 +207,7 @@ def build(now):
             p = 0.5 + (p - 0.5) * 0.5
         when = paris(datetime.strptime(g["d"], "%Y-%m-%dT%H:%M"))
         F = families(g["home"], g["away"], p, 5)
-        safe, less = classify(F) if known else ([], [])
+        safe, less = _split(*classify(F)) if known else ([], [])
         state = "post" if g["short"] in FINISHED else "in" if g["short"] in LIVE else "pre"
         it = dict(id=g["id"], lg=lid, date=when.date().isoformat(), time=f"{when:%H:%M}", state=state, home=g["home"], away=g["away"], p=round(p, 4), known=known, safe=safe, less=less)
         if state == "post" and g["hs"] is not None and g["as_"] is not None and g["hs"] != g["as_"]:

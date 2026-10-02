@@ -15,8 +15,8 @@ GAMES_FILE = os.path.join(DATA, "rugby_games.json")
 BASE = "https://site.api.espn.com/apis/site/v2/sports/rugby/{id}/scoreboard"
 LEAGUES = {"T14": ("270559", "Top 14"), "PRM": ("267979", "Premiership"), "URC": ("270557", "URC")}
 FIRST_YEAR = 2024
-SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
-LAM = 5.0
+SAFE_MIN, LESS_SAFE_MIN = 0.715, 0.30       # 0,70 + l'optimisme mesuré par le test (annoncé ~79,7 %, réel ~78 %)
+LAM = 1.0
 BACKTEST_FROM = date(2025, 10, 1)
 
 
@@ -194,7 +194,7 @@ def backtest(games, lg):
         return {}
     n = len(recs)
     dec = [r for r in recs if r[3] != r[4]]
-    out = dict(n=n, acc=sum((r[0] > r[2]) == (r[3] > r[4]) for r in dec) / max(len(dec), 1), n_safe=len(picks),
+    out = dict(n=n, ll=sum(-math.log(max((r[0] if r[3] > r[4] else r[2] if r[3] < r[4] else r[1]), 1e-6)) for r in recs) / n, acc=sum((r[0] > r[2]) == (r[3] > r[4]) for r in dec) / max(len(dec), 1), n_safe=len(picks),
                said=sum(p for p, _ in picks) / max(len(picks), 1), real=sum(w for _, w in picks) / max(len(picks), 1),
                since=BACKTEST_FROM.isoformat(), until=rows[-1][1][:10])
     bins = []

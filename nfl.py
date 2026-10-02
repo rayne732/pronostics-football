@@ -15,7 +15,7 @@ DATA = "data"
 GAMES_FILE = os.path.join(DATA, "nfl_games.json")
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
 SEASONS = (2023, 2024, 2025, 2026)
-LAM = 14.0
+LAM = 7.0
 SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
 BACKTEST_FROM = date(2025, 9, 1)
 
@@ -115,7 +115,7 @@ def backtest(games):
     if not recs:
         return {}
     n = len(recs)
-    out = dict(n=n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
+    out = dict(n=n, ll=sum(-math.log(min(max(p if w else 1 - p, 1e-6), 1 - 1e-6)) for p, w in recs) / n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
                real=sum(w for _, w in picks) / max(len(picks), 1), since=BACKTEST_FROM.isoformat(), until=rows[-1][1][:10])
     bins = []
     for lo, hi in ((0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 1.01)):

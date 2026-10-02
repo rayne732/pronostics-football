@@ -164,7 +164,7 @@
   D.ext = D.ext || [];
   D.ext.forEach(function (e, i) { e.i = i; e.fav = Math.max.apply(null, e.p); e.favIdx = e.p.indexOf(e.fav); e.conf = confOf(e.fav); });
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
-    var M = Engine.families(f.div, f.home, f.away);
+    var M = Engine.families(f.div, f.home, f.away, f.ov);
     f.i = i; f.p = M.p1x2; f.fav = Math.max.apply(null, f.p); f.favIdx = f.p.indexOf(f.fav); f.conf = confOf(f.fav);
     f.key = norm(f.home + ' ' + f.away + ' ' + D.leagues[f.div].name);
   });
@@ -922,7 +922,7 @@
     D.fixtures.forEach(function (f) {
       if (f.date !== T) return;
       nf++;
-      var C = Engine.classify(Engine.families(f.div, f.home, f.away).fams), ref = 'data-open="' + f.i + '"';
+      var C = Engine.classify(Engine.families(f.div, f.home, f.away, f.ov).fams), ref = 'data-open="' + f.i + '"';
       C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
       if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
     });
@@ -1130,7 +1130,7 @@
     };
   }
   function predHTML(d, f) {
-    var M = Engine.families(d.div, d.home, d.away), C = Engine.classify(M.fams), p = M.p1x2;
+    var M = Engine.families(d.div, d.home, d.away, f && f.ov), C = Engine.classify(M.fams), p = M.p1x2;
     var mx = Math.max.apply(null, p), fi = p.indexOf(mx), conf = confOf(mx), names = [d.home, 'Match nul', d.away];
     var tg = M.over25 >= 0.5 ? ['Plus de 2,5', M.over25] : ['Moins de 2,5', 1 - M.over25];
     var bt = M.btts >= 0.5 ? ['Oui', M.btts] : ['Non', 1 - M.btts];
@@ -1141,7 +1141,7 @@
       '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
       '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
     h += '<div class="sub">Buts attendus ' + M.lh.toFixed(2) + ' – ' + M.la.toFixed(2) + (M.corners ? ' · corners ~' + M.corners.toFixed(1) : '') +
-      (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
+      (f && f.ov ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
     if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
     h += compareHTML(M, d) + heatHTML(M, d);

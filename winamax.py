@@ -5,7 +5,7 @@ Chaque sélection porte aussi une règle qui dit si le pronostic est gagné, à 
 import numpy as np
 from scipy.stats import poisson
 
-from poisson import score_grid
+from poisson import grid_from_lams, score_grid
 
 SAFE_MIN = 0.70          # probabilité minimale pour être classé "sûr"
 LESS_SAFE_MIN = 0.30     # en dessous, un marché n'est même pas proposé (hors "loterie")
@@ -28,9 +28,12 @@ def _res(d):
     return 0 if d > 0 else 1 if d == 0 else 2             # 0 = domicile, 1 = nul, 2 = extérieur
 
 
-def families(models, home, away):
+def families(models, home, away, ov=None):
     """Liste de marchés : dict(name, kind, sels={sélection: proba}, rules={sélection: règle}, validated, lottery)."""
     grid, (lh, la) = score_grid(models["goals"], home, away)
+    if ov:                                                # buts attendus mélangés avec le marché (blend.py)
+        lh, la = ov
+        grid = grid_from_lams(lh, la)
     idx = np.arange(grid.shape[0])
     D = np.subtract.outer(idx, idx)                       # buts dom - buts ext
     T = np.add.outer(idx, idx)                            # total buts

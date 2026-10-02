@@ -164,6 +164,12 @@ def score_grid(m, home, away, z=0.0):
     return np.outer(poisson.pmf(g, lh), poisson.pmf(g, la)), (lh, la)
 
 
+def grid_from_lams(lh, la):
+    """Matrice de scores pour des buts attendus donnés (utilisée quand on remplace ceux du modèle par un mélange avec le marché)."""
+    g = np.arange(MAXG + 1)
+    return np.outer(poisson.pmf(g, lh), poisson.pmf(g, la))
+
+
 def predict(m, r):
     """(P_dom, P_nul, P_ext) pour un match r (dict avec HomeTeam, AwayTeam et les features)."""
     z = sum(t * r[f] for t, f in zip(m["theta"], m["feats"]))

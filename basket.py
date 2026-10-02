@@ -22,7 +22,7 @@ EUR_SEASONS = ("E2024", "E2025", "E2026")
 LEAGUES = {"NBA": "NBA", "EL": "EuroLeague"}
 SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
 XI = math.log(2) / 365           # une saison vieille d'un an compte moitié moins
-LAM = {"NBA": 8.0, "EL": 6.0}    # régularisation des forces d'équipe (en points)
+LAM = {"NBA": 12.0, "EL": 12.0}    # régularisation des forces d'équipe (en points)
 BACKTEST_FROM = {"NBA": date(2025, 10, 1), "EL": date(2025, 10, 1)}
 
 
@@ -267,7 +267,7 @@ def backtest(games, league):
     if not recs:
         return {}
     n = len(recs)
-    out = dict(n=n, acc=sum((p > 0.5) == w for p, w in recs) / n, brier=sum((p - w) ** 2 for p, w in recs) / n,
+    out = dict(n=n, ll=sum(-math.log(min(max(p if w else 1 - p, 1e-6), 1 - 1e-6)) for p, w in recs) / n, acc=sum((p > 0.5) == w for p, w in recs) / n, brier=sum((p - w) ** 2 for p, w in recs) / n,
                n_safe=len(picks), said=sum(p for p, _, _ in picks) / max(len(picks), 1), real=sum(w for _, w, _ in picks) / max(len(picks), 1),
                since=start.isoformat(), until=rows[-1][1][:10])
     bins = []

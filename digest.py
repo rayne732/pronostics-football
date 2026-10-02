@@ -5,6 +5,7 @@ import os
 from datetime import timedelta
 from html import escape
 
+from blend import lams as blend_lams
 from winamax import SAFE_MIN, classify, families
 
 TRACK_FILE = "data/tracking.json"
@@ -45,7 +46,7 @@ def _rows(models, fixtures, today, leagues):
         idx = models[div]["goals"]["idx"]
         if r["Date"].date() != today or home not in idx or away not in idx:
             continue
-        fams, _ = families(models[div], home, away)
+        fams, _ = families(models[div], home, away, blend_lams(models[div], r))
         by = {f["name"]: f["sels"] for f in fams}
         res = by["Résultat du match"]
         fav, pf = max(res.items(), key=lambda kv: kv[1])

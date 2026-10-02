@@ -16,8 +16,8 @@ DATA = "data"
 GAMES_FILE = os.path.join(DATA, "baseball_games.json")
 API = "https://statsapi.mlb.com/api/v1/schedule?sportId=1&gameType=R,F,D,L,W"
 SEASONS = (2024, 2025, 2026)
-SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
-L2 = 25.0
+SAFE_MIN, LESS_SAFE_MIN = 0.716, 0.30       # 0,70 + l'optimisme mesuré par le test (annoncé 75,3 %, réel 73,7 %)
+L2 = 100.0
 MAXR = 26
 BACKTEST_FROM = date(2025, 4, 1)
 
@@ -170,7 +170,7 @@ def backtest(games):
     if not recs:
         return {}
     n = len(recs)
-    out = dict(n=n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
+    out = dict(n=n, ll=sum(-math.log(min(max(p if w else 1 - p, 1e-6), 1 - 1e-6)) for p, w in recs) / n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
                real=sum(w for _, w in picks) / max(len(picks), 1), since=BACKTEST_FROM.isoformat(), until=rows[-1][1][:10])
     bins = []
     for lo, hi in ((0.5, 0.55), (0.55, 0.6), (0.6, 0.65), (0.65, 1.01)):

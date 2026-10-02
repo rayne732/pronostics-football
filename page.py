@@ -1,6 +1,7 @@
 """Génère la page web : une petite application (accueil par dates, fiche match, analyse libre, fiabilité).
 Les marchés sont calculés dans le navigateur (web/engine.js) à partir des paramètres du modèle ; ce fichier
 prépare les données et le contenu statique (fiabilité, test de rentabilité)."""
+from blend import lams as blend_lams
 import json
 import os
 from html import escape
@@ -152,9 +153,10 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
     fx = []
     for r in fixtures:
         mk = market_probs(r) if market_probs else None
+        ov = blend_lams(models[r["Div"]], r) if r["Div"] in models else None
         fx.append(dict(id=f'{r["Div"]}|{r["Date"]:%Y-%m-%d}|{r["HomeTeam"]}|{r["AwayTeam"]}', div=r["Div"],
                        date=f'{r["Date"]:%Y-%m-%d}', time=r.get("Time", ""), home=r["HomeTeam"], away=r["AwayTeam"],
-                       mk=[round(float(x), 4) for x in mk] if mk is not None else None))
+                       mk=[round(float(x), 4) for x in mk] if mk is not None else None, ov=[round(ov[0], 4), round(ov[1], 4)] if ov else None))
     hist = []
     for div, rows in (history or {}).items():
         for r in rows:

@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from markets import fit_all
 from poisson import load
+from blend import lams as blend_lams
 from winamax import classify, families
 
 TRACK_FILE = os.environ.get("TRACK_FILE", "data/tracking.json")
@@ -31,9 +32,9 @@ def result_of(row):
                 ch=ch if c_ok else None, ca=ca if c_ok else None)
 
 
-def make_picks(models, home, away):
+def make_picks(models, home, away, ov=None):
     """Pronostics affichés (sûrs puis moins sûrs) avec leur règle de vérification."""
-    fams, _ = families(models, home, away)
+    fams, _ = families(models, home, away, ov)
     safe, less = classify(fams)
     by = {f["name"]: f for f in fams}
     return [dict(market=m, kind=by[m]["kind"], sel=s, p=round(p, 4), tier=tier, validated=v, rule=by[m]["rules"][s])
@@ -73,7 +74,7 @@ def record(fixtures, models, today):
         key = f'{div}|{r["Date"]:%Y-%m-%d}|{home}|{away}'
         if data["matches"].get(key, {}).get("settled"):
             continue
-        picks = [{k: v for k, v in p.items() if k != "rule"} for p in make_picks(models[div], home, away)]
+        picks = [{k: v for k, v in p.items() if k != "rule"} for p in make_picks(models[div], home, away, blend_lams(models[div], r))]
         data["matches"][key] = dict(div=div, date=f'{r["Date"]:%Y-%m-%d}', time=r.get("Time", ""), home=home, away=away, picks=picks,
                                     recorded=today.isoformat(timespec="minutes"), settled=False)
     _write(TRACK_FILE, data)

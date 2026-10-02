@@ -35,9 +35,9 @@
   }
   function known(div, team) { return !!D.leagues[div].g.t[team]; }
 
-  function families(div, home, away) {
+  function families(div, home, away, ov) {
     var L = D.leagues[div], F = [];
-    var gl = lam(L.g, home, away), lh = gl[0], la = gl[1], g = grid(lh, la);
+    var gl = ov || lam(L.g, home, away), lh = gl[0], la = gl[1], g = grid(lh, la);
     function add(name, items, validated, lottery, kind) {
       F.push({ name: name, kind: kind || name, sels: items, validated: !!validated, lottery: !!lottery });
     }

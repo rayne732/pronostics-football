@@ -9,6 +9,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 
 from digest import _conf, _pct, _rows, yesterday_summary
+from blend import lams as blend_lams
 from winamax import families
 
 NTFY_URL = "https://ntfy.sh/"
@@ -51,7 +52,7 @@ def build(models, fixtures, now, leagues, site_url):
         fire = ko - ALERT_MINUTES * 60
         if not (t0 + 600 < fire < horizon):
             continue
-        fams, _ = families(models[div], home, away)
+        fams, _ = families(models[div], home, away, blend_lams(models[div], r))
         res = next(f for f in fams if f["name"] == "Résultat du match")["sels"]
         fav, pf = max(res.items(), key=lambda kv: kv[1])
         if _conf(pf) == "high":

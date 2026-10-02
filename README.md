@@ -149,3 +149,12 @@ les notes de joueurs restent à jour sans tennis-data. Les joueurs absents de te
 GitHub retarde ou saute parfois les exécutions planifiées (constaté : neuf heures sans exécution un matin). Le workflow a donc trois créneaux le matin
 (5h17, 5h47, 6h37 UTC) et des passages toutes les 2 h à des minutes décalées. Les notifications du matin ne partent qu'une fois par jour : `bot.py --notify-morning`
 vérifie `data/notify_state.json` et n'envoie que si elles ne sont pas déjà parties (entre 4 h et 10 h).
+
+## Amélioration des statistiques (octobre 2026)
+
+- **Mélange modèle + marché (football)** : `blend.py` déduit les buts attendus des cotes (1X2 + plus/moins 2,5) et les mélange avec ceux du modèle (80 % marché).
+  Test sur 2 283 matchs 2025/26 : perte logarithmique 1,0125 → ~0,996 (1X2), 0,693 → ~0,681 (plus/moins 2,5), 0,690 → 0,685 (les deux marquent).
+  Appliqué seulement quand le calendrier contient des cotes ; les autres marchés (handicap, buts par équipe…) héritent des buts mélangés.
+- **Réglages par sport** (régularisation, sur le backtest de chaque sport) : NFL 14 → 7, basket 8/6 → 12, rugby 5 → 1, hockey 60 → 250, baseball 25 → 100.
+- **Seuil « sûr » ajusté à l'optimisme mesuré** : hockey 71,6 %, baseball 71,6 %, rugby/handball 71,5 %, MMA 71,5 %, volley 75 %.
+- Essayés sans gain suffisant : demi-vie du football, correction de Dixon-Coles (-0,0005), classement ATP/WTA pour le tennis (-0,0015).

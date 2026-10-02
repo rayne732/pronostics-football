@@ -18,9 +18,9 @@ DATA = "data"
 GAMES_FILE = os.path.join(DATA, "hockey_games.json")
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/hockey/nhl"
 SEASONS = (2024, 2025, 2026)                # année de fin de saison ESPN
-SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
+SAFE_MIN, LESS_SAFE_MIN = 0.716, 0.30       # 0,70 + l'optimisme mesuré par le test (annoncé 79,2 %, réel 77,6 %)
 XI = math.log(2) / 365
-L2 = 60.0
+L2 = 250.0
 MAXG = 13
 BACKTEST_FROM = date(2025, 10, 1)
 ALIAS = {"Utah Hockey Club": "Utah Mammoth"}
@@ -236,7 +236,7 @@ def backtest(games):
     if not recs:
         return {}
     n = len(recs)
-    out = dict(n=n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
+    out = dict(n=n, ll=sum(-math.log(min(max(p if w else 1 - p, 1e-6), 1 - 1e-6)) for p, w in recs) / n, acc=sum((p > 0.5) == w for p, w in recs) / n, n_safe=len(picks), said=sum(p for p, _ in picks) / max(len(picks), 1),
                real=sum(w for _, w in picks) / max(len(picks), 1), since=BACKTEST_FROM.isoformat(), until=rows[-1][1][:10])
     bins = []
     for lo, hi in ((0.5, 0.55), (0.55, 0.6), (0.6, 0.7), (0.7, 1.01)):

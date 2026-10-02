@@ -16,7 +16,7 @@ FILE = os.path.join(DATA, "mma_fights.json")
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
 FIRST_YEAR = 2022
 K0, KEXP = 70.0, 0.4
-SAFE_MIN, LESS_SAFE_MIN = 0.70, 0.30
+SAFE_MIN, LESS_SAFE_MIN = 0.715, 0.30       # 0,70 + l'optimisme mesuré par le test (annoncé 74,8 %, réel 73,3 %)
 BACKTEST_FROM = date(2025, 1, 1)
 MIN_FIGHTS = 2                  # en dessous, le combattant est « peu connu » : pas de pronostic sûr
 
