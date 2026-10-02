@@ -121,12 +121,15 @@ def live_records():
 
 
 # ---------------------------------------------------------------- backtest
-def run_backtest(leagues, seasons=("2526", "2627")):
-    """Rejoue les pronostics semaine par semaine (modèle entraîné uniquement sur le passé)."""
-    records = []
+BACKTEST_FROM = datetime(2025, 7, 1)                                    # les pronostics rejoués vont de juillet 2025 à aujourd'hui (toutes ligues, saisons à cheval sur l'année ou non)
+
+
+def run_backtest(leagues, seasons=("2526", "2627"), merge=False):
+    """Rejoue les pronostics semaine par semaine (modèle entraîné uniquement sur le passé). merge=True : ne recalcule que `leagues`, garde le reste du fichier."""
+    records = [r for r in backtest_records()[0] if r[0] not in leagues] if merge else []
     for div in leagues:
         df = load(div)
-        test = [r for r in df if r["season"] in seasons]
+        test = [r for r in df if r["Date"] >= BACKTEST_FROM]
         weeks = sorted({r["Date"] - timedelta(days=r["Date"].weekday()) for r in test})
         for w in weeks:
             models = fit_all([r for r in df if r["Date"] < w], w)

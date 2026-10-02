@@ -11,6 +11,10 @@ from scipy.stats import poisson
 XI = 0.0019       # décroissance par jour (demi-vie ~ 1 an)
 L2 = 0.5          # régularisation des forces d'équipe
 L2_HOME = 5.0     # régularisation de l'avantage domicile propre à chaque équipe (fort : peu de données)
+# réglages par championnat (demi-vie, régularisation) : meilleur couple de 9 testés en rejouant 2024-26 mois par mois, retenu seulement si le gain dépasse 0,0035 en perte logarithmique 1X2
+LEAGUE_CFG = {"D1": (0.0010, 6.0), "E1": (0.0035, 6.0), "F2": (0.0035, 6.0), "D2": (0.0035, 6.0), "SP2": (0.0035, 6.0), "N1": (0.0010, 6.0),
+              "B1": (0.0010, 6.0), "T1": (0.0035, 2.0), "SC0": (0.0010, 6.0), "USA": (0.0035, 6.0), "JPN": (0.0035, 6.0), "NOR": (0.0035, 2.0),
+              "POL": (0.0010, 6.0), "SWZ": (0.0035, 0.5), "MEX": (0.0035, 2.0)}
 MAXG = 10
 FORM_N = 5        # nombre de matchs pour la forme
 DEAD_FROM = 0.7   # part de saison jouée à partir de laquelle un match peut être "sans enjeu"
@@ -26,7 +30,9 @@ def _stakes(pts, games_played, n_teams):
     return {t: int(min(abs(p - l) for l in lines) > DEAD_GAP) for t, p in pts.items()}
 
 
-NEW_FORMAT = {"BRA": ("BRA.csv", 2021)}                   # championnats au format « new » : un seul fichier, toutes saisons (sans tirs ni corners)
+NEW_FORMAT = {"BRA": ("BRA.csv", 2021), "ARG": ("ARG.csv", 2021), "DNK": ("DNK.csv", 2021), "FIN": ("FIN.csv", 2021), "IRL": ("IRL.csv", 2021),
+              "JPN": ("JPN.csv", 2021), "MEX": ("MEX.csv", 2021), "NOR": ("NOR.csv", 2021), "POL": ("POL.csv", 2021), "ROU": ("ROU.csv", 2021),
+              "SWE": ("SWE.csv", 2021), "SWZ": ("SWZ.csv", 2021), "USA": ("USA.csv", 2021)}   # championnats au format « new » : un seul fichier, toutes saisons (sans tirs ni corners)
 
 
 def _read_new(div):
@@ -38,11 +44,12 @@ def _read_new(div):
         return rows
     with fh:
         for r in csv.DictReader(fh):
-            if not r.get("HG") or int(r["Season"]) < first:
+            if not r.get("HG") or int(r["Season"][:4]) < first:
                 continue
             rows.append({"Div": div, "Date": datetime.strptime(r["Date"], "%d/%m/%Y"), "Time": r.get("Time", ""),
                          "HomeTeam": r["Home"], "AwayTeam": r["Away"], "FTHG": int(r["HG"]), "FTAG": int(r["AG"]),
-                         "FTR": r["Res"], "season": r["Season"], "shots": None, "xg": None})
+                         "FTR": r["Res"], "season": r["Season"], "shots": None, "xg": None,
+                         "AvgH": r.get("AvgCH"), "AvgD": r.get("AvgCD"), "AvgA": r.get("AvgCA")})   # cotes de clôture : réservées aux tests
     return rows
 
 
@@ -116,6 +123,7 @@ def fit(train, ref_date, feats=(), home_specific=False, alpha=1.0, target=None, 
     """target=("HC", "AC") ajuste le même modèle sur une autre statistique (ex. corners) au lieu des buts."""
     if target:
         train = [r for r in train if r.get(target[0]) not in (None, "") and r.get(target[1]) not in (None, "")]
+    xi, L2 = LEAGUE_CFG.get(train[0].get("Div"), (XI, globals()["L2"])) if train else (XI, globals()["L2"])
     teams = sorted({r["HomeTeam"] for r in train} | {r["AwayTeam"] for r in train})
     idx = {t: i for i, t in enumerate(teams)}
     n, F = len(teams), len(feats)
@@ -126,7 +134,7 @@ def fit(train, ref_date, feats=(), home_specific=False, alpha=1.0, target=None, 
     else:
         gh, ga = shot_targets(train, alpha, proxy)
     X =np.array([[r[f] for f in feats] for r in train], float).reshape(len(train), F)
-    w = np.exp(-XI * np.array([(ref_date - r["Date"]).days for r in train]))
+    w = np.exp(-xi * np.array([(ref_date - r["Date"]).days for r in train]))
     K = 2 * n + 2                                 # début des paramètres "domicile par équipe"
 
     def nll(p):

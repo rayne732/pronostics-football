@@ -32,7 +32,7 @@ import nfl
 import rugby
 import tennis
 from digest import build_digest
-from fixtures_api import fetch_fixtures
+from fixtures_api import fetch_fixtures, fetch_espn, fixtures_from_ext
 from markets import fit_all
 from page import build_page
 import tracking
@@ -43,7 +43,12 @@ from winamax import format_match
 
 BASE_URL = "https://www.football-data.co.uk"
 LEAGUES = {"F1": "Ligue 1", "E0": "Premier League", "SP1": "La Liga", "D1": "Bundesliga",
-           "I1": "Serie A", "E1": "Championship", "BRA": "Brasileirão"}
+           "I1": "Serie A", "E1": "Championship", "BRA": "Brasileirão",
+           "F2": "Ligue 2", "D2": "2. Bundesliga", "I2": "Serie B", "SP2": "La Liga 2", "N1": "Eredivisie", "B1": "Pro League (Belgique)",
+           "P1": "Liga Portugal", "T1": "Süper Lig", "G1": "Super League (Grèce)", "SC0": "Premiership (Écosse)",
+           "USA": "MLS", "MEX": "Liga MX", "ARG": "Primera División (Argentine)", "JPN": "J1 League", "NOR": "Eliteserien", "SWE": "Allsvenskan",
+           "DNK": "Superliga (Danemark)", "POL": "Ekstraklasa", "ROU": "SuperLiga (Roumanie)", "SWZ": "Super League (Suisse)", "FIN": "Veikkausliiga",
+           "IRL": "Premier Division (Irlande)"}
 FIRST_SEASON = 2021                                       # historique utilisé : depuis 2021/22
 os.chdir(os.path.dirname(os.path.abspath(__file__)))     # poisson.py lit data/ en chemin relatif
 
@@ -97,7 +102,7 @@ def upcoming(today, days):
     return sorted(out, key=lambda r: (r["Div"], r["Date"], r.get("Time", "")))
 
 
-def get_fixtures(now, days, leagues):
+def get_fixtures(now, days, leagues, ext=None):
     """Calendrier : fixtures.csv (avec cotes) complété par l'API football-data.org si FOOTBALL_DATA_TOKEN existe."""
     load_env()
     rows = upcoming(now, days)
@@ -106,6 +111,10 @@ def get_fixtures(now, days, leagues):
         have = {(r["Div"], r["HomeTeam"], r["AwayTeam"]) for r in rows}
         api = fetch_fixtures(token, now, days, {d: set(v["teams"]) for d, v in leagues.items()})
         rows += [r for r in api if r["Div"] in leagues and (r["Div"], r["HomeTeam"], r["AwayTeam"]) not in have]
+    have = {(r["Div"], r["HomeTeam"], r["AwayTeam"]) for r in rows}                 # championnats absents de l'offre gratuite : calendrier ESPN
+    rows += [r for r in fetch_espn(now, days, {d: set(v["teams"]) for d, v in leagues.items()}) if (r["Div"], r["HomeTeam"], r["AwayTeam"]) not in have]
+    have = {(r["Div"], r["HomeTeam"], r["AwayTeam"]) for r in rows}
+    rows += [r for r in fixtures_from_ext(ext, now, days, {d: set(v["teams"]) for d, v in leagues.items()}) if (r["Div"], r["HomeTeam"], r["AwayTeam"]) not in have]
     return sorted(rows, key=lambda r: (r["Div"], r["Date"], r.get("Time", "")))
 
 
@@ -301,10 +310,11 @@ def main():
         os.makedirs("output", exist_ok=True)
         rows_by_div = {d: {(r["Date"], r["HomeTeam"], r["AwayTeam"]): r for r in dfs[d]} for d in dfs}
         settled = tracking.settle(models, now, rows_by_div)              # vérifie les pronostics des matchs terminés
-        fixtures = get_fixtures(now, args.days, leagues)
+        ext = external_matches(now)
+        fixtures = get_fixtures(now, args.days, leagues, ext)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, external_matches(now), tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args, lazy_dir="output/data"))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)

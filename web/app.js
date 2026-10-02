@@ -157,7 +157,8 @@
 
   var LMETA = { BRA: ['Brésil', '#1fa84f', '\uD83C\uDDE7\uD83C\uDDF7'], F1: ['France', '#2f6bdc', '🇫🇷'], E0: ['Angleterre', '#7c45e0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
                 SP1: ['Espagne', '#e2522f', '🇪🇸'], D1: ['Allemagne', '#d6383a', '🇩🇪'],
-                I1: ['Italie', '#1d9d8f', '🇮🇹'], E1: ['Angleterre', '#8a5bd0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'] };
+                I1: ['Italie', '#1d9d8f', '🇮🇹'], E1: ['Angleterre', '#8a5bd0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
+                F2: ['France', '#3b7ae0', '🇫🇷'], D2: ['Allemagne', '#c9444a', '🇩🇪'], I2: ['Italie', '#2aa597', '🇮🇹'], SP2: ['Espagne', '#d9703c', '🇪🇸'], N1: ['Pays-Bas', '#e08a2f', '🇳🇱'], B1: ['Belgique', '#c2a12c', '🇧🇪'], P1: ['Portugal', '#2f9e5a', '🇵🇹'], T1: ['Turquie', '#d6383a', '🇹🇷'], G1: ['Grèce', '#3a86c8', '🇬🇷'], SC0: ['Écosse', '#3a5fc8', '🏴󠁧󠁢󠁳󠁣󠁴󠁿'], USA: ['États-Unis', '#4a5fb8', '🇺🇸'], MEX: ['Mexique', '#2f8f5a', '🇲🇽'], ARG: ['Argentine', '#5aa9d6', '🇦🇷'], JPN: ['Japon', '#d64a6a', '🇯🇵'], NOR: ['Norvège', '#c0392b', '🇳🇴'], SWE: ['Suède', '#3a7bc8', '🇸🇪'], DNK: ['Danemark', '#c8453a', '🇩🇰'], POL: ['Pologne', '#c94a5a', '🇵🇱'], ROU: ['Roumanie', '#d0a02c', '🇷🇴'], SWZ: ['Suisse', '#d64040', '🇨🇭'], FIN: ['Finlande', '#3a74b8', '🇫🇮'], IRL: ['Irlande', '#2f9a63', '🇮🇪'] };
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
     '<circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".6"/><circle cx="16" cy="16" r="2.6" fill="var(--amber)"/></svg>';
 
