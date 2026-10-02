@@ -12,9 +12,10 @@ from datetime import datetime
 
 BASE = "https://v3.football.api-sports.io/"
 CACHE = "data/apif_cache.json"
-MAX_PRED = 30                   # 31 requêtes par exécution : 3 exécutions possibles par jour sous la limite de 100
+MAX_PRED = 60                   # prédictions demandées par rafraîchissement (1 par match) ; limite de 100 requêtes par jour
 PAUSE = 6.5                     # 10 requêtes par minute maximum
-MAX_AGE = 9 * 3600              # un cache plus récent que 9 h est réutilisé (évite de gaspiller le quota)
+MAX_AGE = 20 * 3600             # un cache plus récent que 20 h est réutilisé : un seul rafraîchissement par jour (quota)
+FILL = 30                       # on complète avec d'autres compétitions jusqu'à ce total si les compétitions suivies sont peu nombreuses
 
 # (morceau du nom de la compétition, priorité) : les plus suivies d'abord
 PRIORITY = [("uefa nations league", 100), ("champions league", 96), ("europa league", 94), ("conference league", 92),
@@ -22,6 +23,30 @@ PRIORITY = [("uefa nations league", 100), ("champions league", 96), ("europa lea
             ("premier league", 70), ("liga profesional", 66), ("major league soccer", 66), ("liga mx", 66), ("eredivisie", 64),
             ("primeira liga", 64), ("pro league", 62), ("super lig", 62), ("premiership", 60), ("serie b", 56), ("ligue 2", 56),
             ("2. bundesliga", 56), ("segunda", 54), ("copa", 52), ("cup", 50), ("coupe", 50), ("pokal", 50)]
+
+
+# Compétitions choisies par l'utilisateur : toujours affichées dès qu'un match a lieu (identifiants API-Football)
+WANTED_IDS = {
+    2, 3, 848, 1, 4, 5, 10, 13, 11, 536,                                  # Ligue des Champions, Europa, Conférence, Coupe du Monde, Euro, Ligue des Nations, amicaux, Libertadores, Sudamericana, CONCACAF
+    39, 40, 45, 48, 179, 181, 185, 110, 408, 357,                          # Angleterre (PL, Championship, FA Cup, EFL Cup), Écosse, Pays de Galles, Irlande du Nord, Irlande
+    78, 79, 81, 61, 62, 66, 64, 135, 136, 137, 140, 141, 143,              # Allemagne, France (+ D1 féminine), Italie, Espagne
+    88, 94, 95, 144, 203, 307, 253, 262, 98, 292, 188, 73, 200, 479,       # Pays-Bas, Portugal, Belgique, Turquie, Arabie, MLS, Mexique, Japon, Corée, Australie, Brésil, Maroc, Canada
+    103, 113, 119, 106, 345, 332, 271, 210, 244, 329, 218, 172, 286, 283, 207, 197,   # Norvège, Suède, Danemark, Pologne, Tchéquie, Slovaquie, Hongrie, Croatie, Finlande, Estonie, Biélorussie, Bulgarie, Serbie, Roumanie, Suisse, Grèce
+    128, 242, 239,                                                         # Argentine, Équateur, Colombie
+    525, 8,                                                                # Ligue des Champions féminine, Coupe du Monde féminine
+}
+WANTED_NAMES = ("world cup", "super league", "first division", "primera division", "premier division", "primera a", "pro league",
+                "nations league", "euro championship")
+
+
+def wanted(f):
+    lg = f["league"]
+    name = lg["name"].lower()
+    if lg.get("id") in WANTED_IDS:
+        return True
+    if "u21" in name and "qualif" in name:
+        return True
+    return any(k in name for k in WANTED_NAMES)
 
 
 def _prio(f):
@@ -121,8 +146,11 @@ def external_matches(now, key=None):
             print(f"[avertissement] API-Football : {d['errors']}", file=sys.stderr)
             return stale
         fixtures = [f for f in d.get("response", []) if f["fixture"]["status"]["short"] in ("NS", "TBD")]
-        fixtures.sort(key=lambda f: (-_prio(f), f["fixture"]["date"]))
-        for f in fixtures[:MAX_PRED]:
+        fixtures.sort(key=lambda f: (not wanted(f), -_prio(f), f["fixture"]["date"]))
+        n_wanted = sum(1 for f in fixtures if wanted(f))
+        chosen = fixtures[:min(MAX_PRED, max(n_wanted, FILL))]
+        print("[info] API-Football : compétitions retenues :", sorted({f"{f['league']['name']} ({f['league'].get('country', '')}, id {f['league'].get('id')})" for f in chosen}), file=sys.stderr)
+        for f in chosen:
             time.sleep(PAUSE)
             try:
                 r = _call(key, f"predictions?fixture={f['fixture']['id']}")
