@@ -78,7 +78,7 @@ jobs:
     permissions:
       actions: write
     steps:
-      - run: sleep 90
+      - run: sleep 6600
       - name: Relancer le workflow
         env:
           GH_TOKEN: ${{ github.token }}
