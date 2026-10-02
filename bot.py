@@ -36,7 +36,7 @@ from fixtures_api import fetch_fixtures
 from markets import fit_all
 from page import build_page
 import tracking
-from notify import run as run_notify
+from notify import run as run_notify, run_evening
 from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
@@ -269,6 +269,7 @@ def main():
     ap.add_argument("--digest-date", metavar="AAAA-MM-JJ", help="test : générer le mail du matin comme si on était à cette date")
     ap.add_argument("--notify", action="store_true", help="envoyer les notifications ntfy (NTFY_TOPIC requis)")
     ap.add_argument("--notify-dry", action="store_true", help="afficher les notifications sans les envoyer")
+    ap.add_argument("--notify-evening", action="store_true", help="envoie le bilan du soir une seule fois par jour (entre 20 h et 23 h UTC), si pas déjà parti")
     ap.add_argument("--notify-morning", action="store_true", help="envoie les notifications du matin une seule fois par jour (entre 4 h et 10 h), si elles ne sont pas déjà parties")
     ap.add_argument("--backtest", action="store_true", help="recalculer le backtest de précision (long : ~20 min)")
     ap.add_argument("--no-update", action="store_true", help="ne pas télécharger les données")
@@ -323,8 +324,17 @@ def main():
             sports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
             run_notify(models, fixtures, n_now, leagues, dry=args.notify_dry, sports=sports)
             if morning_due and not args.notify_dry and os.environ.get("NTFY_TOPIC"):
+                state["date"] = f"{now:%Y-%m-%d}"
                 with open(state_path, "w", encoding="utf-8") as fh:
-                    json.dump(dict(date=f"{now:%Y-%m-%d}"), fh)
+                    json.dump(state, fh)
+        evening_due = args.notify_evening and 20 <= now.hour <= 23 and state.get("evening") != f"{now:%Y-%m-%d}"
+        if evening_due and os.environ.get("NTFY_TOPIC"):
+            esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
+            esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
+            if run_evening(now, esports):
+                state["evening"] = f"{now:%Y-%m-%d}"
+                with open(state_path, "w", encoding="utf-8") as fh:
+                    json.dump(state, fh)
         d_now = datetime.strptime(args.digest_date, "%Y-%m-%d").replace(hour=9) if args.digest_date else now
         digest = build_digest(models, fixtures, d_now, leagues, page_args[6])          # mail du matin (s'il y a des matchs aujourd'hui)
         if digest:

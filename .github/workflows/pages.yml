@@ -5,6 +5,8 @@ on:
     - cron: "17 5 * * *"      # matin (UTC) : régénère le site ; les notifications du jour partent au premier de ces passages qui réussit
     - cron: "47 5 * * *"      # (GitHub retarde ou saute parfois des exécutions planifiées : d'où plusieurs créneaux)
     - cron: "37 6 * * *"
+    - cron: "17 21 * * *"     # soir (UTC) : bilan du jour (une seule notification par jour)
+    - cron: "47 22 * * *"
     - cron: "23 7-21/2 * * *" # toutes les 2 h dans la journée : tennis et résultats à jour (minutes décalées : les heures rondes sont saturées)
   workflow_dispatch:          # bouton « Run workflow » pour relancer à la main (sans notification)
   push:
@@ -35,7 +37,7 @@ jobs:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python bot.py --html --notify-morning
+        run: python bot.py --html --notify-morning --notify-evening
       - name: Contrôle du site généré
         run: python selfcheck.py
         continue-on-error: true       # avertit sans bloquer le déploiement

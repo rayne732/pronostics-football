@@ -461,6 +461,18 @@
     if (weak.length) h += '<div class="sec"><span class="dot a"></span>À surveiller <small>réussite sous l’annonce</small></div><div class="fm">' + weak.map(diagLine).join('') + '</div>';
     return h;
   }
+  function cmpHTML() {
+    var rows = (D.cmp || []).filter(function (r) { return r[2] >= 30; });
+    if (!rows.length) return '';
+    var h = '<h2>Par compétition</h2><div class="srcnote">Pronostics sûrs rejoués sur la dernière saison (le modèle ne voit que le passé) : <b>annoncé</b> contre <b>réussi</b>. ' +
+      'Triés du moins bon au meilleur écart ; vert = le modèle tient ou dépasse sa promesse. Le football ajoute entre parenthèses le suivi réel du site.</div><div class="fm">';
+    rows.forEach(function (r) {
+      var gap = r[4] - r[3];
+      h += '<div class="pr ' + (gap >= -0.01 ? 'ok' : gap < -0.06 ? 'ko' : '') + '"><span class="pt">' + r[0] + ' ' + esc(r[1]) + '<small class="sm">annoncé ' + pct(r[3]) + ' · ' + r[2] + ' pronostics' +
+        (r[5] >= 10 ? ' · réel ' + pct(r[6]) + ' sur ' + r[5] : '') + '</small></span><span class="pp">' + pct(r[4]) + '</span></div>';
+    });
+    return h + '</div>';
+  }
   function bilanHTML() {
     var today = D.today || isoDate(new Date()), lo = isoDate(new Date(Date.now() - 6 * 864e5)), rows = [], tot = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 }, perDay = {};
     var add = function (d, sw, sn, lw, ln) { var o = perDay[d] || (perDay[d] = { sw: 0, sn: 0 }); o.sw += sw; o.sn += sn; };
@@ -497,6 +509,7 @@
         return '<div class="wd"><span class="wl">' + WD[parseD(d).getDay()] + ' ' + dm(d) + '</span><div class="wb"><i class="' + (pp >= SAFE ? 'ok' : 'lo') + '" style="width:' + Math.round(pp * 100) + '%"></i><u style="left:' + Math.round(SAFE * 100) + '%"></u></div><span class="wp">' + pct(pp) + ' <small>' + o.sw + '/' + o.sn + '</small></span></div>'; }).join('') + '</div>';
     }
     h += diagHTML(lo);
+    h += cmpHTML();
     h += '<button class="voir mid wide" data-bilan style="margin:12px 0"' + (bilanBusy ? ' disabled' : '') + '>' + (bilanBusy ? esc(bilanMsg || 'Mise à jour…') : 'Actualiser les résultats de tous les sports') + '</button>';
     h += '<div class="sub">Le football vient du suivi du site (vérifié chaque jour). Les autres sports sont comptés à partir des résultats que <b>cet appareil</b> a pu récupérer en direct : seuls les jours où le site a été ouvert (ou actualisé ici) sont comptés. ' +
       'Un jour ou un sport isolé ne dit pas grand-chose : le modèle annonce environ 75 % de réussite sur les pronostics sûrs.</div>';

@@ -115,6 +115,75 @@ def build_extra(sports, now, site_url):
     return msgs
 
 
+def _football_day(day):
+    """(pronostics sûrs vérifiés, gagnés, ratés [(proba, texte)]) du football pour le jour `day` (AAAA-MM-JJ), d'après le suivi du site."""
+    from digest import TRACK_FILE
+    try:
+        with open(TRACK_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return 0, 0, []
+    n = w = 0
+    miss = []
+    for m in data["matches"].values():
+        if m["date"] != day or not m["settled"]:
+            continue
+        for p in m["picks"]:
+            if p["tier"] != 0 or p.get("hit") is None:
+                continue
+            n += 1
+            w += int(bool(p["hit"]))
+            if not p["hit"]:
+                miss.append((p["p"], f"⚽ {m['home']} – {m['away']} : {p['sel']} ({_pct(p['p'])})"))
+    return n, w, miss
+
+
+def build_evening(sports, now, site_url):
+    """Bilan du soir : pronostics sûrs gagnés aujourd'hui (tous sports), par sport, et les plus gros ratés. [] s'il y en a trop peu."""
+    day = _paris_date(now).isoformat()
+    per, miss = [], []
+    n, w, ms = _football_day(day)
+    if n:
+        per.append(("⚽", n, w))
+        miss += ms
+    for key, data in (sports or {}).items():
+        icon = SPORT_ICONS.get(key)
+        sn = sw = 0
+        for it in (data or {}).get("matches", []):
+            if not icon or it.get("state") != "post" or it.get("date") != day:
+                continue
+            home, away = it.get("home") or it.get("a"), it.get("away") or it.get("b")
+            for r in it.get("picks", []):
+                if r["t"] != 0 or r.get("h") is None:
+                    continue
+                sn += 1
+                sw += int(bool(r["h"]))
+                if not r["h"]:
+                    miss.append((r["p"], f"{icon} {home} – {away} : {r['s']} ({_pct(r['p'])})"))
+        if sn:
+            per.append((icon, sn, sw))
+    tn, tw = sum(p[1] for p in per), sum(p[2] for p in per)
+    if tn < 5:
+        return []
+    lines = [" · ".join(f"{i} {w_}/{n_}" for i, n_, w_ in per)]
+    miss.sort(key=lambda x: -x[0])
+    if miss:
+        lines.append("Plus gros ratés :")
+        lines += [t for _, t in miss[:3]]
+    return [dict(title=f"Bilan du {_paris_date(now):%d/%m} : {tw}/{tn} pronostics sûrs gagnés ({tw / tn:.0%})", message=chr(10).join(lines),
+                 priority=3, tags=["chart_with_upwards_trend"], **({"click": site_url} if site_url else {}))]
+
+
+def run_evening(now, sports, dry=False):
+    topic = os.environ.get("NTFY_TOPIC", "")
+    if not topic and not dry:
+        print("[notif] NTFY_TOPIC absent : aucune notification envoyée.", file=sys.stderr)
+        return False
+    msgs = build_evening(sports, now, os.environ.get("SITE_URL", ""))
+    send(msgs, topic, dry)
+    return bool(msgs)
+
+
 def send(msgs, topic, dry=False):
     for m in msgs:
         when = f" (programmée {datetime.fromtimestamp(int(m['delay']), timezone.utc):%d/%m %H:%M} UTC)" if "delay" in m else ""

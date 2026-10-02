@@ -240,9 +240,24 @@ def market_stats(days=45):
     return [[d, k, v[0], v[1], round(v[2], 3)] for (d, k), v in sorted(agg.items())]
 
 
+def league_stats():
+    """Par championnat de football, pronostics « sûrs » : {div: {"bt": [nombre, annoncé, réussi], "live": [...]}} (rejoués sur le passé / suivi réel)."""
+    out = {}
+    for key, (recs, _) in (("bt", (backtest_records()[0], 0)), ("live", live_records())):
+        acc = {}
+        for r in recs:
+            if r[4] != 0:
+                continue
+            a = acc.setdefault(r[0], [0, 0.0, 0])
+            a[0] += 1; a[1] += r[3]; a[2] += r[6]
+        for div, (n, sp, w) in acc.items():
+            out.setdefault(div, {})[key] = [n, round(sp / n, 4), round(w / n, 4)]
+    return out
+
+
 def reliability_data():
     bt, seasons = backtest_records()
     live, since = live_records()
     return dict(bt=summary(bt) if bt else None, seasons=seasons, live=summary(live) if live else None, since=since,
-                monthly=monthly(bt), monthly_live=monthly(live, 30), daily=daily_stats(), mk=market_stats(),
+                monthly=monthly(bt), monthly_live=monthly(live, 30), daily=daily_stats(), mk=market_stats(), lgs=league_stats(),
                 recent=recent_results(datetime.strptime(os.environ["TRACKING_TODAY"], "%Y-%m-%d").date() if os.environ.get("TRACKING_TODAY") else datetime.now().date()))

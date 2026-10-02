@@ -146,6 +146,30 @@ def _model_params(m, teams):
     return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5))
 
 
+def competition_rows(leagues, lgs, basket, rugby, handball, hockey, baseball, nfl, mma, volley):
+    """Un tableau « par compétition » : [sport, nom, nb de pronostics sûrs rejoués, annoncé, réussi, nb suivi réel, réussi réel]."""
+    rows = []
+    for div, v in (lgs or {}).items():
+        if div in leagues and v.get("bt"):
+            lv = v.get("live") or [0, 0, 0]
+            rows.append(["⚽", leagues[div]["name"], v["bt"][0], v["bt"][1], v["bt"][2], lv[0], lv[2]])
+
+    def one(icon, name, b):
+        if b and b.get("n_safe"):
+            rows.append([icon, name, b["n_safe"], round(b["said"], 4), round(b["real"], 4), 0, 0])
+    for lg, name in (("NBA", "NBA"), ("EL", "EuroLeague")):
+        one("🏀", name, ((basket or {}).get("bt") or {}).get(lg))
+    for lg, name in ((rugby or {}).get("names") or {}).items():
+        one("🏉", name, ((rugby or {}).get("bt") or {}).get(lg))
+    for icon, d in (("🤾", handball), ("🏐", volley)):
+        for lid, name in ((d or {}).get("names") or {}).items():
+            one(icon, name, ((d or {}).get("bt") or {}).get(lid))
+    for icon, name, d in (("🏒", "NHL", hockey), ("⚾", "MLB", baseball), ("🏈", "NFL", nfl), ("🥋", "UFC", mma)):
+        one(icon, name, (d or {}).get("bt"))
+    rows.sort(key=lambda r: r[4] - r[3])
+    return rows
+
+
 def build_data(models, fixtures, market_probs, leagues, history, generated_at, recent=None, daily=None, ext=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None):
     lg = {}
     for div, info in leagues.items():
@@ -180,6 +204,7 @@ LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "
 def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None, artifact=False, lazy_dir=None):
     d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl, mma, golf, volley)
     d["mk"] = (reliability or {}).get("mk", [])
+    d["cmp"] = competition_rows(leagues, (reliability or {}).get("lgs"), basket, rugby, handball, hockey, baseball, nfl, mma, volley)
     if lazy_dir and not artifact:
         os.makedirs(lazy_dir, exist_ok=True)
         stamp = f"{generated_at:%Y%m%d%H%M}"

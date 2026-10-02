@@ -158,3 +158,7 @@ vérifie `data/notify_state.json` et n'envoie que si elles ne sont pas déjà pa
 - **Réglages par sport** (régularisation, sur le backtest de chaque sport) : NFL 14 → 7, basket 8/6 → 12, rugby 5 → 1, hockey 60 → 250, baseball 25 → 100.
 - **Seuil « sûr » ajusté à l'optimisme mesuré** : hockey 71,6 %, baseball 71,6 %, rugby/handball 71,5 %, MMA 71,5 %, volley 75 %.
 - Essayés sans gain suffisant : demi-vie du football, correction de Dixon-Coles (-0,0005), classement ATP/WTA pour le tennis (-0,0015).
+
+## Bilan du soir et statistiques par compétition
+- **Notification du soir** (`notify.build_evening`, option `--notify-evening`, fenêtre 20 h–23 h UTC, créneaux cron 21 h 17 et 22 h 47) : pronostics sûrs gagnés aujourd'hui, par sport, et les trois plus gros ratés. Une seule fois par jour (`data/notify_state.json`, clé `evening`) ; rien n'est envoyé s'il y a moins de 5 pronostics vérifiés.
+- **Par compétition** (onglet Fiabilité, `page.competition_rows`) : pronostics sûrs rejoués sur la dernière saison, annoncé contre réussi, pour chaque championnat de football (avec le suivi réel) et chaque ligue des autres sports.
