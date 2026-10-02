@@ -15,13 +15,12 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: pages
-  cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     env:
       SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
@@ -36,7 +35,7 @@ jobs:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python bot.py --html ${{ github.event_name == 'schedule' && '--notify-morning' || '' }}
+        run: python bot.py --html --notify-morning
       - name: Contrôle du site généré
         run: python selfcheck.py
         continue-on-error: true       # avertit sans bloquer le déploiement
@@ -56,9 +55,31 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Battement de cœur : GitHub saute souvent les exécutions planifiées. Ce travail attend ~1 h 50 puis relance le workflow,
+  # ce qui garde une exécution toutes les 2 h même si le planificateur est défaillant. Un battement plus récent annule le précédent.
+  heartbeat:
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+    concurrency:
+      group: heartbeat
+      cancel-in-progress: true
+    permissions:
+      actions: write
+    steps:
+      - run: sleep 90
+      - name: Relancer le workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main
