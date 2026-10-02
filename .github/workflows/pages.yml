@@ -2,8 +2,10 @@ name: Pronostics football
 
 on:
   schedule:
-    - cron: "30 5 * * *"      # chaque jour à 5h30 UTC (7h30 à Paris l'été) : régénère le site et envoie les notifications
-    - cron: "0 7-21/2 * * *"  # toutes les 2 h dans la journée : tennis et résultats à jour (sans notification)
+    - cron: "17 5 * * *"      # matin (UTC) : régénère le site ; les notifications du jour partent au premier de ces passages qui réussit
+    - cron: "47 5 * * *"      # (GitHub retarde ou saute parfois des exécutions planifiées : d'où plusieurs créneaux)
+    - cron: "37 6 * * *"
+    - cron: "23 7-21/2 * * *" # toutes les 2 h dans la journée : tennis et résultats à jour (minutes décalées : les heures rondes sont saturées)
   workflow_dispatch:          # bouton « Run workflow » pour relancer à la main (sans notification)
   push:
     branches: [main]
@@ -34,7 +36,7 @@ jobs:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python bot.py --html ${{ github.event.schedule == '30 5 * * *' && '--notify' || '' }}
+        run: python bot.py --html ${{ github.event_name == 'schedule' && '--notify-morning' || '' }}
       - name: Contrôle du site généré
         run: python selfcheck.py
         continue-on-error: true       # avertit sans bloquer le déploiement
@@ -42,7 +44,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/tennis_matches.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/mma_fights.json data/golf_rounds.json data/golf_backtest.json data/volley_games.json data/volley_window.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
+          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/tennis_matches.json data/notify_state.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/mma_fights.json data/golf_rounds.json data/golf_backtest.json data/volley_games.json data/volley_window.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
       - name: Garder uniquement les fichiers du site (le mail du matin est lu depuis digest.txt / digest.html)
         run: rm -f output/artifact.html

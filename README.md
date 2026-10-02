@@ -143,3 +143,9 @@ les autres sports sont comptés par le navigateur à partir des résultats récu
 Le site tennis-data.co.uk refuse les connexions depuis GitHub (403). `tennis.py` garde donc une copie compacte de l'historique
 (`data/tennis_matches.json`, rafraîchie à chaque exécution où tennis-data répond) et la complète toutes les 2 h avec les matchs terminés d'ESPN :
 les notes de joueurs restent à jour sans tennis-data. Les joueurs absents de tennis-data sont suivis sous leur nom ESPN.
+
+### Fiabilité des exécutions planifiées
+
+GitHub retarde ou saute parfois les exécutions planifiées (constaté : neuf heures sans exécution un matin). Le workflow a donc trois créneaux le matin
+(5h17, 5h47, 6h37 UTC) et des passages toutes les 2 h à des minutes décalées. Les notifications du matin ne partent qu'une fois par jour : `bot.py --notify-morning`
+vérifie `data/notify_state.json` et n'envoie que si elles ne sont pas déjà parties (entre 4 h et 10 h).
