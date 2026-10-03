@@ -138,6 +138,75 @@ def _football_day(day):
     return n, w, miss
 
 
+def _day_counts(sports, day):
+    """{icône: [pronostics sûrs vérifiés, gagnés]} pour le jour `day` (football d'après le suivi, autres sports d'après leurs matchs terminés)."""
+    out = {}
+    n, w, _ = _football_day(day)
+    if n:
+        out["⚽"] = [n, w]
+    for key, data in (sports or {}).items():
+        icon = SPORT_ICONS.get(key)
+        if not icon:
+            continue
+        sn = sw = 0
+        for it in (data or {}).get("matches", []):
+            if it.get("state") != "post" or it.get("date") != day:
+                continue
+            for r in it.get("picks", []):
+                if r["t"] == 0 and r.get("h") is not None:
+                    sn += 1
+                    sw += int(bool(r["h"]))
+        if sn:
+            out[icon] = [sn, sw]
+    return out
+
+
+def record_days(state, sports, now):
+    """Mémorise dans `state` les résultats d'aujourd'hui et d'hier (le plus complet l'emporte), sur 14 jours. -> True si l'état a changé."""
+    today = _paris_date(now)
+    days, changed = state.setdefault("days", {}), False
+    for d in (today, today - timedelta(days=1)):
+        key = d.isoformat()
+        cnt = _day_counts(sports, key)
+        old = days.get(key, {})
+        if sum(v[0] for v in cnt.values()) >= sum(v[0] for v in old.values()) and cnt != old:
+            days[key], changed = cnt, True
+    for k in [k for k in days if k < (today - timedelta(days=14)).isoformat()]:
+        del days[k]
+        changed = True
+    return changed
+
+
+def build_weekly(state, now, site_url):
+    """Résumé des 7 derniers jours (jours enregistrés dans `state`), à envoyer le dimanche soir. [] s'il y a trop peu de pronostics."""
+    today = _paris_date(now)
+    keys = [(today - timedelta(days=i)).isoformat() for i in range(6, -1, -1)]
+    per, by_day = {}, []
+    for k in keys:
+        cnt = state.get("days", {}).get(k, {})
+        dn = sum(v[0] for v in cnt.values())
+        dw = sum(v[1] for v in cnt.values())
+        if dn:
+            by_day.append((k, dn, dw))
+        for icon, (sn, sw) in cnt.items():
+            a = per.setdefault(icon, [0, 0])
+            a[0] += sn
+            a[1] += sw
+    tn, tw = sum(v[0] for v in per.values()), sum(v[1] for v in per.values())
+    if tn < 20:
+        return []
+    lines = [" · ".join(f"{i} {w}/{n} ({w / n:.0%})" for i, (n, w) in sorted(per.items(), key=lambda kv: -kv[1][0]))]
+    ranked = [(i, w / n, n) for i, (n, w) in per.items() if n >= 10]
+    if len(ranked) >= 2:
+        ranked.sort(key=lambda x: -x[1])
+        lines.append(f"Meilleur sport : {ranked[0][0]} {ranked[0][1]:.0%} · à surveiller : {ranked[-1][0]} {ranked[-1][1]:.0%}")
+    if by_day:
+        best = max(by_day, key=lambda x: x[2] / x[1])
+        lines.append(f"Meilleur jour : {datetime.strptime(best[0], '%Y-%m-%d'):%d/%m} ({best[2]}/{best[1]})")
+    return [dict(title=f"Semaine du {datetime.strptime(keys[0], '%Y-%m-%d'):%d/%m} au {today:%d/%m} : {tw}/{tn} pronostics sûrs gagnés ({tw / tn:.0%})",
+                 message=chr(10).join(lines), priority=3, tags=["calendar"], **({"click": site_url} if site_url else {}))]
+
+
 def build_evening(sports, now, site_url):
     """Bilan du soir : pronostics sûrs gagnés aujourd'hui (tous sports), par sport, et les plus gros ratés. [] s'il y en a trop peu."""
     day = _paris_date(now).isoformat()
@@ -174,12 +243,19 @@ def build_evening(sports, now, site_url):
                  priority=3, tags=["chart_with_upwards_trend"], **({"click": site_url} if site_url else {}))]
 
 
-def run_evening(now, sports, dry=False):
+def run_evening(now, sports, dry=False, state=None):
+    """Bilan du soir ; le dimanche, s'ajoute le résumé de la semaine (une fois par semaine, mémorisé dans state["weekly"])."""
     topic = os.environ.get("NTFY_TOPIC", "")
     if not topic and not dry:
         print("[notif] NTFY_TOPIC absent : aucune notification envoyée.", file=sys.stderr)
         return False
-    msgs = build_evening(sports, now, os.environ.get("SITE_URL", ""))
+    site = os.environ.get("SITE_URL", "")
+    msgs = build_evening(sports, now, site)
+    if state is not None and _paris_date(now).weekday() == 6 and state.get("weekly") != _paris_date(now).isoformat():
+        weekly = build_weekly(state, now, site)
+        if weekly:
+            msgs += weekly
+            state["weekly"] = _paris_date(now).isoformat()
     send(msgs, topic, dry)
     return bool(msgs)
 

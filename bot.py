@@ -36,7 +36,7 @@ from fixtures_api import fetch_fixtures, fetch_espn, fixtures_from_ext
 from markets import fit_all
 from page import build_page
 import tracking
-from notify import run as run_notify, run_evening
+from notify import run as run_notify, run_evening, record_days
 from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
@@ -337,14 +337,16 @@ def main():
                 state["date"] = f"{now:%Y-%m-%d}"
                 with open(state_path, "w", encoding="utf-8") as fh:
                     json.dump(state, fh)
+        esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
+        esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
+        changed = record_days(state, esports, now)                      # résultats du jour et d'hier : base du résumé hebdomadaire
         evening_due = args.notify_evening and 20 <= now.hour <= 23 and state.get("evening") != f"{now:%Y-%m-%d}"
-        if evening_due and os.environ.get("NTFY_TOPIC"):
-            esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
-            esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
-            if run_evening(now, esports):
-                state["evening"] = f"{now:%Y-%m-%d}"
-                with open(state_path, "w", encoding="utf-8") as fh:
-                    json.dump(state, fh)
+        if evening_due and os.environ.get("NTFY_TOPIC") and run_evening(now, esports, state=state):
+            state["evening"] = f"{now:%Y-%m-%d}"
+            changed = True
+        if changed:
+            with open(state_path, "w", encoding="utf-8") as fh:
+                json.dump(state, fh)
         d_now = datetime.strptime(args.digest_date, "%Y-%m-%d").replace(hour=9) if args.digest_date else now
         digest = build_digest(models, fixtures, d_now, leagues, page_args[6])          # mail du matin (s'il y a des matchs aujourd'hui)
         if digest:
