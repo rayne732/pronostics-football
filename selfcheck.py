@@ -35,6 +35,10 @@ for key, url in (D.get("lazy") or {}).items():
     if key == "hist":
         check(isinstance(data, list) and len(data) > 100, "hist : historique vide")
         continue
+    if key == "cal":
+        check(isinstance(data, list), "cal : calendrier mondial absent")
+        print(f"cal       {len(data):3d} matchs (calendrier mondial), {os.path.getsize(path) // 1024} Ko")
+        continue
     if key == "res":
         check(isinstance(data.get("m"), dict), "res : journal des résultats absent")
         print(f"res       {len(data.get('m', {})):3d} matchs réglables, {os.path.getsize(path) // 1024} Ko")

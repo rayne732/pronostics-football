@@ -198,12 +198,13 @@ def _info(reliability):
     return intro + _reliability(reliability) + _value()
 
 
-LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "nfl", "mma", "golf", "volley", "res")      # données lourdes : un fichier par sport, chargé à l'ouverture du sport
+LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "nfl", "mma", "golf", "volley", "res", "cal")      # données lourdes : un fichier par sport, chargé à l'ouverture du sport
 
 
-def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None, artifact=False, lazy_dir=None, res=None, cal=None):
+def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None, artifact=False, lazy_dir=None, res=None, cal=None, xacc=None):
     d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl, mma, golf, volley, res, cal)
     d["mk"] = (reliability or {}).get("mk", [])
+    d["xacc"] = xacc or []
     d["cmp"] = competition_rows(leagues, (reliability or {}).get("lgs"), basket, rugby, handball, hockey, baseball, nfl, mma, volley)
     if lazy_dir and not artifact:
         os.makedirs(lazy_dir, exist_ok=True)
@@ -212,7 +213,7 @@ def build_page(models, fixtures, market_probs, generated_at, days, leagues, reli
         for key in LAZY:
             with open(os.path.join(lazy_dir, f"{key}.json"), "w", encoding="utf-8") as fh:
                 json.dump(d[key], fh, ensure_ascii=False, separators=(",", ":"))
-            d[key] = [] if key == "hist" else {}
+            d[key] = [] if key in ("hist", "cal") else {}
             d["lazy"][key] = f"data/{key}.json?v={stamp}"
     data = json.dumps(d, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     head = f'<title>Pronostics Football</title>{FONTS}<style>{_read("style.css")}</style>'

@@ -38,7 +38,7 @@ from page import build_page
 import tracking
 from notify import run as run_notify, run_evening, record_days
 from results import update as results_update
-from calendar_extra import fetch as calendar_fetch
+import espn_hub
 from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
@@ -313,11 +313,13 @@ def main():
         rows_by_div = {d: {(r["Date"], r["HomeTeam"], r["AwayTeam"]): r for r in dfs[d]} for d in dfs}
         settled = tracking.settle(models, now, rows_by_div)              # vérifie les pronostics des matchs terminés
         ext = external_matches(now)
-        try:
-            cal = calendar_fetch(now, args.days)                         # calendrier ESPN des compétitions sans modèle (sélections, coupes…)
+        try:                                                             # toutes les compétitions du monde (ESPN) : calendrier, résultats enregistrés, fiabilité des cotes
+            hub_events, hub_lo = espn_hub.fetch_events(now, args.days)
+            xacc = espn_hub.update_logs(hub_events, ext, hub_lo)
+            cal = espn_hub.calendar_items(hub_events, hub_lo, args.days)
         except Exception as exc:
-            print(f"[avertissement] calendrier élargi indisponible : {exc}", file=sys.stderr)
-            cal = []
+            print(f"[avertissement] calendrier mondial indisponible : {exc}", file=sys.stderr)
+            cal, xacc = [], []
         fixtures = get_fixtures(now, args.days, leagues, ext)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
@@ -326,9 +328,9 @@ def main():
         esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
         res = results_update(now, esports)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
         with open("output/index.html", "w", encoding="utf-8") as fh:
-            fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal))
+            fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal, xacc=xacc))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
-            fh.write(build_page(*page_args, artifact=True, res=res, cal=cal))
+            fh.write(build_page(*page_args, artifact=True, res=res, cal=cal, xacc=xacc))
         write_site("output")                                             # manifeste, icônes, service worker (application installable)
         print(f"Page générée : {os.path.abspath('output/index.html')}")
         state_path, state = "data/notify_state.json", {}

@@ -428,3 +428,4 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .comp .cn{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}.comp .cn small{display:block;font-weight:400;color:var(--mute);font-size:.76rem}
 .comp .cnt{flex:none;min-width:28px;text-align:center;padding:2px 8px;border-radius:10px;background:var(--surface2);font-weight:600;font-size:.82rem}
 .comp .ic{width:16px;height:16px;color:var(--mute)}
+.apil{grid-column:1/-1;font-size:.76rem;color:var(--mute);display:flex;gap:8px;align-items:center;flex-wrap:wrap}

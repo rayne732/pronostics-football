@@ -475,6 +475,17 @@
     });
     return h + '</div>';
   }
+  function xaccHTML() {
+    var rows = D.xacc || [];
+    if (!rows.length) return '';
+    var h = '<h2>Compétitions hors modèle : fiabilité mesurée</h2><div class="srcnote">Chaque match terminé est enregistré avec la probabilité du marché d’avant-match (cotes ESPN) et la prédiction d’API-Football. ' +
+      'Colonne « favori juste » : part des matchs où le favori annoncé a bien gagné (un nul compte comme raté). La mesure grandit chaque jour.</div><div class="fm">';
+    rows.forEach(function (r) {
+      var gap = r[3] - r[2];
+      h += '<div class="pr ' + (gap >= -0.02 ? 'ok' : gap < -0.08 ? 'ko' : '') + '"><span class="pt">' + esc(r[0]) + '<small class="sm">' + r[1] + ' matchs · favori annoncé à ' + pct(r[2]) + '</small></span><span class="pp">' + pct(r[3]) + '</span></div>';
+    });
+    return h + '</div>';
+  }
   function bilanHTML() {
     var today = D.today || isoDate(new Date()), lo = isoDate(new Date(Date.now() - 6 * 864e5)), rows = [], tot = { sw: 0, sn: 0, lw: 0, ln: 0, m: 0, h: 0 }, perDay = {};
     var add = function (d, sw, sn, lw, ln) { var o = perDay[d] || (perDay[d] = { sw: 0, sn: 0 }); o.sw += sw; o.sn += sn; };
@@ -512,6 +523,7 @@
     }
     h += diagHTML(lo);
     h += cmpHTML();
+    h += xaccHTML();
     h += '<button class="voir mid wide" data-bilan style="margin:12px 0"' + (bilanBusy ? ' disabled' : '') + '>' + (bilanBusy ? esc(bilanMsg || 'Mise à jour…') : 'Actualiser les résultats de tous les sports') + '</button>';
     h += '<div class="sub">Le football vient du suivi du site (vérifié chaque jour). Les autres sports sont comptés à partir des résultats que <b>cet appareil</b> a pu récupérer en direct : seuls les jours où le site a été ouvert (ou actualisé ici) sont comptés. ' +
       'Un jour ou un sport isolé ne dit pas grand-chose : le modèle annonce environ 75 % de réussite sur les pronostics sûrs.</div>';
@@ -1075,62 +1087,89 @@
     'Mexico': 'Mexique', 'Japan': 'Japon', 'Norway': 'Norvège', 'Sweden': 'Suède', 'Denmark': 'Danemark', 'Poland': 'Pologne', 'Romania': 'Roumanie', 'Switzerland': 'Suisse',
     'Finland': 'Finlande', 'Ireland': 'Irlande', 'Saudi-Arabia': 'Arabie saoudite', 'Australia': 'Australie', 'South-Korea': 'Corée du Sud', 'Morocco': 'Maroc', 'Austria': 'Autriche',
     'Czech-Republic': 'Tchéquie', 'Croatia': 'Croatie', 'Hungary': 'Hongrie', 'Serbia': 'Serbie', 'Bulgaria': 'Bulgarie', 'Slovakia': 'Slovaquie', 'Belarus': 'Biélorussie',
-    'Colombia': 'Colombie', 'Ecuador': 'Équateur', 'Estonia': 'Estonie' };
+    'Colombia': 'Colombie', 'Ecuador': 'Équateur', 'Estonia': 'Estonie', 'Canada': 'Canada' };
   // championnats que notre modèle couvre : leurs matchs « API-Football » ne sont pas listés une deuxième fois
   var EXT_DIV = { 'France|Ligue 1': 'F1', 'France|Ligue 2': 'F2', 'England|Premier League': 'E0', 'England|Championship': 'E1', 'Spain|La Liga': 'SP1', 'Spain|Segunda División': 'SP2',
     'Germany|Bundesliga': 'D1', 'Germany|2. Bundesliga': 'D2', 'Italy|Serie A': 'I1', 'Italy|Serie B': 'I2', 'Netherlands|Eredivisie': 'N1', 'Belgium|Jupiler Pro League': 'B1',
     'Portugal|Primeira Liga': 'P1', 'Turkey|Süper Lig': 'T1', 'Greece|Super League 1': 'G1', 'Scotland|Premiership': 'SC0', 'USA|Major League Soccer': 'USA', 'Mexico|Liga MX': 'MEX',
     'Argentina|Liga Profesional Argentina': 'ARG', 'Japan|J1 League': 'JPN', 'Norway|Eliteserien': 'NOR', 'Sweden|Allsvenskan': 'SWE', 'Denmark|Superliga': 'DNK', 'Poland|Ekstraklasa': 'POL',
     'Romania|Liga I': 'ROU', 'Switzerland|Super League': 'SWZ', 'Finland|Veikkausliiga': 'FIN', 'Ireland|Premier Division': 'IRL', 'Brazil|Serie A': 'BRA' };
-  function compName(e) { return FR_COMP[e.lg] || e.lg; }
-  function compCountry(e) { return FR_CTRY[e.country] || e.country; }
+  var INTL = /^(fifa|uefa|concacaf|conmebol|caf|afc|global|club)\./;
+  var CAL_REQ = false;
   function normT(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function sameTeam(a, b) { a = normT(a); b = normT(b); return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0); }
-  // matchs d'une compétition : ceux d'API-Football (avec prédiction, aujourd'hui) puis ceux du calendrier ESPN qui n'y figurent pas déjà
-  function compItems(lg, country) {
-    var ext = D.ext.filter(function (e) { return e.lg === lg && e.country === country; }).map(function (e) { return { kind: 'ext', e: e, date: e.date, time: e.time }; });
-    var cal = (D.cal || []).filter(function (c) {
-      return c.lg === lg && c.country === country && !D.ext.some(function (e) { return e.lg === lg && e.country === country && e.date === c.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); });
-    }).map(function (c) { return { kind: 'cal', c: c, date: c.date, time: c.time }; });
-    return ext.concat(cal).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1; });
+  function extFor(c) {           // prédiction API-Football du même match (même jour, une équipe en commun)
+    var hit = D.ext.filter(function (e) { return e.date === c.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); });
+    return hit.length ? hit[0] : null;
   }
-  function calRow(c) {
-    var p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '';
-    return '<div class="mrow low ext"><div class="tm">' + esc(c.time) + '</div><div class="tt">' + tn(c.home) + tn(c.away) + '</div>' +
-      '<div class="act">' + (p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low">cotes indisponibles</span>') + '</div>' + (p ? miniBar(p) : '') + '</div>';
+  function calGroups() {
+    var T = parisToday(), g = {}, order = [];
+    (D.cal || []).forEach(function (c) {
+      if (!g[c.s]) { g[c.s] = { key: 'S|' + c.s, s: c.s, name: c.fr, sub: c.cfr, w: c.w, items: [], n: 0 }; order.push(c.s); }
+      g[c.s].items.push(c);
+      if (c.date >= T) g[c.s].n++;
+    });
+    return order.map(function (s) { return g[s]; }).filter(function (x) { return x.n > 0; });
+  }
+  function apiOnlyGroups() {      // matchs d'API-Football qui ne figurent ni dans notre modèle ni dans le calendrier ESPN
+    var idx = {}, out = [];
+    D.ext.forEach(function (e) {
+      var dv = EXT_DIV[e.country + '|' + e.lg];
+      if (dv && D.leagues[dv] && D.fixtures.some(function (f) { return f.div === dv; })) return;
+      if ((D.cal || []).some(function (c) { return c.date === e.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); })) return;
+      var k = 'X|' + e.lg + '|' + e.country;
+      if (!(k in idx)) { idx[k] = out.length; out.push({ key: k, name: FR_COMP[e.lg] || e.lg, sub: FR_CTRY[e.country] || e.country, n: 0 }); }
+      out[idx[k]].n++;
+    });
+    return out;
   }
   function competitions() {
-    var L = [], X = [], idx = {};
+    var L = [], I = [], O = [], F = [];
     D.order.forEach(function (div) {
       var n = D.fixtures.filter(function (f) { return f.div === div; }).length;
       if (n) { var lm = LMETA[div] || ['', '#4f8cff', '']; L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: n }); }
     });
-    D.ext.forEach(function (e) {
-      var dv = EXT_DIV[e.country + '|' + e.lg];
-      if (dv && D.leagues[dv] && D.fixtures.some(function (f) { return f.div === dv; })) return;
-      var k = 'X|' + e.lg + '|' + e.country;
-      if (!(k in idx)) { idx[k] = X.length; X.push({ key: k, name: compName(e), sub: compCountry(e), flag: '', n: 0 }); }
-      X[idx[k]].n++;
-    });
-    (D.cal || []).forEach(function (c) {
-      var k = 'X|' + c.lg + '|' + c.country;
-      if (!(k in idx)) { idx[k] = X.length; X.push({ key: k, name: c.fr || c.lg, sub: FR_CTRY[c.country] || c.country, flag: '', n: 0 }); }
-    });
-    X.forEach(function (x) { var p = x.key.split('|'); x.n = compItems(p[1], p[2]).length; });
-    X = X.filter(function (x) { return x.n > 0; });
-    X.sort(function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; });
-    return { L: L, X: X };
+    calGroups().forEach(function (g) { (INTL.test(g.s + '.') ? I : g.w ? F : O).push(g); });
+    var cmp = function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; };
+    I.sort(function (a, b) { return b.n - a.n; });
+    var X = apiOnlyGroups().sort(cmp);
+    return { L: L, I: I, O: O.sort(cmp), F: F.sort(cmp), X: X, total: L.length + I.length + O.length + F.length + X.length };
   }
   function compRow(c) {
     return '<button class="comp" data-day="comp:' + esc(c.key) + '"><span class="cf">' + (c.flag || svg(IC.trophy)) + '</span><span class="cn">' + esc(c.name) + '<small>' + esc(c.sub) + '</small></span><span class="cnt">' + c.n + '</span>' + svg(IC.chev) + '</button>';
   }
-  function compsHTML() {
-    var C = competitions(), h = '<div class="srcnote">Choisis une compétition pour voir <b>tous ses matchs</b>. Seules celles qui ont des matchs apparaissent : la liste change chaque jour.</div>';
-    h += '<div class="sec"><span class="dot g"></span>Championnats avec notre modèle <small>' + C.L.length + ' avec des matchs</small></div>';
-    h += C.L.length ? C.L.map(compRow).join('') : '<div class="empty">Aucun match de ces championnats dans les prochains jours (trêve internationale ?).</div>';
-    if (C.X.length) h += '<div class="sec"><span class="dot a"></span>Autres compétitions <small>aujourd’hui · prédictions API-Football</small></div>' + C.X.map(compRow).join('');
-    return h;
+  function compMatch(q, c) { return !q || normT(c.name + ' ' + c.sub).indexOf(normT(q)) >= 0; }
+  function compListHTML() {
+    var C = competitions(), q = st.cq || '', h = '', any = false;
+    var sec = function (title, small, list, dot) {
+      list = list.filter(function (c) { return compMatch(q, c); });
+      if (!list.length) return;
+      any = true;
+      h += '<div class="sec"><span class="dot ' + dot + '"></span>' + title + ' <small>' + small + '</small></div>' + list.map(compRow).join('');
+    };
+    sec('Championnats avec notre modèle', 'pronostics complets', C.L, 'g');
+    sec('Sélections et compétitions internationales', 'amicaux, Ligues des Nations, coupes d’Europe…', C.I, 'a');
+    sec('Championnats et coupes des autres pays', 'affiche et cotes quand elles existent', C.O, 'a');
+    sec('Football féminin', '', C.F, 'a');
+    sec('Autres matchs du jour', 'prédictions API-Football', C.X, 'a');
+    return any ? h : '<div class="empty">Aucune compétition ne correspond à « ' + esc(q) + ' ».</div>';
   }
+  function compsHTML() {
+    var C = competitions(), h = '<div class="srcnote">Choisis une compétition pour voir <b>tous ses matchs</b> (<b>' + C.total + '</b> compétitions ont des matchs dans les prochains jours ; la liste change chaque jour). ' +
+      'Hors de notre modèle, tu as l’affiche, le score et, quand elles existent, les probabilités déduites des cotes.</div>';
+    h += '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="cq" type="search" placeholder="Chercher une compétition ou un pays" autocomplete="off" value="' + esc(st.cq || '') + '"></label></div>';
+    if (!isLoaded('cal')) h += '<div class="sub">Chargement du calendrier mondial…</div>';
+    return h + '<div id="clist">' + compListHTML() + '</div>';
+  }
+  function calRow(c) {
+    var x = extFor(c), p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '', right, left = esc(c.time);
+    if (c.st === 'post') { right = '<span class="cfp high">Terminé · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>fini</small>'; }
+    else if (c.st === 'in') { right = '<span class="cfp mid">En cours · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>live</small>'; }
+    else right = p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low">cotes indisponibles</span>';
+    var api = x && c.st === 'pre' ? '<div class="apil">API-Football : ' + esc([x.home, 'Nul', x.away][x.favIdx]) + ' ' + pct(x.fav) + ' <button class="bt-b" data-openext="' + x.i + '">Voir</button></div>' : '';
+    return '<div class="mrow low ext"><div class="tm">' + left + '</div><div class="tt">' + tn(c.home) + tn(c.away) + '</div><div class="act">' + right + '</div>' + (p && c.st === 'pre' ? miniBar(p) : '') + api + '</div>';
+  }
+  function dayLabel(d) { var T = parisToday(); return d === T ? 'Aujourd’hui · ' + dm(d) : d === isoDate(new Date(parseD(T).getTime() - 864e5)) ? 'Hier · ' + dm(d) : WD[parseD(d).getDay()] + ' ' + dm(d); }
   function compHTML(key) {
     var p = key.split('|'), h = '<button class="chip pill" data-day="comps" style="margin-bottom:10px">‹ Toutes les compétitions</button>';
     if (p[0] === 'L') {
@@ -1144,24 +1183,31 @@
       });
       return h;
     }
-    var items = compItems(p[1], p[2]), calOne = (D.cal || []).filter(function (c) { return c.lg === p[1] && c.country === p[2]; })[0], nm = calOne ? calOne.fr : (FR_COMP[p[1]] || p[1]);
-    h += '<div class="srcnote">Hors de notre modèle : pour les matchs du jour, prédiction d’<b>API-Football</b> (non testée) ; pour les jours suivants, l’<b>affiche</b> et, quand elles existent, les <b>probabilités déduites des cotes</b> (sans marge). Pas de pronostic « sûr » ici.</div>';
-    h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(nm) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + items.length + '</span></div>';
-    if (!items.length) return h + '<div class="empty">Aucun match dans les prochains jours pour cette compétition.</div>';
-    var cur = '';
-    items.forEach(function (it) {
-      if (it.date !== cur) { cur = it.date; h += '<div class="cdl">' + WD[parseD(it.date).getDay()] + ' ' + dm(it.date) + '</div>'; }
-      h += it.kind === 'ext' ? extRow(it.e) : calRow(it.c);
-    });
-    return h;
+    if (p[0] === 'S') {
+      var g = calGroups().filter(function (x) { return x.s === p[1]; })[0] || ((D.cal || []).some(function (c) { return c.s === p[1]; }) ? { name: p[1], sub: '', items: (D.cal || []).filter(function (c) { return c.s === p[1]; }) } : null);
+      if (!g) return h + '<div class="empty">Cette compétition n’a plus de match dans les prochains jours.</div>';
+      h += '<div class="srcnote">Hors de notre modèle : l’<b>affiche</b>, le <b>score</b> et, quand elles existent, les <b>probabilités déduites des cotes</b> (sans marge). Pas de pronostic « sûr » ici. Les résultats sont enregistrés pour mesurer la fiabilité des cotes (onglet Fiabilité).</div>';
+      h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(g.name) + '<small>' + esc(g.sub) + '</small></div><span class="cnt">' + g.items.length + '</span></div>';
+      var items = g.items.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1; }), cd = '';
+      items.forEach(function (c) {
+        if (c.date !== cd) { cd = c.date; h += '<div class="cdl">' + dayLabel(c.date) + '</div>'; }
+        h += calRow(c);
+      });
+      return h;
+    }
+    var xs = D.ext.filter(function (e) { return e.lg === p[1] && e.country === p[2]; });
+    h += '<div class="srcnote">Prédictions d’<b>API-Football</b> (modèle différent du nôtre, non testé). Seuls les matchs du jour sont disponibles.</div>';
+    h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(FR_COMP[p[1]] || p[1]) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + xs.length + '</span></div>';
+    return h + (xs.length ? xs.map(extRow).join('') : '<div class="empty">Aucun match aujourd’hui pour cette compétition.</div>');
   }
   function homeHTML() {
+    if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (st.tab === 'home' && st.sport === 'foot' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
     var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
     var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext' || st.day === 'comps' || st.day.indexOf('comp:') === 0;
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
-    if (!fx.length && !past.length && !D.daily.length && !D.ext.length && !(D.cal || []).length) {
+    if (!fx.length && !past.length && !D.daily.length && !D.ext.length && !(D.cal || []).length && isLoaded('cal')) {
       return h + '<div class="empty">Aucun match à venir dans les 5 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
@@ -1183,7 +1229,7 @@
       });
     }
     if (D.ext.length) h += '<button class="chip' + (st.day === 'ext' ? ' on' : '') + '" data-day="ext">Autres matchs<b>' + D.ext.length + ' aujourd’hui</b></button>';
-    var nc = competitions(); nc = nc.L.length + nc.X.length;
+    var nc = competitions().total;
     if (nc) h += '<button class="chip' + (st.day === 'comps' || st.day.indexOf('comp:') === 0 ? ' on' : '') + '" data-day="comps">Compétitions<b>' + nc + '</b></button>';
     h += '</div>';
     if (inPast) return h + (st.day === 'ext' ? extHTML() : st.day === 'week' ? weekHTML() : st.day === 'comps' ? compsHTML() : st.day.indexOf('comp:') === 0 ? compHTML(st.day.slice(5)) : pastHTML(st.day.slice(5)));
@@ -1553,6 +1599,12 @@
     st.q = e.target.value;
     var box = document.getElementById('list');
     if (box) box.innerHTML = listHTML();                 // on ne refait que la liste pour garder le clavier ouvert
+  });
+  app.addEventListener('input', function (e) {
+    if (e.target.id !== 'cq') return;
+    st.cq = e.target.value;
+    var box = document.getElementById('clist');
+    if (box) box.innerHTML = compListHTML();
   });
   app.addEventListener('change', function (e) {
     var id = e.target.id, v = +e.target.value;
