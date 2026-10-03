@@ -45,6 +45,7 @@
     plus: '<path d="M12 5v14M5 12h14"/>',
     check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    bets: '<rect x="3.5" y="6" width="17" height="12" rx="3"/><circle cx="12" cy="12" r="2.6"/><path d="M7 9.5v.01M17 14.5v.01"/>',
     ticket: '<path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v2h16v-2a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V6H4z"/><path d="M13 6v12" stroke-dasharray="2 2.4"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>',
     moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
@@ -1316,7 +1317,7 @@
 
   /* ------------------------------------------------------------ navigation */
   function renderNav() {
-    var items = [['today', 'Aujourd’hui'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['info', 'Fiabilité']];
+    var items = [['today', 'Aujourd’hui'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + '<span>' + x[1] + '</span></button>';
     }).join('') + '</div>';
@@ -1335,6 +1336,7 @@
     else if (st.tab === 'today') app.innerHTML = todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
+    else if (st.tab === 'bets') app.innerHTML = Bets.html();
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     renderNav();
@@ -1438,6 +1440,7 @@
     if (!t) return;
     st.tab = t.getAttribute('data-tab'); st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
+  Bets.attach(app, render);
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 
   render();

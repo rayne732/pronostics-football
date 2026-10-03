@@ -391,3 +391,27 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .pr small.sm{display:block;margin-top:2px;color:var(--mute);font-size:.68rem;font-weight:400}
 
 #info .voir[disabled]{opacity:.6}
+
+/* suivi de mes paris */
+.bt-form label{display:flex;flex-direction:column;gap:5px;font-size:.78rem;color:var(--mute);margin-bottom:10px;min-width:0}
+.bt-form input,.bt-line input,#bt-io{font-size:.95rem;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:14px;padding:11px 12px;width:100%;min-width:0}
+#bt-io{margin-top:10px;font-family:inherit;resize:vertical}
+.bt-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bt-imp{font-size:.78rem;color:var(--mute);min-height:1.2em;margin:-4px 0 10px}
+.bt-line{display:flex;gap:8px;align-items:center}
+.bt-b{flex:none;padding:7px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);color:var(--ink);font-size:.8rem;font-weight:500}
+.bt-b.w{background:color-mix(in srgb,var(--green) 22%,var(--surface2));border-color:var(--green)}
+.bt-b.l{background:color-mix(in srgb,var(--red) 20%,var(--surface2));border-color:var(--red)}
+.bt-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.bt-row{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:10px;border-left:4px solid var(--line)}
+.bt-row.ok{border-left-color:var(--green)}.bt-row.ko{border-left-color:var(--red)}
+.bt-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.bt-t{min-width:0}.bt-t b{display:block;overflow-wrap:anywhere}.bt-t small{color:var(--mute);font-size:.76rem}
+.bt-r{flex:none;font-weight:600;font-size:.9rem;color:var(--mute)}.bt-r.ok{color:var(--green)}.bt-r.ko{color:var(--red)}
+.bt-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+.bt-grid b{display:block;font-size:.98rem}.bt-grid small{color:var(--mute);font-size:.7rem}
+@media (max-width:420px){.bt-grid{grid-template-columns:repeat(2,1fr)}}
+.bt-warn{background:color-mix(in srgb,var(--amber) 16%,var(--surface));border:1px solid var(--amber);border-radius:12px;padding:9px 12px;font-size:.82rem;margin:8px 0}
+.bt-bud{display:flex;flex-direction:column;gap:7px;margin-bottom:6px;font-size:.86rem}
+.bt-ch svg{width:100%;height:auto;display:block}
+.bt-ax{display:flex;justify-content:space-between;color:var(--mute);font-size:.7rem;margin-top:4px}
