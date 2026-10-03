@@ -636,7 +636,7 @@
       '<table class="tbl"><thead><tr><th>Confiance</th><th>Matchs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
   function tnPage(i) {
-    var m = TM.filter(function (x) { return x.id === st.detail.id; })[0] || TM[i], d = { div: 'TEN', home: m.a, away: m.b }, conf = m.conf, p = [m.p, 1 - m.p];
+    var m = TM.filter(function (x) { return x.id === st.detail.id; })[0] || TM[i], d = { div: 'TEN', home: m.a, away: m.b, ref: 'tennis|' + m.id }, conf = m.conf, p = [m.p, 1 - m.p];
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">🎾 ' + esc(m.tn) + '</span><small>' + esc(m.round) + ' · ' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + tnState(m) + '</small></div></div>' + vsBlock(d);
     if (m.state === 'post') {
@@ -835,7 +835,7 @@
       (c.gap ? line('Écart attendu', f(Math.abs(m.lh - m.la)) + ' ' + c.unit + ' pour ' + (m.lh >= m.la ? m.home : m.away)) : '');
   }
   function spPage(S, ref) {
-    var c = S.cfg, L = spLeagues(S), m = S.items.filter(function (x) { return x.id === ref.id; })[0] || S.items[ref.i], d = { div: S.sid, home: m.home, away: m.away }, conf = m.conf, p = m.p3;
+    var c = S.cfg, L = spLeagues(S), m = S.items.filter(function (x) { return x.id === ref.id; })[0] || S.items[ref.i], d = { div: S.sid, home: m.home, away: m.away, ref: c.key + '|' + m.id }, conf = m.conf, p = m.p3;
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">' + c.icon + ' ' + esc(L[m.lg] ? L[m.lg][0] : c.title) + '</span><small>' + (m.label ? esc(m.label) + ' · ' : '') + dm(m.date) + ' · ' + esc(m.time) + ' · ' + spState(m) + '</small></div></div>' + vsBlock(d);
     if (m.state === 'post' && (m.hs != null || m.res)) {
@@ -1123,6 +1123,7 @@
       pct(P * avg) + '. Un bookmaker applique sa marge à chaque sélection, donc la cote d’un combiné est encore moins favorable que la cote juste.</div>';
     if (dup) h += '<div class="sub warn">' + (dup + 1) + ' sélections viennent d’un même match : elles sont liées entre elles, donc le produit des probabilités n’est qu’une approximation.</div>';
     return h + '<div class="sec"><span class="dot g"></span>Sélections</div>' + rows +
+      '<button class="voir mid wide" data-bcomb style="margin-top:12px">€ Noter ce combiné dans Mes paris</button>' +
       '<button class="voir low wide" data-clear style="margin-top:12px">Vider le combiné</button>';
   }
 
@@ -1130,12 +1131,13 @@
   function line(a, b) { return '<div class="mline"><span>' + esc(a) + '</span><span>' + esc(b) + '</span></div>'; }
   var BETSP = { handball: 'hand', rugby15: 'rugby', TEN: 'tennis' };
   function betSport(d) { return d && d.div && !D.leagues[d.div] ? (BETSP[d.div] || d.div) : 'foot'; }
-  function alt(s, best, d, m) {
+  function betRef(d) { return d.ref || (d.fi != null && D.fixtures[d.fi] ? D.fixtures[d.fi].id : ''); }
+  function alt(s, best, d, m, cls) {
     var p = s[1], k = tkKey(d, m, s[0]), on = inTicket(k);
     return '<div class="alt' + (best ? ' best' : '') + '"><span>' + esc(s[0]) + '</span><span class="p">' + pct(p) + '</span>' +
-      '<span class="acts"><button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + p.toFixed(4) + '" data-bm="' + esc(m) + '" aria-label="Noter ce pari dans Mes paris">€</button>' +
+      '<span class="acts"><button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + p.toFixed(4) + '" data-bm="' + esc(m) + '" data-bs="' + esc(s[0]) + '" data-bref="' + esc(betRef(d)) + '" data-bcat="' + (cls === 'g' ? 'Pronostic sûr' : 'Moins sûr') + '" aria-label="Noter ce pari dans Mes paris">€</button>' +
       '<button class="add' + (on ? ' on' : '') + '" data-add="' + esc(k) + '" data-p="' + p.toFixed(4) + '" data-mt="' + esc(d.home + ' – ' + d.away) +
-      '" data-m="' + esc(m) + '" data-s="' + esc(s[0]) + '" aria-label="' + (on ? 'Retirer du combiné' : 'Ajouter au combiné') + '">' + svg(on ? IC.check : IC.plus) + '</button></span>' +
+      '" data-m="' + esc(m) + '" data-s="' + esc(s[0]) + '" data-bref="' + esc(betRef(d)) + '" aria-label="' + (on ? 'Retirer du combiné' : 'Ajouter au combiné') + '">' + svg(on ? IC.check : IC.plus) + '</button></span>' +
       '<span class="c">' + (p > 0.005 ? 'cote juste ' + (1 / p).toFixed(2) : 'très improbable') + '</span>' +
       '<div class="bar"><i style="width:' + Math.round(p * 100) + '%"></i></div></div>';
   }
@@ -1144,7 +1146,7 @@
       return '<details class="mk"><summary><span class="mi ' + cls + '">' + mkIcon(x.m) + '</span><span class="mt">' + esc(x.m) +
         (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') +
         '</span><span class="pk ' + cls + '">' + esc(x.s) + ' · ' + pct(x.p) + '</span></summary><div class="alts">' +
-        x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m); }).join('') + '</div></details>';
+        x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m, cls); }).join('') + '</div></details>';
     };
   }
   function predHTML(d, f) {
@@ -1341,7 +1343,10 @@
     else if (st.tab === 'today') app.innerHTML = todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
-    else if (st.tab === 'bets') app.innerHTML = Bets.html();
+    else if (st.tab === 'bets') {
+      app.innerHTML = Bets.html();
+      if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+    }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     renderNav();
@@ -1354,7 +1359,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1409,11 +1414,16 @@
       var key = t.getAttribute('data-add'), at = -1;
       ticket.forEach(function (x, i) { if (x.k === key) at = i; });
       if (at >= 0) ticket.splice(at, 1);
-      else ticket.push({ k: key, p: +t.getAttribute('data-p'), mt: t.getAttribute('data-mt'), m: t.getAttribute('data-m'), s: t.getAttribute('data-s') });
+      else ticket.push({ k: key, p: +t.getAttribute('data-p'), mt: t.getAttribute('data-mt'), m: t.getAttribute('data-m'), s: t.getAttribute('data-s'), r: t.getAttribute('data-bref') || '' });
       saveTicket();
       var y = window.scrollY; render(); window.scrollTo(0, y);
     }
     else if (t.hasAttribute('data-rm')) { ticket.splice(+t.getAttribute('data-rm'), 1); saveTicket(); render(); }
+    else if (t.hasAttribute('data-bcomb')) {
+      Bets.prefill({ label: ticket.map(function (x) { return x.mt + ' : ' + x.s; }).join(' + '), p: ticketProb(), kind: 'combine', cat: 'Combiné',
+        legs: ticket.filter(function (x) { return x.r; }).map(function (x) { var ps = x.r; return { id: ps, m: x.m, s: x.s }; }), nLegs: ticket.length });
+      st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
+    }
     else if (t.hasAttribute('data-clear')) { ticket = []; saveTicket(); render(); }
     else if (t.hasAttribute('data-share')) { copyText(shareText(st.detail, st.detail.fi != null ? D.fixtures[st.detail.fi] : null)); }
     else if (t.hasAttribute('data-dtab')) { st.dtab = t.getAttribute('data-dtab'); render(); }
@@ -1445,6 +1455,12 @@
     if (!t) return;
     st.tab = t.getAttribute('data-tab'); st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
+  Bets.resolver = function (id, m, sel) {
+    var r = isLoaded('res') && D.res && D.res.m && D.res.m[id];
+    if (!r) return null;
+    for (var i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
+    return null;
+  };
   Bets.attach(app, render, function () { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); });
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 

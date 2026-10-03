@@ -35,6 +35,10 @@ for key, url in (D.get("lazy") or {}).items():
     if key == "hist":
         check(isinstance(data, list) and len(data) > 100, "hist : historique vide")
         continue
+    if key == "res":
+        check(isinstance(data.get("m"), dict), "res : journal des résultats absent")
+        print(f"res       {len(data.get('m', {})):3d} matchs réglables, {os.path.getsize(path) // 1024} Ko")
+        continue
     ms = data.get("matches", [])
     check("generated" in data, f"{key} : date de mise à jour absente")
     check(bool(data.get("model")) or key in ("handball", "tennis", "golf", "volley"), f"{key} : modèle absent (pas de direct dans le navigateur)")

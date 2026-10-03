@@ -37,6 +37,7 @@ from markets import fit_all
 from page import build_page
 import tracking
 from notify import run as run_notify, run_evening, record_days
+from results import update as results_update
 from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
@@ -315,10 +316,13 @@ def main():
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
         page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
+        esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
+        esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
+        res = results_update(now, esports)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
         with open("output/index.html", "w", encoding="utf-8") as fh:
-            fh.write(build_page(*page_args, lazy_dir="output/data"))
+            fh.write(build_page(*page_args, lazy_dir="output/data", res=res))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
-            fh.write(build_page(*page_args, artifact=True))
+            fh.write(build_page(*page_args, artifact=True, res=res))
         write_site("output")                                             # manifeste, icônes, service worker (application installable)
         print(f"Page générée : {os.path.abspath('output/index.html')}")
         state_path, state = "data/notify_state.json", {}
@@ -337,8 +341,6 @@ def main():
                 state["date"] = f"{now:%Y-%m-%d}"
                 with open(state_path, "w", encoding="utf-8") as fh:
                     json.dump(state, fh)
-        esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
-        esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
         changed = record_days(state, esports, now)                      # résultats du jour et d'hier : base du résumé hebdomadaire
         evening_due = args.notify_evening and 20 <= now.hour <= 23 and state.get("evening") != f"{now:%Y-%m-%d}"
         if evening_due and os.environ.get("NTFY_TOPIC") and run_evening(now, esports, state=state):

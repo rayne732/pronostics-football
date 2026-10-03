@@ -419,3 +419,4 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .bt-ax{display:flex;justify-content:space-between;color:var(--mute);font-size:.7rem;margin-top:4px}
 .betbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 14px}
 .betbar a.bt-b{text-decoration:none;color:var(--ink)}
+.bt-t small.bt-p{display:block;color:var(--blue);margin-top:2px}

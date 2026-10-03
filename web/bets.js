@@ -5,7 +5,8 @@ var Bets = (function () {
     ['nfl', 'Foot US'], ['mma', 'MMA'], ['volley', 'Volley'], ['f1', 'Formule 1'], ['golf', 'Golf'], ['autre', 'Autre']];
   var SPN = {};
   SPORTS.forEach(function (s) { SPN[s[0]] = s[1]; });
-  var ui = { period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '', pre: null };
+  var ui = { period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '', pre: null, cat: '' };
+  var CATS = ['Pronostic sûr', 'Moins sûr', 'Combiné', 'Autre'];
 
   function load() {
     try {
@@ -22,6 +23,26 @@ var Bets = (function () {
   function pc(x) { return Math.round(x * 100) + ' %'; }
   function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function dmy(s) { return s.slice(8) + '/' + s.slice(5, 7); }
+
+  /* règlement automatique : un pari relié à un pronostic du site est gagné ou perdu dès que le match figure dans le journal des résultats */
+  function legRes(l) { return Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null; }
+  function settle() {
+    var changed = false;
+    mem.bets.forEach(function (b) {
+      if (b.st !== 'p' || !b.legs || !b.legs.length) return;
+      var r = b.legs.map(legRes);
+      if (r.some(function (x) { return x === false; })) { b.st = 'l'; b.auto = true; changed = true; }
+      else if (r.every(function (x) { return x === true; }) && b.legs.length >= (b.nLegs || b.legs.length)) { b.st = 'w'; b.auto = true; changed = true; }
+    });
+    if (changed) save();
+  }
+  function needsRes() { return mem.bets.some(function (b) { return b.st === 'p' && b.legs && b.legs.length; }); }
+  function prefill(pre) { ui.pre = pre; ui.kind = pre.kind || 'simple'; ui.sport = pre.sport || (pre.kind === 'combine' ? 'foot' : ui.sport); ui.msg = ''; }
+  function allCats() {
+    var seen = {}, out = [];
+    CATS.concat(mem.bets.map(function (b) { return b.cat || ''; })).forEach(function (c) { if (c && !seen[c]) { seen[c] = 1; out.push(c); } });
+    return out;
+  }
 
   function inPeriod(b) {
     var now = new Date(), today = iso(now);
@@ -78,7 +99,8 @@ var Bets = (function () {
     var cls = b.st === 'w' ? 'ok' : b.st === 'l' ? 'ko' : '';
     var ask = ui.ask === b.id;
     return '<div class="bt-row ' + cls + '"><div class="bt-top"><div class="bt-t"><b>' + esc(b.label || 'Pari') + '</b><small>' + dmy(b.d) + ' · ' + esc(SPN[b.sport] || 'Autre') + ' · ' +
-      (b.kind === 'combine' ? 'combiné' : 'simple') + ' · ' + eur(b.stake) + ' à ' + String(b.odds).replace('.', ',') + '</small></div><div class="bt-r ' + cls + '">' + res + '</div></div>' +
+      (b.kind === 'combine' ? 'combiné' : 'simple') + (b.cat ? ' · ' + esc(b.cat) : '') + ' · ' + eur(b.stake) + ' à ' + String(b.odds).replace('.', ',') + '</small>' +
+      (b.p ? '<small class="bt-p">Notre pronostic : ' + pc(b.p) + (b.auto ? ' · résultat réglé automatiquement' : b.legs && b.legs.length && b.st === 'p' ? ' · réglage automatique dès la fin du match' : '') + '</small>' : '') + '</div><div class="bt-r ' + cls + '">' + res + '</div></div>' +
       statusBtns(b) +
       '<div class="bt-act">' + (b.st !== 'p' ? '<button data-bst="' + b.id + '|p" class="bt-b">Modifier le résultat</button>' : '') +
       (ask ? '<button data-bdel="' + b.id + '" class="bt-b l">Confirmer la suppression</button><button data-bask="" class="bt-b">Annuler</button>'
@@ -86,6 +108,7 @@ var Bets = (function () {
   }
 
   function html() {
+    settle();
     var now = new Date(), today = iso(now), list = mem.bets.filter(inPeriod), all = stats(list), h = '';
     var month = today.slice(0, 7), spent = mem.bets.filter(function (b) { return b.d.slice(0, 7) === month; }).reduce(function (s, b) { return s + (b.st === 'v' ? 0 : b.stake); }, 0);
     h += '<h2>Mes paris</h2><div class="srcnote">Ce suivi reste <b>sur cet appareil</b> (rien n’est envoyé nulle part). Pense à faire une sauvegarde en bas de page : si tu vides les données du navigateur, tout disparaît.</div>';
@@ -126,20 +149,30 @@ var Bets = (function () {
       '<div class="bt-imp" id="bt-imp"></div>' +
       '<div class="bt-2"><label>Sport<select id="bt-sport">' + SPORTS.map(function (s) { return '<option value="' + s[0] + '"' + (ui.sport === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></label>' +
       '<label>Type<select id="bt-kind"><option value="simple"' + (ui.kind === 'simple' ? ' selected' : '') + '>Simple</option><option value="combine"' + (ui.kind === 'combine' ? ' selected' : '') + '>Combiné</option></select></label></div>' +
+      '<label>Catégorie<input id="bt-cat" type="text" maxlength="30" list="bt-cats" placeholder="ex. Pronostic sûr, Combiné, Test…" value="' + esc(ui.pre && ui.pre.cat ? ui.pre.cat : ui.cat) + '"></label>' +
+      '<datalist id="bt-cats">' + allCats().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
       '<label>Date<input id="bt-date" type="date" value="' + today + '"></label>' +
       (ui.msg ? '<div class="bt-warn">' + esc(ui.msg) + '</div>' : '') +
       '<button class="voir mid wide" data-badd>Ajouter ce pari</button></div>';
 
     // courbe et répartition
     h += chart(list);
-    var bySport = group(list, function (b) { return SPN[b.sport] || 'Autre'; }), byKind = group(list, function (b) { return b.kind === 'combine' ? 'Combinés' : 'Simples'; });
-    if (all.n && (bySport.length > 1 || byKind.length > 1)) {
-      h += '<div class="sec"><span class="dot a"></span>Par sport et par type <small>bénéfice · retour sur mise</small></div><div class="fm">' +
-        bySport.concat(byKind).map(function (s) {
+    var bySport = group(list, function (b) { return SPN[b.sport] || 'Autre'; }), byKind = group(list, function (b) { return b.kind === 'combine' ? 'Combinés' : 'Simples'; }),
+      byCat = group(list, function (b) { return b.cat ? 'Catégorie : ' + b.cat : ''; }).filter(function (s) { return s.k; });
+    if (all.n && (bySport.length > 1 || byKind.length > 1 || byCat.length)) {
+      h += '<div class="sec"><span class="dot a"></span>Par catégorie, sport et type <small>bénéfice</small></div><div class="fm">' +
+        byCat.concat(bySport, byKind).map(function (s) {
           return '<div class="pr ' + (s.profit >= 0 ? 'ok' : 'ko') + '"><span class="pt">' + esc(s.k) + '<small class="sm">' + s.w + '/' + s.n + ' gagnés · ' + pc(s.hit) + '</small></span><span class="pp">' + eur(s.profit, true) + '</span></div>';
         }).join('') + '</div>';
     }
 
+    // tes paris reliés à nos pronostics : ce que nous annoncions contre ce qui est arrivé
+    var linked = list.filter(function (b) { return b.p && (b.st === 'w' || b.st === 'l'); });
+    if (linked.length) {
+      var lw = linked.filter(function (b) { return b.st === 'w'; }).length, lp = linked.reduce(function (s, b) { return s + b.p; }, 0) / linked.length;
+      h += '<div class="srcnote">Sur tes <b>' + linked.length + '</b> paris reliés à un pronostic du site, nous annoncions en moyenne <b>' + pc(lp) + '</b> de réussite ; tu en as gagné <b>' + pc(lw / linked.length) + '</b>' +
+        (linked.length < 30 ? ' (trop peu de paris pour conclure).' : '.') + '</div>';
+    }
     // liste
     var shown = list.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : b.t - a.t; });
     h += '<div class="sec"><span class="dot g"></span>Historique <small>' + shown.length + ' pari' + (shown.length > 1 ? 's' : '') + '</small></div>';
@@ -158,7 +191,8 @@ var Bets = (function () {
   function readForm() {
     var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
     ui.sport = g('bt-sport') || ui.sport; ui.kind = g('bt-kind') || ui.kind;
-    return { label: g('bt-label').trim(), stake: num(g('bt-stake')), odds: num(g('bt-odds')), sport: ui.sport, kind: ui.kind, d: g('bt-date') || iso(new Date()) };
+    ui.cat = g('bt-cat').trim();
+    return { cat: ui.cat, label: g('bt-label').trim(), stake: num(g('bt-stake')), odds: num(g('bt-odds')), sport: ui.sport, kind: ui.kind, d: g('bt-date') || iso(new Date()) };
   }
   function attach(root, rerender, go) {
     var again = function () { var y = window.scrollY; rerender(); window.scrollTo(0, y); };
@@ -171,7 +205,8 @@ var Bets = (function () {
       }
       if (t.hasAttribute('data-bet')) {
         var sp = t.getAttribute('data-bsp') || 'foot';
-        ui.pre = { label: t.getAttribute('data-bet'), p: +t.getAttribute('data-bp') || 0 };
+        var ref = t.getAttribute('data-bref'), mk = t.getAttribute('data-bm'), sl = t.getAttribute('data-bs');
+        ui.pre = { label: t.getAttribute('data-bet'), p: +t.getAttribute('data-bp') || 0, cat: t.getAttribute('data-bcat') || '', legs: ref && mk && sl ? [{ id: ref, m: mk, s: sl }] : [] };
         ui.sport = SPN[sp] ? sp : 'foot'; ui.kind = 'simple'; ui.msg = '';
         if (go) go();
         return;
@@ -180,8 +215,11 @@ var Bets = (function () {
       else if (t.hasAttribute('data-badd')) {
         var f = readForm();
         if (!(f.stake > 0) || !(f.odds > 1)) { ui.msg = 'Indique une mise supérieure à 0 et une cote supérieure à 1 (ex. 1,85).'; again(); return; }
-        ui.msg = ''; ui.pre = null;
-        mem.bets.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: f.d, label: f.label, sport: f.sport, kind: f.kind, stake: Math.round(f.stake * 100) / 100, odds: Math.round(f.odds * 100) / 100, st: 'p' });
+        ui.msg = '';
+        var nb = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: f.d, label: f.label, sport: f.sport, kind: f.kind, cat: f.cat, stake: Math.round(f.stake * 100) / 100, odds: Math.round(f.odds * 100) / 100, st: 'p' };
+        if (ui.pre) { if (ui.pre.p) nb.p = ui.pre.p; if (ui.pre.legs && ui.pre.legs.length) { nb.legs = ui.pre.legs; if (ui.pre.nLegs) nb.nLegs = ui.pre.nLegs; } }
+        ui.pre = null;
+        mem.bets.push(nb);
         save(); again();
       } else if (t.hasAttribute('data-bst')) {
         var p = t.getAttribute('data-bst').split('|');
@@ -216,5 +254,5 @@ var Bets = (function () {
       box.textContent = o > 1 ? 'Cette cote suppose ' + pc(1 / o) + ' de chances de gagner' + (s > 0 ? ' · gain possible : ' + eur(s * (o - 1), true) : '') + '.' : '';
     });
   }
-  return { html: html, attach: attach };
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, resolver: null };
 })();
