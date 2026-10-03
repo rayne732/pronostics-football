@@ -1128,11 +1128,14 @@
 
   /* ------------------------------------------------------------ fiche match */
   function line(a, b) { return '<div class="mline"><span>' + esc(a) + '</span><span>' + esc(b) + '</span></div>'; }
+  var BETSP = { handball: 'hand', rugby15: 'rugby', TEN: 'tennis' };
+  function betSport(d) { return d && d.div && !D.leagues[d.div] ? (BETSP[d.div] || d.div) : 'foot'; }
   function alt(s, best, d, m) {
     var p = s[1], k = tkKey(d, m, s[0]), on = inTicket(k);
     return '<div class="alt' + (best ? ' best' : '') + '"><span>' + esc(s[0]) + '</span><span class="p">' + pct(p) + '</span>' +
+      '<span class="acts"><button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + p.toFixed(4) + '" data-bm="' + esc(m) + '" aria-label="Noter ce pari dans Mes paris">€</button>' +
       '<button class="add' + (on ? ' on' : '') + '" data-add="' + esc(k) + '" data-p="' + p.toFixed(4) + '" data-mt="' + esc(d.home + ' – ' + d.away) +
-      '" data-m="' + esc(m) + '" data-s="' + esc(s[0]) + '" aria-label="' + (on ? 'Retirer du combiné' : 'Ajouter au combiné') + '">' + svg(on ? IC.check : IC.plus) + '</button>' +
+      '" data-m="' + esc(m) + '" data-s="' + esc(s[0]) + '" aria-label="' + (on ? 'Retirer du combiné' : 'Ajouter au combiné') + '">' + svg(on ? IC.check : IC.plus) + '</button></span>' +
       '<span class="c">' + (p > 0.005 ? 'cote juste ' + (1 / p).toFixed(2) : 'très improbable') + '</span>' +
       '<div class="bar"><i style="width:' + Math.round(p * 100) + '%"></i></div></div>';
   }
@@ -1291,7 +1294,9 @@
   function vsBlock(d) {
     var lm = LMETA[d.div] || ['', '#4f8cff', ''];
     return '<div class="vs"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
-      '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>';
+      '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
+      '<div class="betbar"><button class="bt-b" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari sur ce match</button>' +
+      '<a class="bt-b" data-bwin="' + esc(d.home + ' – ' + d.away) + '" href="https://www.winamax.fr/paris-sportifs" target="_blank" rel="noopener">Voir la cote sur Winamax ↗</a></div>';
   }
   function detailPage(d) {
     var f = d.fi != null ? D.fixtures[d.fi] : null, lm = LMETA[d.div] || ['', '#4f8cff', ''];
@@ -1440,7 +1445,7 @@
     if (!t) return;
     st.tab = t.getAttribute('data-tab'); st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
-  Bets.attach(app, render);
+  Bets.attach(app, render, function () { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); });
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 
   render();

@@ -171,3 +171,5 @@ vérifie `data/notify_state.json` et n'envoie que si elles ne sont pas déjà pa
 
 ## Mes paris
 Onglet « Mes paris » (`web/bets.js`) : saisie des paris (mise, cote, sport, simple ou combiné), résultat (gagné, perdu, remboursé), bénéfice, retour sur mise, réussite nécessaire pour être à l'équilibre contre réussite réelle, courbe cumulée, répartition par sport et par type, budget mensuel avec alerte, sauvegarde par copier / coller. Tout reste dans le localStorage de l'appareil : rien n'est envoyé au serveur ni publié sur le site.
+
+Chaque fiche match a un bouton « Noter un pari sur ce match » et un lien vers Winamax (page d'accueil des paris : pas de lien direct possible, le nom du match est copié pour le chercher) ; chaque sélection a un bouton « € » qui pré-remplit « Mes paris » (match, marché et notre probabilité). Aucun accès au compte Winamax : mise et cote réelle restent à saisir à la main.

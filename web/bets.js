@@ -5,7 +5,7 @@ var Bets = (function () {
     ['nfl', 'Foot US'], ['mma', 'MMA'], ['volley', 'Volley'], ['f1', 'Formule 1'], ['golf', 'Golf'], ['autre', 'Autre']];
   var SPN = {};
   SPORTS.forEach(function (s) { SPN[s[0]] = s[1]; });
-  var ui = { period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '' };
+  var ui = { period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '', pre: null };
 
   function load() {
     try {
@@ -119,7 +119,9 @@ var Bets = (function () {
 
     // formulaire
     h += '<div class="sec"><span class="dot g"></span>Ajouter un pari</div><div class="fm bt-form">' +
-      '<label>Description<input id="bt-label" type="text" maxlength="80" placeholder="ex. PSG gagne, plus de 2,5 buts"></label>' +
+      (ui.pre ? '<div class="srcnote">Pré-rempli depuis le site' + (ui.pre.p ? ' : notre probabilité est de <b>' + pc(ui.pre.p) + '</b> (cote juste ' + (1 / ui.pre.p).toFixed(2).replace('.', ',') + ')' : '') +
+        '. Ajoute la <b>mise</b> et la <b>cote réelle vue sur Winamax</b>.</div>' : '') +
+      '<label>Description<input id="bt-label" type="text" maxlength="120" placeholder="ex. PSG gagne, plus de 2,5 buts" value="' + (ui.pre ? esc(ui.pre.label) : '') + '"></label>' +
       '<div class="bt-2"><label>Mise (€)<input id="bt-stake" inputmode="decimal" placeholder="10"></label><label>Cote<input id="bt-odds" inputmode="decimal" placeholder="1,85"></label></div>' +
       '<div class="bt-imp" id="bt-imp"></div>' +
       '<div class="bt-2"><label>Sport<select id="bt-sport">' + SPORTS.map(function (s) { return '<option value="' + s[0] + '"' + (ui.sport === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></label>' +
@@ -158,16 +160,27 @@ var Bets = (function () {
     ui.sport = g('bt-sport') || ui.sport; ui.kind = g('bt-kind') || ui.kind;
     return { label: g('bt-label').trim(), stake: num(g('bt-stake')), odds: num(g('bt-odds')), sport: ui.sport, kind: ui.kind, d: g('bt-date') || iso(new Date()) };
   }
-  function attach(root, rerender) {
+  function attach(root, rerender, go) {
     var again = function () { var y = window.scrollY; rerender(); window.scrollTo(0, y); };
     root.addEventListener('click', function (e) {
-      var t = e.target.closest('[data-bper],[data-badd],[data-bst],[data-bask],[data-bdel],[data-bbud],[data-bcopy],[data-bimp]');
+      var t = e.target.closest('[data-bet],[data-bwin],[data-bper],[data-badd],[data-bst],[data-bask],[data-bdel],[data-bbud],[data-bcopy],[data-bimp]');
       if (!t) return;
+      if (t.hasAttribute('data-bwin')) {                            // le lien s'ouvre ; on copie en plus le nom du match pour le chercher sur Winamax
+        try { navigator.clipboard.writeText(t.getAttribute('data-bwin')); } catch (err) { /* ignoré */ }
+        return;
+      }
+      if (t.hasAttribute('data-bet')) {
+        var sp = t.getAttribute('data-bsp') || 'foot';
+        ui.pre = { label: t.getAttribute('data-bet'), p: +t.getAttribute('data-bp') || 0 };
+        ui.sport = SPN[sp] ? sp : 'foot'; ui.kind = 'simple'; ui.msg = '';
+        if (go) go();
+        return;
+      }
       if (t.hasAttribute('data-bper')) { ui.period = t.getAttribute('data-bper'); again(); }
       else if (t.hasAttribute('data-badd')) {
         var f = readForm();
         if (!(f.stake > 0) || !(f.odds > 1)) { ui.msg = 'Indique une mise supérieure à 0 et une cote supérieure à 1 (ex. 1,85).'; again(); return; }
-        ui.msg = '';
+        ui.msg = ''; ui.pre = null;
         mem.bets.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: f.d, label: f.label, sport: f.sport, kind: f.kind, stake: Math.round(f.stake * 100) / 100, odds: Math.round(f.odds * 100) / 100, st: 'p' });
         save(); again();
       } else if (t.hasAttribute('data-bst')) {
