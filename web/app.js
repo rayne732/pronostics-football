@@ -1065,11 +1065,74 @@
     }
     return h;
   }
+
+  /* ------------------------------------------------------------ compétitions : un championnat ou une coupe = une page avec tous ses matchs */
+  var FR_COMP = { 'Friendlies': 'Matchs amicaux', 'Friendlies Clubs': 'Amicaux de clubs', 'UEFA Nations League': 'Ligue des Nations', 'FA Cup': 'FA Cup', 'Copa del Rey': 'Coupe du Roi',
+    'World Cup': 'Coupe du Monde', 'UEFA Champions League': 'Ligue des Champions', 'UEFA Europa League': 'Ligue Europa', 'UEFA Europa Conference League': 'Ligue Conférence',
+    'DFB Pokal': 'Coupe d’Allemagne', 'Coppa Italia': 'Coupe d’Italie', 'League Cup': 'Coupe de la Ligue', 'Segunda División': 'La Liga 2', 'Liga Profesional Argentina': 'Primera División' };
+  var FR_CTRY = { 'World': 'Monde', 'Wales': 'Pays de Galles', 'Scotland': 'Écosse', 'Northern-Ireland': 'Irlande du Nord', 'England': 'Angleterre', 'Spain': 'Espagne', 'Germany': 'Allemagne',
+    'Italy': 'Italie', 'Argentina': 'Argentine', 'Brazil': 'Brésil', 'Netherlands': 'Pays-Bas', 'Belgium': 'Belgique', 'Turkey': 'Turquie', 'Greece': 'Grèce', 'USA': 'États-Unis',
+    'Mexico': 'Mexique', 'Japan': 'Japon', 'Norway': 'Norvège', 'Sweden': 'Suède', 'Denmark': 'Danemark', 'Poland': 'Pologne', 'Romania': 'Roumanie', 'Switzerland': 'Suisse',
+    'Finland': 'Finlande', 'Ireland': 'Irlande', 'Saudi-Arabia': 'Arabie saoudite', 'Australia': 'Australie', 'South-Korea': 'Corée du Sud', 'Morocco': 'Maroc', 'Austria': 'Autriche',
+    'Czech-Republic': 'Tchéquie', 'Croatia': 'Croatie', 'Hungary': 'Hongrie', 'Serbia': 'Serbie', 'Bulgaria': 'Bulgarie', 'Slovakia': 'Slovaquie', 'Belarus': 'Biélorussie',
+    'Colombia': 'Colombie', 'Ecuador': 'Équateur', 'Estonia': 'Estonie' };
+  // championnats que notre modèle couvre : leurs matchs « API-Football » ne sont pas listés une deuxième fois
+  var EXT_DIV = { 'France|Ligue 1': 'F1', 'France|Ligue 2': 'F2', 'England|Premier League': 'E0', 'England|Championship': 'E1', 'Spain|La Liga': 'SP1', 'Spain|Segunda División': 'SP2',
+    'Germany|Bundesliga': 'D1', 'Germany|2. Bundesliga': 'D2', 'Italy|Serie A': 'I1', 'Italy|Serie B': 'I2', 'Netherlands|Eredivisie': 'N1', 'Belgium|Jupiler Pro League': 'B1',
+    'Portugal|Primeira Liga': 'P1', 'Turkey|Süper Lig': 'T1', 'Greece|Super League 1': 'G1', 'Scotland|Premiership': 'SC0', 'USA|Major League Soccer': 'USA', 'Mexico|Liga MX': 'MEX',
+    'Argentina|Liga Profesional Argentina': 'ARG', 'Japan|J1 League': 'JPN', 'Norway|Eliteserien': 'NOR', 'Sweden|Allsvenskan': 'SWE', 'Denmark|Superliga': 'DNK', 'Poland|Ekstraklasa': 'POL',
+    'Romania|Liga I': 'ROU', 'Switzerland|Super League': 'SWZ', 'Finland|Veikkausliiga': 'FIN', 'Ireland|Premier Division': 'IRL', 'Brazil|Serie A': 'BRA' };
+  function compName(e) { return FR_COMP[e.lg] || e.lg; }
+  function compCountry(e) { return FR_CTRY[e.country] || e.country; }
+  function competitions() {
+    var L = [], X = [], idx = {};
+    D.order.forEach(function (div) {
+      var n = D.fixtures.filter(function (f) { return f.div === div; }).length;
+      if (n) { var lm = LMETA[div] || ['', '#4f8cff', '']; L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: n }); }
+    });
+    D.ext.forEach(function (e) {
+      var dv = EXT_DIV[e.country + '|' + e.lg];
+      if (dv && D.leagues[dv] && D.fixtures.some(function (f) { return f.div === dv; })) return;
+      var k = 'X|' + e.lg + '|' + e.country;
+      if (!(k in idx)) { idx[k] = X.length; X.push({ key: k, name: compName(e), sub: compCountry(e), flag: '', n: 0 }); }
+      X[idx[k]].n++;
+    });
+    X.sort(function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; });
+    return { L: L, X: X };
+  }
+  function compRow(c) {
+    return '<button class="comp" data-day="comp:' + esc(c.key) + '"><span class="cf">' + (c.flag || svg(IC.trophy)) + '</span><span class="cn">' + esc(c.name) + '<small>' + esc(c.sub) + '</small></span><span class="cnt">' + c.n + '</span>' + svg(IC.chev) + '</button>';
+  }
+  function compsHTML() {
+    var C = competitions(), h = '<div class="srcnote">Choisis une compétition pour voir <b>tous ses matchs</b>. Seules celles qui ont des matchs apparaissent : la liste change chaque jour.</div>';
+    h += '<div class="sec"><span class="dot g"></span>Championnats avec notre modèle <small>' + C.L.length + ' avec des matchs</small></div>';
+    h += C.L.length ? C.L.map(compRow).join('') : '<div class="empty">Aucun match de ces championnats dans les prochains jours (trêve internationale ?).</div>';
+    if (C.X.length) h += '<div class="sec"><span class="dot a"></span>Autres compétitions <small>aujourd’hui · prédictions API-Football</small></div>' + C.X.map(compRow).join('');
+    return h;
+  }
+  function compHTML(key) {
+    var p = key.split('|'), h = '<button class="chip pill" data-day="comps" style="margin-bottom:10px">‹ Toutes les compétitions</button>';
+    if (p[0] === 'L') {
+      var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div; }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = LMETA[div] || ['', '#4f8cff', ''];
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + esc(lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
+      if (!list.length) return h + '<div class="empty">Aucun match à venir pour cette compétition dans les prochains jours.</div>';
+      var cur = '';
+      list.forEach(function (f) {
+        if (f.date !== cur) { cur = f.date; h += '<div class="cdl">' + WD[parseD(f.date).getDay()] + ' ' + dm(f.date) + '</div>'; }
+        h += row(f, false);
+      });
+      return h;
+    }
+    var items = D.ext.filter(function (e) { return e.lg === p[1] && e.country === p[2]; });
+    h += '<div class="srcnote">Prédictions d’<b>API-Football</b> (modèle différent du nôtre, non testé). Seuls les matchs du jour sont disponibles pour ces compétitions.</div>';
+    h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(FR_COMP[p[1]] || p[1]) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + items.length + '</span></div>';
+    return h + (items.length ? items.map(extRow).join('') : '<div class="empty">Aucun match aujourd’hui pour cette compétition.</div>');
+  }
   function homeHTML() {
     var fx = D.fixtures, days = [], past = pastDates();
     fx.forEach(function (f) { if (days.indexOf(f.date) < 0) days.push(f.date); });
     days.sort();
-    var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext';
+    var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext' || st.day === 'comps' || st.day.indexOf('comp:') === 0;
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
     if (!fx.length && !past.length && !D.daily.length && !D.ext.length) {
       return h + '<div class="empty">Aucun match à venir dans les 5 prochains jours pour les championnats suivis. ' +
@@ -1093,8 +1156,10 @@
       });
     }
     if (D.ext.length) h += '<button class="chip' + (st.day === 'ext' ? ' on' : '') + '" data-day="ext">Autres matchs<b>' + D.ext.length + ' aujourd’hui</b></button>';
+    var nc = competitions(); nc = nc.L.length + nc.X.length;
+    if (nc) h += '<button class="chip' + (st.day === 'comps' || st.day.indexOf('comp:') === 0 ? ' on' : '') + '" data-day="comps">Compétitions<b>' + nc + '</b></button>';
     h += '</div>';
-    if (inPast) return h + (st.day === 'ext' ? extHTML() : st.day === 'week' ? weekHTML() : pastHTML(st.day.slice(5)));
+    if (inPast) return h + (st.day === 'ext' ? extHTML() : st.day === 'week' ? weekHTML() : st.day === 'comps' ? compsHTML() : st.day.indexOf('comp:') === 0 ? compHTML(st.day.slice(5)) : pastHTML(st.day.slice(5)));
     if (!fx.length) return h + '<div class="empty">Aucun match à venir dans les prochains jours. Les résultats d’hier sont dans les pastilles ci-dessus.</div>';
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);

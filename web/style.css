@@ -421,3 +421,10 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .betbar a.bt-b{text-decoration:none;color:var(--ink)}
 .bt-t small.bt-p{display:block;color:var(--blue);margin-top:2px}
 .chip small{display:block;font-size:.66rem;font-weight:400;color:var(--mute)}.chip.on small{color:var(--on-accent)}
+
+/* liste des compétitions */
+.comp{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;margin-bottom:8px;border-radius:16px;background:var(--surface);border:1px solid var(--line);text-align:left}
+.comp .cf{flex:none;width:30px;font-size:1.3rem;text-align:center;display:grid;place-items:center;color:var(--amber)}
+.comp .cn{flex:1;min-width:0;font-weight:600;overflow-wrap:anywhere}.comp .cn small{display:block;font-weight:400;color:var(--mute);font-size:.76rem}
+.comp .cnt{flex:none;min-width:28px;text-align:center;padding:2px 8px;border-radius:10px;background:var(--surface2);font-weight:600;font-size:.82rem}
+.comp .ic{width:16px;height:16px;color:var(--mute)}
