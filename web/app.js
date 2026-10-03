@@ -914,7 +914,7 @@
   function todayLoad() {                                  // charge chaque sport, récupère ses matchs en direct, puis redessine l'onglet
     if (TODAY.busy || Date.now() - TODAY.ts < 3 * 60 * 1000) return;
     TODAY.busy = true; TODAY.step = 0;
-    var jobs = [['tennis', null]].concat(Object.keys(SPORT_CFG).map(function (sid) { return [SPORT_CFG[sid].key, spOf(sid)]; }));
+    var jobs = [['tennis', null], ['golf', null]].concat(Object.keys(SPORT_CFG).map(function (sid) { return [SPORT_CFG[sid].key, spOf(sid)]; }));
     TODAY.total = jobs.length;
     var left = jobs.length;
     var finish = function () {
@@ -926,6 +926,7 @@
       loadLazy(j[0], function (err) {
         if (err) { finish(); return; }
         if (j[1]) { spInit(j[1]); spLive(j[1], finish); }
+        else if (j[0] === 'golf') finish();
         else { setTM(D.tennis.matches || []); liveTennis(finish); }
       });
     });
@@ -943,21 +944,38 @@
     });
     if (nf) counts.push(['⚽', 'Football', nf]);
     var add = function (icon, name, items, refOf) {
-      var n = 0;
+      var n = 0, nk = 0;
       items.forEach(function (m) {
-        if (m.date !== T || m.state === 'post' || !m.known) return;
+        if (m.date !== T || m.state === 'post') return;
         n++;
+        if (!m.known) return;
+        nk++;
         var home = m.home || m.a, away = m.away || m.b, ref = refOf(m);
         (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
         if (m.conf === 'high') favs2.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: m.favName, p: m.fav, ref: ref });
       });
-      if (n) counts.push([icon, name, n]);
+      if (n) counts.push([icon, name, n, nk]);
     };
     add('🎾', 'Tennis', TM, function (m) { return 'data-tnopen="' + m.i + '"'; });
     Object.keys(SPORT_CFG).forEach(function (sid) {
       var S = spOf(sid);
       if (S.inited) add(S.cfg.icon, S.cfg.title.charAt(0).toUpperCase() + S.cfg.title.slice(1), S.items, function (m) { return 'data-spopen="' + sid + '|' + m.i + '"'; });
     });
+    // Formule 1 : course du jour
+    var N = D.f1 && D.f1.next;
+    if (N && N.date && window.Tennis) {
+      var rw = Tennis.paris(N.date + 'T' + (N.time || '12:00:00Z').replace('Z', '').slice(0, 5));
+      if (rw.d === T) {
+        counts.push(['🏁', 'Formule 1', 1, 1, 'course']);
+        f1Picks(N).safe.slice().sort(function (a, b) { return b.p - a.p; }).slice(0, 2).forEach(function (r) { picks.push({ icon: '🏁', match: N.name, time: rw.t, pick: r.m + ' : ' + r.s, p: r.p, ref: 'data-gosport="f1"' }); });
+      }
+    }
+    // golf : tournois en cours ou qui commencent aujourd'hui
+    var ge = ((D.golf && D.golf.events) || []).filter(function (ev) { return ev.state === 'in' || ev.start === T; });
+    if (ge.length) {
+      counts.push(['⛳', 'Golf', ge.length, ge.length, 'tournoi']);
+      ge.forEach(function (ev) { gPicks(ev).safe.slice(0, 1).forEach(function (r) { picks.push({ icon: '⛳', match: ev.name, time: '', pick: r.s + ' : ' + r.m, p: r.p, ref: 'data-gosport="golf"' }); }); });
+    }
     var by = function (a, b) { return b.p - a.p; };
     return { picks: picks.sort(by), favs: favs2.sort(by), counts: counts, T: T };
   }
@@ -969,7 +987,7 @@
     todayLoad();
     var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
-    if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' match' + (c[2] > 1 ? 's' : '') + '</b></span>'; }).join('') + '</div>';
+    if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
     if (!R.counts.length) return h + '<div class="empty">' + (TODAY.busy ? 'Chargement des matchs du jour…' : 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>';
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
@@ -1359,7 +1377,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1419,6 +1437,11 @@
       var y = window.scrollY; render(); window.scrollTo(0, y);
     }
     else if (t.hasAttribute('data-rm')) { ticket.splice(+t.getAttribute('data-rm'), 1); saveTicket(); render(); }
+    else if (t.hasAttribute('data-gosport')) {
+      var gs = t.getAttribute('data-gosport');
+      st.tab = 'home'; st.sport = gs; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
+      loadLazy(gs, function () { if (st.sport === gs && st.tab === 'home' && !st.detail) render(); });
+    }
     else if (t.hasAttribute('data-bcomb')) {
       Bets.prefill({ label: ticket.map(function (x) { return x.mt + ' : ' + x.s; }).join(' + '), p: ticketProb(), kind: 'combine', cat: 'Combiné',
         legs: ticket.filter(function (x) { return x.r; }).map(function (x) { var ps = x.r; return { id: ps, m: x.m, s: x.s }; }), nLegs: ticket.length });

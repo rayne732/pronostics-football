@@ -420,3 +420,4 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .betbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin:2px 0 14px}
 .betbar a.bt-b{text-decoration:none;color:var(--ink)}
 .bt-t small.bt-p{display:block;color:var(--blue);margin-top:2px}
+.chip small{display:block;font-size:.66rem;font-weight:400;color:var(--mute)}.chip.on small{color:var(--on-accent)}
