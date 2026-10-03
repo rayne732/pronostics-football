@@ -176,3 +176,6 @@ Chaque fiche match a un bouton « Noter un pari sur ce match » et un lien vers 
 
 ### Règlement automatique de « Mes paris »
 `results.py` garde 14 jours de résultats de nos pronostics (football : suivi réel ; autres sports : matchs terminés) dans `data/results_log.json` et publie `data/res.json` (chargé à l'ouverture de l'onglet). Un pari créé avec le bouton « € » d'une sélection (ou avec « Noter ce combiné ») est relié au pronostic ; dès que le match est dans le journal, il passe en gagné ou perdu tout seul (un combiné est perdu dès qu'une sélection est perdue, gagné quand toutes le sont). Une sélection absente de nos pronostics reste à régler à la main. Catégories libres (suggestions : Pronostic sûr, Moins sûr, Combiné), bilan par catégorie et comparaison entre nos probabilités annoncées et tes résultats.
+
+## Calendrier élargi (`calendar_extra.py`)
+Les compétitions hors modèle (sélections nationales, coupes d'Europe et nationales, Série B brésilienne, Arabie saoudite, A-League, Équateur, Colombie…) sont listées 5 jours à l'avance d'après ESPN (équipes, heure, probabilités déduites des cotes quand elles existent). Page « Compétitions » du football : API-Football (prédiction, jour même) + ce calendrier, sans doublon. Les dates de « Autres matchs » suivent maintenant l'heure de Paris (le serveur est en UTC).

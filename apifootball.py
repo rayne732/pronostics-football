@@ -59,6 +59,12 @@ def _prio(f):
     return 20
 
 
+def _paris_today(now):
+    from datetime import timezone
+    from tennis import paris
+    return paris(datetime.fromtimestamp(now.timestamp(), timezone.utc).replace(tzinfo=None)).date()
+
+
 def _call(key, path):
     req = urllib.request.Request(BASE + path, headers={"x-apisports-key": key})
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -128,7 +134,7 @@ def external_matches(now, key=None):
     key = key or os.environ.get("API_FOOTBALL_KEY")
     if not key:
         return []
-    today = f"{now:%Y-%m-%d}"
+    today = f"{_paris_today(now):%Y-%m-%d}"          # date de Paris (le serveur GitHub est en UTC : après 22 h il a un jour de retard)
     stale = []                      # cache du jour, plus ancien : sert de secours si l'API refuse (limite quotidienne atteinte)
     try:
         with open(CACHE, encoding="utf-8") as fh:

@@ -163,7 +163,7 @@
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
     '<circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".6"/><circle cx="16" cy="16" r="2.6" fill="var(--amber)"/></svg>';
 
-  D.ext = D.ext || [];
+  D.ext = (D.ext || []).filter(function (e) { return e.date >= parisToday(); });      // on n'affiche pas la liste d'hier tant que celle d'aujourd'hui n'est pas arrivée
   D.ext.forEach(function (e, i) { e.i = i; e.fav = Math.max.apply(null, e.p); e.favIdx = e.p.indexOf(e.fav); e.conf = confOf(e.fav); });
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
     var M = Engine.families(f.div, f.home, f.away, f.ov);
@@ -1084,6 +1084,21 @@
     'Romania|Liga I': 'ROU', 'Switzerland|Super League': 'SWZ', 'Finland|Veikkausliiga': 'FIN', 'Ireland|Premier Division': 'IRL', 'Brazil|Serie A': 'BRA' };
   function compName(e) { return FR_COMP[e.lg] || e.lg; }
   function compCountry(e) { return FR_CTRY[e.country] || e.country; }
+  function normT(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function sameTeam(a, b) { a = normT(a); b = normT(b); return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0); }
+  // matchs d'une compétition : ceux d'API-Football (avec prédiction, aujourd'hui) puis ceux du calendrier ESPN qui n'y figurent pas déjà
+  function compItems(lg, country) {
+    var ext = D.ext.filter(function (e) { return e.lg === lg && e.country === country; }).map(function (e) { return { kind: 'ext', e: e, date: e.date, time: e.time }; });
+    var cal = (D.cal || []).filter(function (c) {
+      return c.lg === lg && c.country === country && !D.ext.some(function (e) { return e.lg === lg && e.country === country && e.date === c.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); });
+    }).map(function (c) { return { kind: 'cal', c: c, date: c.date, time: c.time }; });
+    return ext.concat(cal).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1; });
+  }
+  function calRow(c) {
+    var p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '';
+    return '<div class="mrow low ext"><div class="tm">' + esc(c.time) + '</div><div class="tt">' + tn(c.home) + tn(c.away) + '</div>' +
+      '<div class="act">' + (p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low">cotes indisponibles</span>') + '</div>' + (p ? miniBar(p) : '') + '</div>';
+  }
   function competitions() {
     var L = [], X = [], idx = {};
     D.order.forEach(function (div) {
@@ -1097,6 +1112,12 @@
       if (!(k in idx)) { idx[k] = X.length; X.push({ key: k, name: compName(e), sub: compCountry(e), flag: '', n: 0 }); }
       X[idx[k]].n++;
     });
+    (D.cal || []).forEach(function (c) {
+      var k = 'X|' + c.lg + '|' + c.country;
+      if (!(k in idx)) { idx[k] = X.length; X.push({ key: k, name: c.fr || c.lg, sub: FR_CTRY[c.country] || c.country, flag: '', n: 0 }); }
+    });
+    X.forEach(function (x) { var p = x.key.split('|'); x.n = compItems(p[1], p[2]).length; });
+    X = X.filter(function (x) { return x.n > 0; });
     X.sort(function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; });
     return { L: L, X: X };
   }
@@ -1123,10 +1144,16 @@
       });
       return h;
     }
-    var items = D.ext.filter(function (e) { return e.lg === p[1] && e.country === p[2]; });
-    h += '<div class="srcnote">Prédictions d’<b>API-Football</b> (modèle différent du nôtre, non testé). Seuls les matchs du jour sont disponibles pour ces compétitions.</div>';
-    h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(FR_COMP[p[1]] || p[1]) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + items.length + '</span></div>';
-    return h + (items.length ? items.map(extRow).join('') : '<div class="empty">Aucun match aujourd’hui pour cette compétition.</div>');
+    var items = compItems(p[1], p[2]), calOne = (D.cal || []).filter(function (c) { return c.lg === p[1] && c.country === p[2]; })[0], nm = calOne ? calOne.fr : (FR_COMP[p[1]] || p[1]);
+    h += '<div class="srcnote">Hors de notre modèle : pour les matchs du jour, prédiction d’<b>API-Football</b> (non testée) ; pour les jours suivants, l’<b>affiche</b> et, quand elles existent, les <b>probabilités déduites des cotes</b> (sans marge). Pas de pronostic « sûr » ici.</div>';
+    h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(nm) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + items.length + '</span></div>';
+    if (!items.length) return h + '<div class="empty">Aucun match dans les prochains jours pour cette compétition.</div>';
+    var cur = '';
+    items.forEach(function (it) {
+      if (it.date !== cur) { cur = it.date; h += '<div class="cdl">' + WD[parseD(it.date).getDay()] + ' ' + dm(it.date) + '</div>'; }
+      h += it.kind === 'ext' ? extRow(it.e) : calRow(it.c);
+    });
+    return h;
   }
   function homeHTML() {
     var fx = D.fixtures, days = [], past = pastDates();
@@ -1134,7 +1161,7 @@
     days.sort();
     var h = brand() + sportsBar(), inPast = st.day.indexOf('past:') === 0 || st.day === 'week' || st.day === 'ext' || st.day === 'comps' || st.day.indexOf('comp:') === 0;
     var ext = fx.length > 0 && Math.min.apply(null, fx.map(function (f) { return +kickoff(f); })) - Date.now() > 7 * 864e5;
-    if (!fx.length && !past.length && !D.daily.length && !D.ext.length) {
+    if (!fx.length && !past.length && !D.daily.length && !D.ext.length && !(D.cal || []).length) {
       return h + '<div class="empty">Aucun match à venir dans les 5 prochains jours pour les championnats suivis. ' +
         'Utilise l’onglet <b>Analyser</b> pour étudier n’importe quelle affiche.</div>';
     }
