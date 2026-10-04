@@ -97,10 +97,12 @@ def families(models, home, away, ov=None):
               ("Nul : 0-0, 1-1 ou 2-2", [(0, 0), (1, 1), (2, 2)])]
     add("Score exact multichance", [(lab, float(sum(grid[i, j] for i, j in cs)), lambda r, cs=cs: (r["fh"], r["fa"]) in cs) for lab, cs in groups], lottery=True)
     resopts = [(f"{home} gagne", D > 0, lambda r: r["fh"] > r["fa"]), (f"{away} gagne", D < 0, lambda r: r["fh"] < r["fa"]),
-               (f"{home} ou nul", D >= 0, lambda r: r["fh"] >= r["fa"]), (f"{away} ou nul", D <= 0, lambda r: r["fh"] <= r["fa"])]
+               (f"{home} ou nul", D >= 0, lambda r: r["fh"] >= r["fa"]), (f"{away} ou nul", D <= 0, lambda r: r["fh"] <= r["fa"]),
+               (f"{home} ou {away}", D != 0, lambda r: r["fh"] != r["fa"])]
     goalopts = [("plus de 0,5 buts", T > 0.5, lambda r: r["fh"] + r["fa"] > 0.5), ("plus de 1,5 buts", T > 1.5, lambda r: r["fh"] + r["fa"] > 1.5),
                 ("plus de 2,5 buts", T > 2.5, lambda r: r["fh"] + r["fa"] > 2.5), ("moins de 2,5 buts", T < 2.5, lambda r: r["fh"] + r["fa"] < 2.5),
-                ("moins de 3,5 buts", T < 3.5, lambda r: r["fh"] + r["fa"] < 3.5), ("les deux équipes marquent", (HI > 0) & (AI > 0), lambda r: r["fh"] > 0 and r["fa"] > 0)]
+                ("moins de 3,5 buts", T < 3.5, lambda r: r["fh"] + r["fa"] < 3.5), ("les deux équipes marquent", (HI > 0) & (AI > 0), lambda r: r["fh"] > 0 and r["fa"] > 0),
+                ("les deux équipes ne marquent pas toutes deux", ~((HI > 0) & (AI > 0)), lambda r: not (r["fh"] > 0 and r["fa"] > 0))]
     add("Combiné résultat + buts (MyMatch)",
         [(f"{rl} + {gl}", P(rm & gm), (lambda r, rf=rf, gf=gf: rf(r) and gf(r))) for rl, rm, rf in resopts for gl, gm, gf in goalopts], kind="Combiné MyMatch", extra=True)
 
@@ -135,6 +137,126 @@ def families(models, home, away, ov=None):
     add("Dernier but", [(home, lh / l * (1 - np.exp(-l)), lambda r: None),
                         (away, la / l * (1 - np.exp(-l)), lambda r: None),
                         ("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)], lottery=True)
+
+
+    # --- marchés buts / mi-temps supplémentaires (tous « extra » : affichés dans la fiche match, hors décompte des pronostics sûrs)
+    S = lambda k: "s" if k > 1 else ""
+
+    def ex(name, items, kind=None):
+        add(name, items, kind=kind, extra=True)
+    TT = lambda r: r["fh"] + r["fa"]
+    ex("Nombre exact de buts", [(f"{k} but{S(k)}", P(T == k), lambda r, k=k: TT(r) == k) for k in range(9)] + [("9 buts ou plus", P(T >= 9), lambda r: TT(r) >= 9)])
+    ex("Nombre de buts (intervalle)", [("0-1 but", P(T <= 1), lambda r: TT(r) <= 1), ("2-3 buts", P((T >= 2) & (T <= 3)), lambda r: 2 <= TT(r) <= 3),
+                                       ("4-6 buts", P((T >= 4) & (T <= 6)), lambda r: 4 <= TT(r) <= 6), ("7 buts ou plus", P(T >= 7), lambda r: TT(r) >= 7)])
+    for team, M_, key in ((home, HI, "fh"), (away, AI, "fa")):
+        ex(f"Nombre exact de buts de {team}", [(f"{k} but{S(k)}", P(M_ == k), lambda r, k=k, key=key: r[key] == k) for k in range(3)] + [("3 buts ou plus", P(M_ >= 3), lambda r, key=key: r[key] >= 3)],
+           kind="Nombre exact de buts d'une équipe")
+        ex(f"Intervalle de buts de {team}", [("0 but", P(M_ == 0), lambda r, key=key: r[key] == 0), ("1-2 buts", P((M_ >= 1) & (M_ <= 2)), lambda r, key=key: 1 <= r[key] <= 2),
+                                             ("1-3 buts", P((M_ >= 1) & (M_ <= 3)), lambda r, key=key: 1 <= r[key] <= 3), ("2-3 buts", P((M_ >= 2) & (M_ <= 3)), lambda r, key=key: 2 <= r[key] <= 3),
+                                             ("4 buts ou plus", P(M_ >= 4), lambda r, key=key: r[key] >= 4)], kind="Intervalle de buts d'une équipe")
+    mv = []
+    for team, sgn in ((home, 1), (away, -1)):
+        mv += [(f"{team} gagne par exactement 1 but", P(sgn * D == 1), lambda r, sgn=sgn: sgn * (r["fh"] - r["fa"]) == 1),
+               (f"{team} gagne par exactement 2 buts", P(sgn * D == 2), lambda r, sgn=sgn: sgn * (r["fh"] - r["fa"]) == 2),
+               (f"{team} gagne par au moins 3 buts", P(sgn * D >= 3), lambda r, sgn=sgn: sgn * (r["fh"] - r["fa"]) >= 3)]
+    mv.append(("Match nul", pn, lambda r: r["fh"] == r["fa"]))
+    ex("Marge de victoire", mv)
+    rs3 = [(home, D > 0, lambda r: r["fh"] > r["fa"]), ("Match nul", D == 0, lambda r: r["fh"] == r["fa"]), (away, D < 0, lambda r: r["fh"] < r["fa"])]
+    gl6 = [("plus de 1,5", T > 1.5, lambda r: TT(r) > 1.5), ("moins de 1,5", T < 1.5, lambda r: TT(r) < 1.5), ("plus de 2,5", T > 2.5, lambda r: TT(r) > 2.5),
+           ("moins de 2,5", T < 2.5, lambda r: TT(r) < 2.5), ("plus de 3,5", T > 3.5, lambda r: TT(r) > 3.5), ("moins de 3,5", T < 3.5, lambda r: TT(r) < 3.5)]
+    ex("Résultat et nombre de buts", [(f"{rn} et {gn}", P(rm & gm), lambda r, rf=rf, gf=gf: rf(r) and gf(r)) for rn, rm, rf in rs3 for gn, gm, gf in gl6])
+    btm = (HI > 0) & (AI > 0)
+    ex("Résultat et les deux équipes marquent", [(f"{rn} et {bn}", P(rm & bm), lambda r, rf=rf, bf=bf: rf(r) and bf(r)) for rn, rm, rf in rs3
+                                                   for bn, bm, bf in (("oui", btm, lambda r: r["fh"] > 0 and r["fa"] > 0), ("non", ~btm, lambda r: not (r["fh"] > 0 and r["fa"] > 0)))])
+    rh = np.divide(HI, T, out=np.zeros(grid.shape), where=T > 0)             # P(1er but du domicile | score final) : les buts d'un même score sont échangeables
+    ra = np.divide(AI, T, out=np.zeros(grid.shape), where=T > 0)
+
+    def first_rule(is_home, res_ok):                                         # connu seulement si une seule équipe a marqué (ou si le résultat est déjà perdu)
+        def f(r):
+            if not res_ok(r) or r["fh"] + r["fa"] == 0:
+                return False
+            if r["fa"] == 0:
+                return is_home
+            if r["fh"] == 0:
+                return not is_home
+            return None
+        return f
+    fr = []
+    for fname, ratio, is_home in ((home, rh, True), (away, ra, False)):
+        for rn, rm, rf in rs3:
+            lab = f"{fname} marque en premier et " + ("match nul" if rn == "Match nul" else f"{rn} gagne")
+            fr.append((lab, float((grid * ratio)[rm].sum()), first_rule(is_home, rf)))
+    ex("Équipe qui marque le 1er but et résultat", fr)
+    ex("Quelle équipe va marquer ?", [("Aucune équipe", P(T == 0), lambda r: TT(r) == 0), (f"Seulement {home}", P((HI > 0) & (AI == 0)), lambda r: r["fh"] > 0 and r["fa"] == 0),
+                                      (f"Seulement {away}", P((AI > 0) & (HI == 0)), lambda r: r["fa"] > 0 and r["fh"] == 0), ("Les deux équipes", P(btm), lambda r: r["fh"] > 0 and r["fa"] > 0)])
+    for team, own, opp, key, okey in ((home, HI, AI, "fh", "fa"), (away, AI, HI, "fa", "fh")):
+        cs = P(opp == 0)
+        ex(f"{team} garde sa cage inviolée", [("Oui", cs, lambda r, okey=okey: r[okey] == 0), ("Non", 1 - cs, lambda r, okey=okey: r[okey] > 0)], kind="Cage inviolée (oui/non)")
+        wn = P((own > opp) & (opp == 0))
+        ex(f"{team} gagne sans concéder de but", [("Oui", wn, lambda r, key=key, okey=okey: r[key] > r[okey] and r[okey] == 0),
+                                                  ("Non", 1 - wn, lambda r, key=key, okey=okey: not (r[key] > r[okey] and r[okey] == 0))], kind="Gagne sans concéder (oui/non)")
+
+    # mi-temps (1re période indépendante de la 2e)
+    sh_w = lambda r, sgn: sgn * ((r["fh"] - r["hh"]) - (r["fa"] - r["ha"])) > 0              # a gagné la 2e mi-temps
+    h_w = lambda r, sgn: sgn * (r["hh"] - r["ha"]) > 0                                         # a gagné la 1re
+    for team, sgn, lam_t, key, hkey in ((home, 1, lh, "fh", "hh"), (away, -1, la, "fa", "ha")):
+        w1 = float(ht[Dh * sgn > 0].sum())
+        w2 = float(sh[Dh * sgn > 0].sum())
+        ex(f"{team} gagne une des mi-temps", [("Oui", 1 - (1 - w1) * (1 - w2), _ht(lambda r, sgn=sgn: h_w(r, sgn) or sh_w(r, sgn))),
+                                              ("Non", (1 - w1) * (1 - w2), _ht(lambda r, sgn=sgn: not (h_w(r, sgn) or sh_w(r, sgn))))], kind="Gagne une mi-temps (oui/non)")
+        ex(f"{team} gagne les deux mi-temps", [("Oui", w1 * w2, _ht(lambda r, sgn=sgn: h_w(r, sgn) and sh_w(r, sgn))),
+                                               ("Non", 1 - w1 * w2, _ht(lambda r, sgn=sgn: not (h_w(r, sgn) and sh_w(r, sgn))))], kind="Gagne les deux mi-temps (oui/non)")
+        sc2 = (1 - np.exp(-s * lam_t)) * (1 - np.exp(-(1 - s) * lam_t))
+        ex(f"{team} marque dans les deux mi-temps", [("Oui", float(sc2), _ht(lambda r, key=key, hkey=hkey: r[hkey] > 0 and r[key] - r[hkey] > 0)),
+                                                     ("Non", float(1 - sc2), _ht(lambda r, key=key, hkey=hkey: not (r[hkey] > 0 and r[key] - r[hkey] > 0)))], kind="Marque dans les deux mi-temps (oui/non)")
+    m2 = np.outer(poisson.pmf(g, s * l), poisson.pmf(g, (1 - s) * l))
+    ex("Mi-temps avec le plus de buts", [("1re mi-temps", float(m2[Dh > 0].sum()), _ht(lambda r: r["hh"] + r["ha"] > (r["fh"] + r["fa"]) - (r["hh"] + r["ha"]))),
+                                         ("Égalité", float(np.trace(m2)), _ht(lambda r: r["hh"] + r["ha"] == (r["fh"] + r["fa"]) - (r["hh"] + r["ha"]))),
+                                         ("2de mi-temps", float(m2[Dh < 0].sum()), _ht(lambda r: r["hh"] + r["ha"] < (r["fh"] + r["fa"]) - (r["hh"] + r["ha"])))])
+    Th = np.add.outer(g, g)
+    HIh = np.broadcast_to(g[:, None], ht.shape)
+    AIh = np.broadcast_to(g[None, :], ht.shape)
+    PH = lambda mask: float(ht[mask].sum())
+    TH = lambda r: r["hh"] + r["ha"]
+    ex("Mi-temps - Double chance", [(f"{home} ou nul", PH(Dh >= 0), _ht(lambda r: r["hh"] >= r["ha"])), (f"{away} ou nul", PH(Dh <= 0), _ht(lambda r: r["hh"] <= r["ha"])),
+                                    (f"{home} ou {away}", PH(Dh != 0), _ht(lambda r: r["hh"] != r["ha"]))])
+    bh = (HIh > 0) & (AIh > 0)
+    ex("Mi-temps - Les 2 équipes marquent", [("Oui", PH(bh), _ht(lambda r: r["hh"] > 0 and r["ha"] > 0)), ("Non", 1 - PH(bh), _ht(lambda r: not (r["hh"] > 0 and r["ha"] > 0)))])
+    ex("Mi-temps - Nombre de buts", [(f"Plus de {_f(x)} buts", PH(Th > x), _ht(lambda r, x=x: TH(r) > x)) for x in (0.5, 1.5, 2.5)] +
+       [(f"Moins de {_f(x)} buts", PH(Th < x), _ht(lambda r, x=x: TH(r) < x)) for x in (0.5, 1.5, 2.5)])
+    for team, M_, hkey in ((home, HIh, "hh"), (away, AIh, "ha")):
+        ex(f"Mi-temps - Nombre de buts de {team}", [(f"{team} plus de {_f(x)}", PH(M_ > x), _ht(lambda r, x=x, hkey=hkey: r[hkey] > x)) for x in (0.5, 1.5)] +
+           [(f"{team} moins de {_f(x)}", PH(M_ < x), _ht(lambda r, x=x, hkey=hkey: r[hkey] < x)) for x in (0.5, 1.5)], kind="Mi-temps - Buts d'une équipe")
+    ex("Mi-temps - Nombre exact de buts", [(f"{k} but{S(k)}", PH(Th == k), _ht(lambda r, k=k: TH(r) == k)) for k in range(3)] + [("3 buts ou plus", PH(Th >= 3), _ht(lambda r: TH(r) >= 3))])
+    ex("Mi-temps - Nombre de buts (intervalle)", [("0 but", PH(Th == 0), _ht(lambda r: TH(r) == 0)), ("1-2 buts", PH((Th >= 1) & (Th <= 2)), _ht(lambda r: 1 <= TH(r) <= 2)),
+                                                  ("1-3 buts", PH((Th >= 1) & (Th <= 3)), _ht(lambda r: 1 <= TH(r) <= 3)), ("2-3 buts", PH((Th >= 2) & (Th <= 3)), _ht(lambda r: 2 <= TH(r) <= 3)),
+                                                  ("4 buts ou plus", PH(Th >= 4), _ht(lambda r: TH(r) >= 4))])
+    cells = [(1, 0), (0, 0), (0, 1), (2, 0), (1, 1), (0, 2), (2, 1), (2, 2), (1, 2)]
+    ex("Mi-temps - Score exact", [(f"{i}-{j}", float(ht[i, j]), _ht(lambda r, i=i, j=j: r["hh"] == i and r["ha"] == j)) for i, j in cells] +
+       [("Autre", 1 - sum(float(ht[i, j]) for i, j in cells), _ht(lambda r: (r["hh"], r["ha"]) not in cells))])
+    hw, ha_ = PH(Dh > 0), PH(Dh < 0)
+    if hw + ha_ > 0:
+        ex("Mi-temps - Vainqueur (remboursé si match nul)", [(home, hw / (hw + ha_), _ht(lambda r: None if r["hh"] == r["ha"] else r["hh"] > r["ha"])),
+                                                               (away, ha_ / (hw + ha_), _ht(lambda r: None if r["hh"] == r["ha"] else r["hh"] < r["ha"]))])
+    for team, M_, hkey, okey in ((home, AIh, "hh", "ha"), (away, HIh, "ha", "hh")):
+        c0 = PH(M_ == 0)
+        ex(f"Mi-temps - {team} garde sa cage inviolée ?", [("Oui", c0, _ht(lambda r, okey=okey: r[okey] == 0)), ("Non", 1 - c0, _ht(lambda r, okey=okey: r[okey] > 0))], kind="Mi-temps - Cage inviolée")
+    hr3 = [(home, Dh > 0, lambda r: r["hh"] > r["ha"]), ("Match nul", Dh == 0, lambda r: r["hh"] == r["ha"]), (away, Dh < 0, lambda r: r["hh"] < r["ha"])]
+    hg4 = [("moins de 0,5", Th < 0.5, lambda r: TH(r) < 0.5), ("plus de 0,5", Th > 0.5, lambda r: TH(r) > 0.5), ("moins de 1,5", Th < 1.5, lambda r: TH(r) < 1.5), ("plus de 1,5", Th > 1.5, lambda r: TH(r) > 1.5)]
+    ex("Mi-temps - Résultat et nombre de buts", [(f"{rn} et {gn}", PH(rm & gm), _ht(lambda r, rf=rf, gf=gf: rf(r) and gf(r))) for rn, rm, rf in hr3 for gn, gm, gf in hg4])
+    hdc = [(f"{home} ou nul", Dh >= 0, lambda r: r["hh"] >= r["ha"]), (f"{away} ou nul", Dh <= 0, lambda r: r["hh"] <= r["ha"]), (f"{home} ou {away}", Dh != 0, lambda r: r["hh"] != r["ha"])]
+    ex("Mi-temps - Double chance et les deux équipes marquent",
+       [(f"{dn} et {bn}", PH(dm & bm), _ht(lambda r, df=df, bf=bf: df(r) and bf(r))) for dn, dm, df in hdc
+        for bn, bm, bf in (("oui", bh, lambda r: r["hh"] > 0 and r["ha"] > 0), ("non", ~bh, lambda r: not (r["hh"] > 0 and r["ha"] > 0)))])
+
+    # minute du 1er but : buts répartis uniformément dans chaque mi-temps (part s en 1re période) ; non vérifiables après coup (minutes de buts absentes des données)
+    def lam_cum(t):
+        return s * l * min(t, 45) / 45 + (1 - s) * l * max(t - 45, 0) / 45
+
+    def minute_rule(r):
+        return False if r["fh"] + r["fa"] == 0 else None
+    for name, bounds in (("Minute du 1er but (10 min)", [(a, a + 10) for a in range(0, 90, 10)]), ("Minute du 1er but (15 min)", [(a, a + 15) for a in range(0, 90, 15)])):
+        ex(name, [(f"{a + 1}-{b}", float(np.exp(-lam_cum(a)) - np.exp(-lam_cum(b))), minute_rule) for a, b in bounds] + [("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)])
 
     ch = ca = 0.0
     if models.get("corners"):                                # pas de corners pour tous les championnats

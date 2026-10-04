@@ -85,10 +85,11 @@
                   [away + ' : 0-1, 0-2 ou 0-3', [[0, 1], [0, 2], [0, 3]]], [away + ' : 1-2, 1-3 ou 2-3', [[1, 2], [1, 3], [2, 3]]], ['Nul : 0-0, 1-1 ou 2-2', [[0, 0], [1, 1], [2, 2]]]];
     add('Score exact multichance', groups.map(function (gr) { return [gr[0], gr[1].reduce(function (s0, c) { return s0 + g[c[0]][c[1]]; }, 0)]; }), false, true);
     var resopts = [[home + ' gagne', function (i, j) { return i > j; }], [away + ' gagne', function (i, j) { return i < j; }],
-                   [home + ' ou nul', function (i, j) { return i >= j; }], [away + ' ou nul', function (i, j) { return i <= j; }]];
+                   [home + ' ou nul', function (i, j) { return i >= j; }], [away + ' ou nul', function (i, j) { return i <= j; }], [home + ' ou ' + away, function (i, j) { return i !== j; }]];
     var goalopts = [['plus de 0,5 buts', function (i, j) { return i + j > 0.5; }], ['plus de 1,5 buts', function (i, j) { return i + j > 1.5; }],
                     ['plus de 2,5 buts', function (i, j) { return i + j > 2.5; }], ['moins de 2,5 buts', function (i, j) { return i + j < 2.5; }],
-                    ['moins de 3,5 buts', function (i, j) { return i + j < 3.5; }], ['les deux équipes marquent', function (i, j) { return i > 0 && j > 0; }]];
+                    ['moins de 3,5 buts', function (i, j) { return i + j < 3.5; }], ['les deux équipes marquent', function (i, j) { return i > 0 && j > 0; }],
+                    ['les deux équipes ne marquent pas toutes deux', function (i, j) { return !(i > 0 && j > 0); }]];
     var combos = [];
     resopts.forEach(function (ro) { goalopts.forEach(function (go) { combos.push([ro[0] + ' + ' + go[0], gsum(g, function (i, j) { return ro[1](i, j) && go[1](i, j); })]); }); });
     add('Combiné résultat + buts (MyMatch)', combos, false, false, 'Combiné MyMatch', true);
@@ -118,6 +119,118 @@
     add('Premier but', [[home, lh / l * (1 - Math.exp(-l))], [away, la / l * (1 - Math.exp(-l))], ['Aucun but', Math.exp(-l)]], false, true);
 
     add('Dernier but', [[home, lh / l * (1 - Math.exp(-l))], [away, la / l * (1 - Math.exp(-l))], ['Aucun but', Math.exp(-l)]], false, true);
+
+
+    // --- marchés buts / mi-temps supplémentaires (tous « extra »)
+    function S(k) { return k > 1 ? 's' : ''; }
+    function exs(name, items, kind) { add(name, items, false, false, kind, true); }
+    function tot(f) { return function (i, j) { return f(i + j); }; }
+    exs('Nombre exact de buts', [0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (k) { return [k + ' but' + S(k), gsum(g, tot(function (t) { return t === k; }))]; })
+      .concat([['9 buts ou plus', gsum(g, tot(function (t) { return t >= 9; }))]]));
+    exs('Nombre de buts (intervalle)', [['0-1 but', gsum(g, tot(function (t) { return t <= 1; }))], ['2-3 buts', gsum(g, tot(function (t) { return t >= 2 && t <= 3; }))],
+      ['4-6 buts', gsum(g, tot(function (t) { return t >= 4 && t <= 6; }))], ['7 buts ou plus', gsum(g, tot(function (t) { return t >= 7; }))]]);
+    [[home, function (i, j) { return i; }], [away, function (i, j) { return j; }]].forEach(function (t) {
+      var own = t[1];
+      exs('Nombre exact de buts de ' + t[0], [0, 1, 2].map(function (k) { return [k + ' but' + S(k), gsum(g, function (i, j) { return own(i, j) === k; })]; })
+        .concat([['3 buts ou plus', gsum(g, function (i, j) { return own(i, j) >= 3; })]]), "Nombre exact de buts d'une équipe");
+      exs('Intervalle de buts de ' + t[0], [['0 but', gsum(g, function (i, j) { return own(i, j) === 0; })], ['1-2 buts', gsum(g, function (i, j) { return own(i, j) >= 1 && own(i, j) <= 2; })],
+        ['1-3 buts', gsum(g, function (i, j) { return own(i, j) >= 1 && own(i, j) <= 3; })], ['2-3 buts', gsum(g, function (i, j) { return own(i, j) >= 2 && own(i, j) <= 3; })],
+        ['4 buts ou plus', gsum(g, function (i, j) { return own(i, j) >= 4; })]], "Intervalle de buts d'une équipe");
+    });
+    var mv = [];
+    [[home, 1], [away, -1]].forEach(function (t) {
+      mv.push([t[0] + ' gagne par exactement 1 but', gsum(g, function (i, j) { return t[1] * (i - j) === 1; })]);
+      mv.push([t[0] + ' gagne par exactement 2 buts', gsum(g, function (i, j) { return t[1] * (i - j) === 2; })]);
+      mv.push([t[0] + ' gagne par au moins 3 buts', gsum(g, function (i, j) { return t[1] * (i - j) >= 3; })]);
+    });
+    mv.push(['Match nul', pn]);
+    exs('Marge de victoire', mv);
+    var rs3 = [[home, function (i, j) { return i > j; }], ['Match nul', function (i, j) { return i === j; }], [away, function (i, j) { return i < j; }]];
+    var gl6 = [['plus de 1,5', function (i, j) { return i + j > 1.5; }], ['moins de 1,5', function (i, j) { return i + j < 1.5; }], ['plus de 2,5', function (i, j) { return i + j > 2.5; }],
+               ['moins de 2,5', function (i, j) { return i + j < 2.5; }], ['plus de 3,5', function (i, j) { return i + j > 3.5; }], ['moins de 3,5', function (i, j) { return i + j < 3.5; }]];
+    var rg = [];
+    rs3.forEach(function (ro) { gl6.forEach(function (go) { rg.push([ro[0] + ' et ' + go[0], gsum(g, function (i, j) { return ro[1](i, j) && go[1](i, j); })]); }); });
+    exs('Résultat et nombre de buts', rg);
+    var rb = [];
+    rs3.forEach(function (ro) {
+      rb.push([ro[0] + ' et oui', gsum(g, function (i, j) { return ro[1](i, j) && i > 0 && j > 0; })]);
+      rb.push([ro[0] + ' et non', gsum(g, function (i, j) { return ro[1](i, j) && !(i > 0 && j > 0); })]);
+    });
+    exs('Résultat et les deux équipes marquent', rb);
+    var fr = [];
+    [[home, true], [away, false]].forEach(function (fo) {
+      rs3.forEach(function (ro) {
+        var s1 = 0;
+        for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) if (i + j > 0 && ro[1](i, j)) s1 += g[i][j] * (fo[1] ? i : j) / (i + j);
+        fr.push([fo[0] + ' marque en premier et ' + (ro[0] === 'Match nul' ? 'match nul' : ro[0] + ' gagne'), s1]);
+      });
+    });
+    exs('Équipe qui marque le 1er but et résultat', fr);
+    exs('Quelle équipe va marquer ?', [['Aucune équipe', gsum(g, function (i, j) { return i + j === 0; })], ['Seulement ' + home, gsum(g, function (i, j) { return i > 0 && j === 0; })],
+      ['Seulement ' + away, gsum(g, function (i, j) { return j > 0 && i === 0; })], ['Les deux équipes', b]]);
+    [[home, function (i, j) { return i; }, function (i, j) { return j; }], [away, function (i, j) { return j; }, function (i, j) { return i; }]].forEach(function (t) {
+      var own = t[1], opp = t[2], cs = gsum(g, function (i, j) { return opp(i, j) === 0; }), wn = gsum(g, function (i, j) { return own(i, j) > opp(i, j) && opp(i, j) === 0; });
+      exs(t[0] + ' garde sa cage inviolée', [['Oui', cs], ['Non', 1 - cs]], 'Cage inviolée (oui/non)');
+      exs(t[0] + ' gagne sans concéder de but', [['Oui', wn], ['Non', 1 - wn]], 'Gagne sans concéder (oui/non)');
+    });
+
+    // mi-temps (1re période indépendante de la 2e)
+    [[home, 1, lh], [away, -1, la]].forEach(function (t) {
+      var w1 = gsum(ht, function (i, j) { return t[1] * (i - j) > 0; }), w2 = gsum(sh, function (i, j) { return t[1] * (i - j) > 0; });
+      exs(t[0] + ' gagne une des mi-temps', [['Oui', 1 - (1 - w1) * (1 - w2)], ['Non', (1 - w1) * (1 - w2)]], 'Gagne une mi-temps (oui/non)');
+      exs(t[0] + ' gagne les deux mi-temps', [['Oui', w1 * w2], ['Non', 1 - w1 * w2]], 'Gagne les deux mi-temps (oui/non)');
+      var sc2 = (1 - Math.exp(-s * t[2])) * (1 - Math.exp(-(1 - s) * t[2]));
+      exs(t[0] + ' marque dans les deux mi-temps', [['Oui', sc2], ['Non', 1 - sc2]], 'Marque dans les deux mi-temps (oui/non)');
+    });
+    var pa = pmfArr(s * l, N), pb = pmfArr((1 - s) * l, N), m2a = 0, m2e = 0, m2b = 0;
+    for (var ia = 0; ia < N; ia++) for (var ib = 0; ib < N; ib++) { var v = pa[ia] * pb[ib]; if (ia > ib) m2a += v; else if (ia === ib) m2e += v; else m2b += v; }
+    exs('Mi-temps avec le plus de buts', [['1re mi-temps', m2a], ['Égalité', m2e], ['2de mi-temps', m2b]]);
+    function hs(f) { return gsum(ht, f); }
+    exs('Mi-temps - Double chance', [[home + ' ou nul', hs(function (i, j) { return i >= j; })], [away + ' ou nul', hs(function (i, j) { return i <= j; })], [home + ' ou ' + away, hs(function (i, j) { return i !== j; })]]);
+    var bhy = hs(function (i, j) { return i > 0 && j > 0; });
+    exs('Mi-temps - Les 2 équipes marquent', [['Oui', bhy], ['Non', 1 - bhy]]);
+    exs('Mi-temps - Nombre de buts', [0.5, 1.5, 2.5].map(function (x) { return ['Plus de ' + fx(x) + ' buts', hs(function (i, j) { return i + j > x; })]; })
+      .concat([0.5, 1.5, 2.5].map(function (x) { return ['Moins de ' + fx(x) + ' buts', hs(function (i, j) { return i + j < x; })]; })));
+    [[home, function (i, j) { return i; }], [away, function (i, j) { return j; }]].forEach(function (t) {
+      var own = t[1];
+      exs('Mi-temps - Nombre de buts de ' + t[0], [0.5, 1.5].map(function (x) { return [t[0] + ' plus de ' + fx(x), hs(function (i, j) { return own(i, j) > x; })]; })
+        .concat([0.5, 1.5].map(function (x) { return [t[0] + ' moins de ' + fx(x), hs(function (i, j) { return own(i, j) < x; })]; })), "Mi-temps - Buts d'une équipe");
+    });
+    exs('Mi-temps - Nombre exact de buts', [0, 1, 2].map(function (k) { return [k + ' but' + S(k), hs(function (i, j) { return i + j === k; })]; }).concat([['3 buts ou plus', hs(function (i, j) { return i + j >= 3; })]]));
+    exs('Mi-temps - Nombre de buts (intervalle)', [['0 but', hs(function (i, j) { return i + j === 0; })], ['1-2 buts', hs(function (i, j) { return i + j >= 1 && i + j <= 2; })],
+      ['1-3 buts', hs(function (i, j) { return i + j >= 1 && i + j <= 3; })], ['2-3 buts', hs(function (i, j) { return i + j >= 2 && i + j <= 3; })], ['4 buts ou plus', hs(function (i, j) { return i + j >= 4; })]]);
+    var hcells = [[1, 0], [0, 0], [0, 1], [2, 0], [1, 1], [0, 2], [2, 1], [2, 2], [1, 2]], hsum = 0;
+    var hitems = hcells.map(function (c) { hsum += ht[c[0]][c[1]]; return [c[0] + '-' + c[1], ht[c[0]][c[1]]]; });
+    hitems.push(['Autre', 1 - hsum]);
+    exs('Mi-temps - Score exact', hitems);
+    var hw = hs(function (i, j) { return i > j; }), haw = hs(function (i, j) { return i < j; });
+    if (hw + haw > 0) exs('Mi-temps - Vainqueur (remboursé si match nul)', [[home, hw / (hw + haw)], [away, haw / (hw + haw)]]);
+    [[home, function (i, j) { return j; }], [away, function (i, j) { return i; }]].forEach(function (t) {
+      var c0 = hs(function (i, j) { return t[1](i, j) === 0; });
+      exs('Mi-temps - ' + t[0] + ' garde sa cage inviolée ?', [['Oui', c0], ['Non', 1 - c0]], 'Mi-temps - Cage inviolée');
+    });
+    var hr3 = [[home, function (i, j) { return i > j; }], ['Match nul', function (i, j) { return i === j; }], [away, function (i, j) { return i < j; }]];
+    var hg4 = [['moins de 0,5', function (i, j) { return i + j < 0.5; }], ['plus de 0,5', function (i, j) { return i + j > 0.5; }], ['moins de 1,5', function (i, j) { return i + j < 1.5; }], ['plus de 1,5', function (i, j) { return i + j > 1.5; }]];
+    var hrg = [];
+    hr3.forEach(function (ro) { hg4.forEach(function (go) { hrg.push([ro[0] + ' et ' + go[0], hs(function (i, j) { return ro[1](i, j) && go[1](i, j); })]); }); });
+    exs('Mi-temps - Résultat et nombre de buts', hrg);
+    var hdc = [[home + ' ou nul', function (i, j) { return i >= j; }], [away + ' ou nul', function (i, j) { return i <= j; }], [home + ' ou ' + away, function (i, j) { return i !== j; }]];
+    var hdb = [];
+    hdc.forEach(function (dc) {
+      hdb.push([dc[0] + ' et oui', hs(function (i, j) { return dc[1](i, j) && i > 0 && j > 0; })]);
+      hdb.push([dc[0] + ' et non', hs(function (i, j) { return dc[1](i, j) && !(i > 0 && j > 0); })]);
+    });
+    exs('Mi-temps - Double chance et les deux équipes marquent', hdb);
+    // minute du 1er but : buts répartis uniformément dans chaque mi-temps
+    function lamCum(t) { return s * l * Math.min(t, 45) / 45 + (1 - s) * l * Math.max(t - 45, 0) / 45; }
+    function minutes(bounds) {
+      return bounds.map(function (ab) { return [(ab[0] + 1) + '-' + ab[1], Math.exp(-lamCum(ab[0])) - Math.exp(-lamCum(ab[1]))]; }).concat([['Aucun but', Math.exp(-l)]]);
+    }
+    var b10 = [], b15 = [], a0;
+    for (a0 = 0; a0 < 90; a0 += 10) b10.push([a0, a0 + 10]);
+    for (a0 = 0; a0 < 90; a0 += 15) b15.push([a0, a0 + 15]);
+    exs('Minute du 1er but (10 min)', minutes(b10));
+    exs('Minute du 1er but (15 min)', minutes(b15));
 
     var cc = [0, 0], ct = 0;
     if (L.c) {                                          // pas de corners pour tous les championnats

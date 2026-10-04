@@ -1395,7 +1395,7 @@
       var top = f.sels.slice().sort(function (a, b) { return b[1] - a[1]; })[0];
       return { m: f.name, s: top[0], p: top[1], v: false, f: f };
     });
-    if (ex.length) h += '<div class="sec"><span class="dot b"></span>Autres marchés <small>handicaps, écarts de buts, combinaisons · hors décompte des pronostics sûrs</small></div>' + ex.map(mkRow('b', d)).join('');
+    if (ex.length) h += '<div class="sec"><span class="dot b"></span>Autres marchés <small>handicaps, écarts, combinaisons, mi-temps, minute du 1er but… · hors décompte des pronostics sûrs</small></div>' + ex.map(mkRow('b', d)).join('');
     h += '<div class="sub" style="margin-top:14px">Touche un marché pour voir toutes les sélections et leur cote juste. ' +
       '⚠ = marché non validé par backtest. Voir l’onglet Fiabilité.</div>';
     return h;
