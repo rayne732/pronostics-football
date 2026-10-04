@@ -178,13 +178,13 @@ def fetch_espn(today, days, teams_by_div):
             except Exception as exc:
                 print(f"[avertissement] calendrier ESPN {slug} indisponible : {exc}", file=sys.stderr)
         for e in events:
-            if e["status"]["type"]["name"] != "STATUS_SCHEDULED":
-                continue
             try:
                 when = _local(e["date"].replace("Z", ":00Z") if e["date"].count(":") == 1 else e["date"])
             except ValueError:
                 continue
             if not (lo <= when.date() <= hi):
+                continue
+            if e["status"]["type"]["name"] != "STATUS_SCHEDULED" and when.date() != lo:       # les matchs du jour déjà commencés restent affichés (historique CSV : pas de fuite du résultat)
                 continue
             comp = e["competitions"][0]
             team = {c["homeAway"]: c["team"] for c in comp["competitors"]}

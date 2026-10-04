@@ -209,9 +209,14 @@ def evaluations(hist, divs, now):
 # ---------------------------------------------------------------- construction pour le bot
 def build(now, events, hist):
     """-> (infos par compétition modélisée: {div: dict(df, name, ctry, flag, cfg)}, lignes de calendrier à modéliser)."""
-    upcoming = {}
+    from tennis import paris
+    today = f"{paris(datetime.fromtimestamp(now.timestamp(), timezone.utc).replace(tzinfo=None)):%Y-%m-%d}"
+    upcoming, started = {}, set()
     for it in events:
-        if it["st"] == "pre" and it["slug"] not in MODELED and not it["slug"].startswith(SKIP_PREFIX) and it["slug"] != "club.friendly":
+        live = it["st"] != "pre" and it["date"] == today                       # match du jour déjà commencé ou terminé : il reste affiché jusqu'à la fin de la journée
+        if live:
+            started.add((it["date"], it["home"], it["away"]))
+        if (it["st"] == "pre" or live) and it["slug"] not in MODELED and not it["slug"].startswith(SKIP_PREFIX) and it["slug"] != "club.friendly":
             upcoming.setdefault(div_of(it["slug"]), []).append(it)
     ev = evaluations(hist, sorted(upcoming), now)
     info, fixtures = {}, []
@@ -219,7 +224,8 @@ def build(now, events, hist):
         e = ev.get(div)
         if not e or not e.get("cfg") or (e.get("gain") or 0) < GAIN_MIN:
             continue
-        rows = dataset(hist, div)
+        full = dataset(hist, div)
+        rows = [r for r in full if (f"{r['Date']:%Y-%m-%d}", r["HomeTeam"], r["AwayTeam"]) not in started]     # le modèle ne doit pas connaître le résultat d'un match du jour
         if not rows:
             continue
         slug = its[0]["slug"]
@@ -230,7 +236,7 @@ def build(now, events, hist):
             name, ctry, flag = fr, cfr, FLAGS.get(slug.split(".")[0], "⚽")
         poisson.LEAGUE_CFG[div] = tuple(e["cfg"])
         recent = now - timedelta(days=400)
-        info[div] = dict(df=rows, name=name, ctry=ctry, flag=flag, gain=e["gain"], slugs=sorted({it["slug"] for it in its}),
+        info[div] = dict(df=rows, full=full, name=name, ctry=ctry, flag=flag, gain=e["gain"], slugs=sorted({it["slug"] for it in its}),
                          teams=sorted({t for r in rows if r["Date"] >= recent for t in (r["HomeTeam"], r["AwayTeam"])}))
         for it in its:
             row = dict(Div=div, Date=datetime.strptime(it["date"], "%Y-%m-%d"), Time=it["time"], HomeTeam=it["home"], AwayTeam=it["away"])

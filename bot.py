@@ -353,7 +353,7 @@ def main():
             for div, x in xinfo.items():
                 LEAGUES[div] = x["name"]
                 models[div] = fit_all(x["df"], now)
-                dfs[div] = x["df"]
+                dfs[div] = x.get("full", x["df"])                        # résultats complets (règlement) ; le modèle n'a pas vu les matchs du jour
                 leagues[div] = dict(name=x["name"], teams=x["teams"], ctry=x["ctry"], flag=x["flag"])
                 xmodeled |= set(x["slugs"])
             print(f"Compétitions ESPN modélisées : {len(xinfo)} ({sum(len(x['df']) for x in xinfo.values())} matchs d'historique).", file=sys.stderr)
