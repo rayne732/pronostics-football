@@ -952,11 +952,11 @@
       if (f.date !== T) return;
       nf++;
       var C = Engine.classify(Engine.families(f.div, f.home, f.away, f.ov).fams), ref = 'data-open="' + f.i + '"';
-      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
+      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
       if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
     });
     if (nf) counts.push(['⚽', 'Football', nf]);
-    var add = function (icon, name, items, refOf) {
+    var add = function (icon, name, items, refOf, keyOf) {
       var n = 0, nk = 0;
       items.forEach(function (m) {
         if (m.date !== T || m.state === 'post') return;
@@ -964,15 +964,15 @@
         if (!m.known) return;
         nk++;
         var home = m.home || m.a, away = m.away || m.b, ref = refOf(m);
-        (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref }); });
+        (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref, bid: keyOf + '|' + m.id, bm: r.m, bs: r.s }); });
         if (m.conf === 'high') favs2.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: m.favName, p: m.fav, ref: ref });
       });
       if (n) counts.push([icon, name, n, nk]);
     };
-    add('🎾', 'Tennis', TM, function (m) { return 'data-tnopen="' + m.i + '"'; });
+    add('🎾', 'Tennis', TM, function (m) { return 'data-tnopen="' + m.i + '"'; }, 'tennis');
     Object.keys(SPORT_CFG).forEach(function (sid) {
       var S = spOf(sid);
-      if (S.inited) add(S.cfg.icon, S.cfg.title.charAt(0).toUpperCase() + S.cfg.title.slice(1), S.items, function (m) { return 'data-spopen="' + sid + '|' + m.i + '"'; });
+      if (S.inited) add(S.cfg.icon, S.cfg.title.charAt(0).toUpperCase() + S.cfg.title.slice(1), S.items, function (m) { return 'data-spopen="' + sid + '|' + m.i + '"'; }, S.cfg.key);
     });
     // Formule 1 : course du jour
     var N = D.f1 && D.f1.next;
@@ -996,6 +996,37 @@
     return '<div class="mrow high" style="grid-template-columns:44px 1fr auto"><div class="tm">' + esc(r.time || '–') + '</div><div class="tt"><b style="font-weight:600">' + r.icon + ' ' + esc(r.match) + '</b>' +
       '<div class="tres" style="color:var(--ink)">' + esc(r.pick) + '</div></div><div class="act"><span class="cfp high">' + pct(r.p) + '</span><button class="voir high" ' + r.ref + '>Voir' + svg(IC.chev) + '</button></div></div>';
   }
+  /* combinés du jour : sélections de matchs différents, de la plus probable à la moins probable ; on affiche la vraie probabilité et la cote minimale à exiger */
+  var COMBOS = [];
+  function todayCombos(picks) {
+    var seen = {}, pool = [];
+    picks.slice().sort(function (a, b) { return b.p - a.p; }).forEach(function (r) {
+      if (!r.bid || seen[r.match]) return;
+      seen[r.match] = 1; pool.push(r);
+    });
+    var out = [];
+    [['Prudent', 2], ['Équilibré', 3], ['Audacieux', 4]].forEach(function (x) {
+      if (pool.length < x[1]) return;
+      var legs = pool.slice(0, x[1]), P = legs.reduce(function (p, r) { return p * r.p; }, 1);
+      out.push({ name: x[0], legs: legs, P: P });
+    });
+    return out;
+  }
+  function comboHTML(R) {
+    COMBOS = todayCombos(R.picks);
+    if (!COMBOS.length) return '';
+    var h = '<div class="sec"><span class="dot a"></span>Combinés du jour <small>indicatif · matchs différents</small></div>' +
+      '<div class="srcnote">Un combiné n’est gagné que si <b>toutes</b> ses sélections passent : sa probabilité est le produit des leurs. ' +
+      'Les bookmakers prennent une marge sur chaque sélection, donc la cote affichée sur Winamax sera souvent <b>plus basse</b> que la cote juste ci-dessous : ' +
+      'ne joue un combiné que si la cote proposée est <b>au moins</b> égale à la cote minimale. Aucun combiné ne garantit un gain.</div>';
+    COMBOS.forEach(function (c, i) {
+      h += '<div class="fm"><h4>' + c.name + '<span class="pp">' + pct(c.P) + ' de réussite</span></h4>' +
+        c.legs.map(function (r) { return '<div class="pr"><span class="pt">' + r.icon + ' ' + esc(r.match) + '<small class="sm">' + esc(r.pick) + '</small></span><span class="pp">' + pct(r.p) + '</span></div>'; }).join('') +
+        line('Cote juste', (1 / c.P).toFixed(2)) + line('Cote minimale à exiger', (1 / c.P).toFixed(2) + ' ou plus') +
+        '<button class="bt-b" style="margin-top:10px" data-bcombo="' + i + '">€ Noter ce combiné dans Mes paris</button></div>';
+    });
+    return h;
+  }
   function todayHTML() {
     todayLoad();
     var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
@@ -1005,6 +1036,7 @@
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
     h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
+    h += comboHTML(R);
     var seenF = {};
     var fv = R.favs.filter(function (r) { if (seenF[r.match]) return false; seenF[r.match] = 1; return true; }).slice(0, 10);
     if (fv.length) h += '<div class="sec"><span class="dot a"></span>Les favoris les plus nets <small>vainqueur à haute confiance</small></div>' + fv.map(todayRow).join('');
@@ -1516,7 +1548,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1576,6 +1608,12 @@
       var y = window.scrollY; render(); window.scrollTo(0, y);
     }
     else if (t.hasAttribute('data-rm')) { ticket.splice(+t.getAttribute('data-rm'), 1); saveTicket(); render(); }
+    else if (t.hasAttribute('data-bcombo')) {
+      var cb = COMBOS[+t.getAttribute('data-bcombo')];
+      Bets.prefill({ label: cb.legs.map(function (r) { return r.match + ' : ' + r.pick; }).join(' + '), p: cb.P, kind: 'combine', cat: 'Combiné du jour',
+        legs: cb.legs.map(function (r) { return { id: r.bid, m: r.bm, s: r.bs }; }), nLegs: cb.legs.length });
+      st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
+    }
     else if (t.hasAttribute('data-gosport')) {
       var gs = t.getAttribute('data-gosport');
       st.tab = 'home'; st.sport = gs; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
