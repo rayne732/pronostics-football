@@ -223,7 +223,7 @@ def build_page(models, fixtures, market_probs, generated_at, days, leagues, reli
             f'<nav id="nav" aria-label="Navigation"></nav>'
             f'<script id="data" type="application/json">{data}</script>'
             f'<template id="info-html">{_info(reliability)}</template>'
-            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("rugby.js")}</script><script>{_read("hockey.js")}</script><script>{_read("baseball.js")}</script><script>{_read("nfl.js")}</script><script>{_read("mma.js")}</script><script>{_read("bets.js")}</script><script>{_read("app.js")}</script>')
+            f'<script>{_read("engine.js")}</script><script>{_read("tennis.js")}</script><script>{_read("basket.js")}</script><script>{_read("rugby.js")}</script><script>{_read("hockey.js")}</script><script>{_read("baseball.js")}</script><script>{_read("nfl.js")}</script><script>{_read("mma.js")}</script><script>{_read("bets.js")}</script><script>{_read("alerts.js")}</script><script>{_read("app.js")}</script>')
     if artifact:
         return head + body
     desc = "Probabilités et pronostics de 6 championnats de football (modèle statistique). Analyse indicative, pas un conseil de pari."

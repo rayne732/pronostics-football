@@ -1277,15 +1277,30 @@
     return h + '<div id="list">' + listHTML() + '</div>';
   }
 
+  var ALMSG = '';
+  function favItems() {
+    return D.fixtures.filter(function (f) { return favs[f.id]; }).map(function (f) {
+      return { id: f.id, ko: +kickoff(f), title: 'Dans 45 min : ' + f.home + ' – ' + f.away, msg: D.leagues[f.div].name + ' · ' + favName(f) + ' ' + pct(f.fav) };
+    });
+  }
+  function alertsPanel() {
+    var t = Alerts.topic();
+    return '<div class="sec"><span class="dot a"></span>Alertes sur mes favoris</div><div class="fm"><div class="sub">Reçois une notification <b>45 minutes avant</b> chaque match mis en favori (★). ' +
+      'Colle ici le nom de ton sujet ntfy, celui auquel ton téléphone est abonné dans l’appli ntfy : il reste <b>sur cet appareil</b> et n’est jamais publié.</div>' +
+      '<div class="bt-line"><input id="al-topic" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nom du sujet ntfy" value="' + esc(t) + '">' +
+      '<button class="bt-b" data-alsave>' + (t ? 'Mettre à jour' : 'Activer') + '</button></div>' +
+      (t ? '<div class="sub" style="margin-top:8px">' + esc(Alerts.status()) + '</div><div class="bt-act"><button class="bt-b" data-altest>Envoyer une notification test</button><button class="bt-b l" data-aloff>Désactiver</button></div>' : '') +
+      (ALMSG ? '<div class="bt-warn">' + esc(ALMSG) + '</div>' : '') + '</div>';
+  }
   function favsHTML() {
     var list = D.fixtures.filter(function (f) { return favs[f.id]; });
     var h = '<div class="top"><h1>Mes favoris</h1></div>';
     if (!list.length) {
-      return h + '<div class="empty">Aucun favori pour l’instant. Touche l’étoile ☆ à côté d’un match dans l’onglet Découvrir pour le retrouver ici.</div>';
+      return h + '<div class="empty">Aucun favori pour l’instant. Touche l’étoile ☆ à côté d’un match dans l’onglet Découvrir pour le retrouver ici.</div>' + alertsPanel();
     }
     list.sort(function (a, b) { return kickoff(a) - kickoff(b); });
     return h + '<div class="sub">' + list.length + ' match' + (list.length > 1 ? 's' : '') + ' suivi' + (list.length > 1 ? 's' : '') + ', dans l’ordre des coups d’envoi.</div>' +
-      list.map(function (f) { return '<div class="cdl">' + esc(D.leagues[f.div].name) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('');
+      list.map(function (f) { return '<div class="cdl">' + esc(D.leagues[f.div].name) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('') + alertsPanel();
   }
   function ticketProb() { return ticket.reduce(function (p, t) { return p * t.p; }, 1); }
   function ticketHTML() {
@@ -1548,7 +1563,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1608,6 +1623,18 @@
       var y = window.scrollY; render(); window.scrollTo(0, y);
     }
     else if (t.hasAttribute('data-rm')) { ticket.splice(+t.getAttribute('data-rm'), 1); saveTicket(); render(); }
+    else if (t.hasAttribute('data-alsave')) {
+      var tp = ((document.getElementById('al-topic') || {}).value || '').trim();
+      if (!tp) { ALMSG = 'Indique le nom de ton sujet ntfy.'; render(); return; }
+      Alerts.setTopic(tp); ALMSG = '';
+      Alerts.sync(favItems()).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
+      render();
+    }
+    else if (t.hasAttribute('data-altest')) {
+      ALMSG = 'Envoi du test…'; render();
+      Alerts.test().then(function () { ALMSG = 'Notification test envoyée : regarde ton téléphone.'; }, function () { ALMSG = 'Envoi impossible (réseau ?).'; }).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
+    }
+    else if (t.hasAttribute('data-aloff')) { Alerts.clear(); ALMSG = 'Alertes désactivées.'; render(); }
     else if (t.hasAttribute('data-bcombo')) {
       var cb = COMBOS[+t.getAttribute('data-bcombo')];
       Bets.prefill({ label: cb.legs.map(function (r) { return r.match + ' : ' + r.pick; }).join(' + '), p: cb.P, kind: 'combine', cat: 'Combiné du jour',
@@ -1631,6 +1658,7 @@
       var g = D.fixtures[+t.getAttribute('data-fav')];
       if (favs[g.id]) delete favs[g.id]; else favs[g.id] = 1;
       saveFavs(); render();
+      Alerts.sync(favItems()).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
   });
   app.addEventListener('input', function (e) {
@@ -1662,11 +1690,14 @@
     st.tab = t.getAttribute('data-tab'); st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
   Bets.resolver = function (id, m, sel) {
-    var r = isLoaded('res') && D.res && D.res.m && D.res.m[id];
-    if (!r) return null;
-    for (var i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
+    if (!isLoaded('res') || !D.res) return null;
+    var r = D.res.m && D.res.m[id], i;
+    if (r) for (i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
+    r = D.res.a && D.res.a[id];                       // football : toutes les sélections des fiches match (pas seulement nos pronostics)
+    if (r) for (i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
     return null;
   };
+  Alerts.sync(favItems());                                                    // programme les alertes des favoris (si le sujet ntfy est renseigné)
   Bets.attach(app, render, function () { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); });
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 

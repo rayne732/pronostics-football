@@ -125,10 +125,10 @@ def live_records():
 
 
 # ---------------------------------------------------------------- backtest
-def backtest_rows(div, df):
+def backtest_rows(div, df, start=None):
     """Pronostics rejoués semaine par semaine pour un championnat : [div, date, type, proba, catégorie, validé, gagné]."""
     records = []
-    test = [r for r in df if r["Date"] >= BACKTEST_FROM]
+    test = [r for r in df if r["Date"] >= (start or BACKTEST_FROM)]
     weeks = sorted({r["Date"] - timedelta(days=r["Date"].weekday()) for r in test})
     for w in weeks:
         models = fit_all([r for r in df if r["Date"] < w], w)
@@ -154,6 +154,50 @@ def run_backtest(leagues, seasons=("2526", "2627"), merge=False):
         print(f"[backtest] {div} terminé : {len(records)} pronostics cumulés", file=sys.stderr, flush=True)
         _write(BACKTEST_FILE, dict(generated=datetime.now().isoformat(timespec="minutes"), seasons=list(seasons), records=records))
     return records
+
+
+def update_backtest(leagues, today):
+    """Prolonge le backtest jusqu'à aujourd'hui sans tout recalculer : pour chaque championnat, on rejoue les semaines postérieures au dernier pronostic enregistré
+    (le modèle de chaque semaine ne voit que le passé, donc les anciennes lignes restent valables). -> nombre de lignes ajoutées."""
+    data = _read(BACKTEST_FILE) or {"records": [], "seasons": []}
+    recs = data["records"]
+    last = {}
+    for r in recs:
+        if r[1] > last.get(r[0], ""):
+            last[r[0]] = r[1]
+    added = 0
+    for div in leagues:
+        if div.startswith("x:"):
+            continue
+        since = datetime.strptime(last[div], "%Y-%m-%d") - timedelta(days=3) if div in last else BACKTEST_FROM
+        if (today - since).days < 7:
+            continue
+        df = load(div)
+        if not df:
+            continue
+        keep_lo = f"{since:%Y-%m-%d}"
+        recs = [r for r in recs if not (r[0] == div and r[1] >= keep_lo)]
+        new = backtest_rows(div, df, since)
+        recs += new
+        added += len(new)
+        print(f"[backtest] {div} prolongé depuis {keep_lo} : {len(new)} lignes", file=sys.stderr, flush=True)
+    if added:
+        _write(BACKTEST_FILE, dict(generated=datetime.now().isoformat(timespec="minutes"), seasons=data.get("seasons", []), records=recs))
+    return added
+
+
+def drift(days=60, min_n=200, gap=-0.05):
+    """Championnats dont les pronostics « sûrs » des `days` derniers jours réussissent nettement moins que ce que le modèle annonçait : [(div, n, annoncé, réussi)]."""
+    lo = f"{datetime.now().date() - timedelta(days=days):%Y-%m-%d}"
+    acc = {}
+    for r in backtest_records()[0] + live_records()[0]:
+        if r[4] != 0 or r[1] < lo:
+            continue
+        a = acc.setdefault(r[0], [0, 0.0, 0])
+        a[0] += 1
+        a[1] += r[3]
+        a[2] += r[6]
+    return sorted((d, n, round(s / n, 3), round(w / n, 3)) for d, (n, s, w) in acc.items() if n >= min_n and w / n - s / n <= gap)
 
 
 def backtest_records():

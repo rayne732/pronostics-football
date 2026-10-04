@@ -271,6 +271,39 @@ def send_telegram(text):
     print(f"Envoyé ({len(chunks)} message(s)).")
 
 
+def weekly_backtest(now):
+    """Prolonge le backtest (au plus une fois par semaine) puis envoie une alerte ntfy si des pronostics sûrs réussissent nettement moins que prévu."""
+    path = "data/notify_state.json"
+    try:
+        with open(path, encoding="utf-8") as fh:
+            state = json.load(fh)
+    except (OSError, ValueError):
+        state = {}
+    last = state.get("bt")
+    if last and (now.date() - datetime.strptime(last, "%Y-%m-%d").date()).days < 7:
+        return
+    try:
+        added = tracking.update_backtest([d for d in LEAGUES if not d.startswith("x:")], now)
+        late = tracking.drift()
+    except Exception as exc:
+        print(f"[avertissement] backtest hebdomadaire impossible : {exc}", file=sys.stderr)
+        return
+    print(f"Backtest prolongé : {added} lignes ; championnats en dérive : {late}", file=sys.stderr)
+    topic = os.environ.get("NTFY_TOPIC")
+    if late and topic:
+        from notify import send
+        lines = [f"{LEAGUES.get(d, d)} : annoncé {s:.0%}, réussi {w:.0%} ({n} pronostics)" for d, n, s, w in late]
+        send([dict(title="Surveillance du modèle : un championnat dérive", message="\n".join(lines[:6]), priority=3, tags=["warning"])], topic)
+    try:                                                                  # relit l'état (le bilan du jour peut l'avoir modifié) avant d'écrire
+        with open(path, encoding="utf-8") as fh:
+            state = json.load(fh)
+    except (OSError, ValueError):
+        pass
+    state["bt"] = f"{now:%Y-%m-%d}"
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--send", action="store_true", help="envoyer sur Telegram au lieu d'afficher")
@@ -329,6 +362,7 @@ def main():
             hub_events, xfix = hub_events or [], []
         rows_by_div = {d: {(r["Date"], r["HomeTeam"], r["AwayTeam"]): r for r in dfs[d]} for d in dfs}
         settled = tracking.settle(models, now, rows_by_div)              # vérifie les pronostics des matchs terminés
+        weekly_backtest(now)                                             # une fois par semaine : le backtest rejoue les dernières semaines, et alerte si un championnat dérive
         ext = external_matches(now)
         try:                                                             # calendrier des autres compétitions, résultats enregistrés, fiabilité des cotes
             xacc = espn_hub.update_logs(hub_events, ext, hub_lo) if hub_lo else []
@@ -347,7 +381,7 @@ def main():
         page_args = (models, fixtures, market_probs, now, args.days, leagues, rel, hist_dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
         esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
         esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
-        res = results_update(now, esports)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
+        res = results_update(now, esports, models=models, rows_by_div=rows_by_div)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal, xacc=xacc))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
