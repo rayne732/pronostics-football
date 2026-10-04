@@ -270,12 +270,12 @@ def reliability(log, el):
 
 
 # ---------------------------------------------------------------- pour la page
-def calendar_items(events, lo, days):
+def calendar_items(events, lo, days, exclude=()):
     """Éléments du calendrier (hors championnats déjà modélisés) pour la page : lignes compactes."""
     out = []
     hi = lo + timedelta(days=days)
     for it in events:
-        if it["slug"] in MODELED:
+        if it["slug"] in MODELED or it["slug"] in exclude:
             continue
         d = datetime.strptime(it["date"], "%Y-%m-%d").date()
         if d < lo - timedelta(days=1) or d > hi:

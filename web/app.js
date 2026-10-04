@@ -160,6 +160,7 @@
                 SP1: ['Espagne', '#e2522f', '🇪🇸'], D1: ['Allemagne', '#d6383a', '🇩🇪'],
                 I1: ['Italie', '#1d9d8f', '🇮🇹'], E1: ['Angleterre', '#8a5bd0', '🏴󠁧󠁢󠁥󠁮󠁧󠁿'],
                 F2: ['France', '#3b7ae0', '🇫🇷'], D2: ['Allemagne', '#c9444a', '🇩🇪'], I2: ['Italie', '#2aa597', '🇮🇹'], SP2: ['Espagne', '#d9703c', '🇪🇸'], N1: ['Pays-Bas', '#e08a2f', '🇳🇱'], B1: ['Belgique', '#c2a12c', '🇧🇪'], P1: ['Portugal', '#2f9e5a', '🇵🇹'], T1: ['Turquie', '#d6383a', '🇹🇷'], G1: ['Grèce', '#3a86c8', '🇬🇷'], SC0: ['Écosse', '#3a5fc8', '🏴󠁧󠁢󠁳󠁣󠁴󠁿'], USA: ['États-Unis', '#4a5fb8', '🇺🇸'], MEX: ['Mexique', '#2f8f5a', '🇲🇽'], ARG: ['Argentine', '#5aa9d6', '🇦🇷'], JPN: ['Japon', '#d64a6a', '🇯🇵'], NOR: ['Norvège', '#c0392b', '🇳🇴'], SWE: ['Suède', '#3a7bc8', '🇸🇪'], DNK: ['Danemark', '#c8453a', '🇩🇰'], POL: ['Pologne', '#c94a5a', '🇵🇱'], ROU: ['Roumanie', '#d0a02c', '🇷🇴'], SWZ: ['Suisse', '#d64040', '🇨🇭'], FIN: ['Finlande', '#3a74b8', '🇫🇮'], IRL: ['Irlande', '#2f9a63', '🇮🇪'] };
+  function lmeta(div) { if (LMETA[div]) return LMETA[div]; var l = D.leagues[div] || {}; return [l.ctry || '', '#4f8cff', l.flag || '']; }
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
     '<circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".6"/><circle cx="16" cy="16" r="2.6" fill="var(--amber)"/></svg>';
 
@@ -218,7 +219,7 @@
       var sub = list.filter(function (f) { return f.div === div; });
       if (!sub.length) return;
       if (st.sort === 'conf') sub = sub.slice().sort(function (a, b) { return b.fav - a.fav; });
-      var lm = LMETA[div] || ['', '#4f8cff', ''];
+      var lm = lmeta(div);
       h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) +
         '<small>' + lm[0] + '</small></div><span class="cnt">' + sub.length + '</span></div>';
       h += sub.map(function (f) { return row(f, st.day === 'all'); }).join('');
@@ -262,7 +263,7 @@
   function resCard(m) {
     var sc = m.res.split('-'), safe = m.picks.filter(function (p) { return p.t === 0; }), less = m.picks.filter(function (p) { return p.t !== 0; });
     var sw = safe.filter(function (p) { return p.h; }).length, lw = less.filter(function (p) { return p.h; }).length;
-    var lm = LMETA[m.div] || ['', '#4f8cff', ''];
+    var lm = lmeta(m.div);
     return '<div class="rc"><div class="rh"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[m.div].name) + '</span><small>' + esc(m.time || '') + '</small></div>' +
       '<div class="rsc"><div class="s">' + crest(m.home, true) + '<b>' + esc(m.home) + '</b></div><div class="score">' + esc(sc[0] || '?') + ' – ' + esc(sc[1] || '?') +
       '</div><div class="s">' + crest(m.away, true) + '<b>' + esc(m.away) + '</b></div></div>' +
@@ -284,7 +285,7 @@
     D.order.forEach(function (div) {
       var sub = ms.filter(function (m) { return m.div === div; });
       if (!sub.length) return;
-      var lm = LMETA[div] || ['', '#4f8cff', ''];
+      var lm = lmeta(div);
       h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + lm[0] +
         '</small></div><span class="cnt">' + sub.length + '</span></div>' + sub.map(resCard).join('');
     });
@@ -1127,7 +1128,7 @@
     var L = [], I = [], O = [], F = [];
     D.order.forEach(function (div) {
       var n = D.fixtures.filter(function (f) { return f.div === div; }).length;
-      if (n) { var lm = LMETA[div] || ['', '#4f8cff', '']; L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: n }); }
+      if (n) { var lm = lmeta(div); L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: n }); }
     });
     calGroups().forEach(function (g) { (INTL.test(g.s + '.') ? I : g.w ? F : O).push(g); });
     var cmp = function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; };
@@ -1173,7 +1174,7 @@
   function compHTML(key) {
     var p = key.split('|'), h = '<button class="chip pill" data-day="comps" style="margin-bottom:10px">‹ Toutes les compétitions</button>';
     if (p[0] === 'L') {
-      var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div; }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = LMETA[div] || ['', '#4f8cff', ''];
+      var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div; }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = lmeta(div);
       h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + esc(lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
       if (!list.length) return h + '<div class="empty">Aucun match à venir pour cette compétition dans les prochains jours.</div>';
       var cur = '';
@@ -1450,14 +1451,14 @@
       (st.dtab === 'pred' ? predHTML(d, f) : formHTML(d));
   }
   function vsBlock(d) {
-    var lm = LMETA[d.div] || ['', '#4f8cff', ''];
+    var lm = lmeta(d.div);
     return '<div class="vs"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
       '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
       '<div class="betbar"><button class="bt-b" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari sur ce match</button>' +
       '<a class="bt-b" data-bwin="' + esc(d.home + ' – ' + d.away) + '" href="https://www.winamax.fr/paris-sportifs" target="_blank" rel="noopener">Voir la cote sur Winamax ↗</a></div>';
   }
   function detailPage(d) {
-    var f = d.fi != null ? D.fixtures[d.fi] : null, lm = LMETA[d.div] || ['', '#4f8cff', ''];
+    var f = d.fi != null ? D.fixtures[d.fi] : null, lm = lmeta(d.div);
     return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[d.div].name) + '</span><small>' +
       (f ? dm(f.date) + (f.time ? ' · ' + f.time : '') + ' · ' + countdown(f) : '') + '</small></div>' +

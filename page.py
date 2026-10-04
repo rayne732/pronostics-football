@@ -174,6 +174,8 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
     lg = {}
     for div, info in leagues.items():
         lg[div] = dict(name=info["name"], teams=info["teams"], **_model_params(models[div], info["teams"]))
+        if info.get("ctry"):
+            lg[div].update(ctry=info["ctry"], flag=info.get("flag", ""))
     fx = []
     for r in fixtures:
         mk = market_probs(r) if market_probs else None

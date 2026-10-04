@@ -76,6 +76,9 @@ def load(div="F1"):
                 rows.append(r)
     if div in NEW_FORMAT:
         rows = _read_new(div)
+    if div.startswith("x:"):                                  # compétitions ESPN (historique data/espn_hist.json)
+        import espn_models
+        rows = espn_models.dataset((espn_models._read(espn_models.HIST_FILE) or {"d": {}})["d"], div)
     rows.sort(key=lambda r: r["Date"])
 
     state = {}                                    # saison -> {"pts", "played", "last"}

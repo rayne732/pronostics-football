@@ -75,6 +75,8 @@ def record(fixtures, models, today):
         if data["matches"].get(key, {}).get("settled"):
             continue
         picks = [{k: v for k, v in p.items() if k != "rule"} for p in make_picks(models[div], home, away, blend_lams(models[div], r))]
+        if div.startswith("x:"):
+            picks = [p for p in picks if p["tier"] == 0]               # compétitions ESPN : seulement les pronostics sûrs (fichier de suivi compact)
         data["matches"][key] = dict(div=div, date=f'{r["Date"]:%Y-%m-%d}', time=r.get("Time", ""), home=home, away=away, picks=picks,
                                     recorded=today.isoformat(timespec="minutes"), settled=False)
     _write(TRACK_FILE, data)
@@ -102,6 +104,8 @@ def settle(models, today, rows_by_div):
             p["hit"] = None if hit is None else bool(hit)
         m["settled"], m["result"] = True, f'{res["fh"]}-{res["fa"]}'
         done += 1
+    lo = f"{today.date() - timedelta(days=150):%Y-%m-%d}"
+    data["matches"] = {k: m for k, m in data["matches"].items() if m["date"] >= lo}          # on garde 150 jours
     _write(TRACK_FILE, data)
     return done
 
@@ -121,6 +125,24 @@ def live_records():
 
 
 # ---------------------------------------------------------------- backtest
+def backtest_rows(div, df):
+    """Pronostics rejoués semaine par semaine pour un championnat : [div, date, type, proba, catégorie, validé, gagné]."""
+    records = []
+    test = [r for r in df if r["Date"] >= BACKTEST_FROM]
+    weeks = sorted({r["Date"] - timedelta(days=r["Date"].weekday()) for r in test})
+    for w in weeks:
+        models = fit_all([r for r in df if r["Date"] < w], w)
+        for r in (r for r in test if w <= r["Date"] < w + timedelta(days=7)):
+            if r["HomeTeam"] not in models["goals"]["idx"] or r["AwayTeam"] not in models["goals"]["idx"]:
+                continue
+            res = result_of(r)
+            for p in make_picks(models, r["HomeTeam"], r["AwayTeam"]):
+                hit = p["rule"](res)
+                if hit is not None:
+                    records.append([div, f'{r["Date"]:%Y-%m-%d}', p["kind"], p["p"], p["tier"], int(p["validated"]), int(hit)])
+    return records
+
+
 BACKTEST_FROM = datetime(2025, 7, 1)                                    # les pronostics rejoués vont de juillet 2025 à aujourd'hui (toutes ligues, saisons à cheval sur l'année ou non)
 
 
@@ -128,19 +150,7 @@ def run_backtest(leagues, seasons=("2526", "2627"), merge=False):
     """Rejoue les pronostics semaine par semaine (modèle entraîné uniquement sur le passé). merge=True : ne recalcule que `leagues`, garde le reste du fichier."""
     records = [r for r in backtest_records()[0] if r[0] not in leagues] if merge else []
     for div in leagues:
-        df = load(div)
-        test = [r for r in df if r["Date"] >= BACKTEST_FROM]
-        weeks = sorted({r["Date"] - timedelta(days=r["Date"].weekday()) for r in test})
-        for w in weeks:
-            models = fit_all([r for r in df if r["Date"] < w], w)
-            for r in (r for r in test if w <= r["Date"] < w + timedelta(days=7)):
-                if r["HomeTeam"] not in models["goals"]["idx"] or r["AwayTeam"] not in models["goals"]["idx"]:
-                    continue
-                res = result_of(r)
-                for p in make_picks(models, r["HomeTeam"], r["AwayTeam"]):
-                    hit = p["rule"](res)
-                    if hit is not None:
-                        records.append([div, f'{r["Date"]:%Y-%m-%d}', p["kind"], p["p"], p["tier"], int(p["validated"]), int(hit)])
+        records += backtest_rows(div, load(div))
         print(f"[backtest] {div} terminé : {len(records)} pronostics cumulés", file=sys.stderr, flush=True)
         _write(BACKTEST_FILE, dict(generated=datetime.now().isoformat(timespec="minutes"), seasons=list(seasons), records=records))
     return records

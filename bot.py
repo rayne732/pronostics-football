@@ -39,6 +39,7 @@ import tracking
 from notify import run as run_notify, run_evening, record_days
 from results import update as results_update
 import espn_hub
+import espn_models
 from poisson import NEW_FORMAT, load
 from pwa import write_site
 from winamax import format_match
@@ -310,20 +311,40 @@ def main():
 
     if args.html:
         os.makedirs("output", exist_ok=True)
+        hub_events, hub_lo, xfix, xmodeled, xcal = [], None, [], set(), {}
+        try:                                                             # toutes les compétitions du monde (ESPN) : flux, historique et modèles maison
+            hub_events, hub_lo = espn_hub.fetch_events(now, args.days)
+            hist = espn_models.update_history(hub_events, now.timestamp())
+            xinfo, xfix = espn_models.build(now, hub_events, hist)
+            xcal = {d: v["cal"] for d, v in (espn_models._read(espn_models.EVAL_FILE) or {"m": {}})["m"].items() if v.get("cal") and d in xinfo}
+            for div, x in xinfo.items():
+                LEAGUES[div] = x["name"]
+                models[div] = fit_all(x["df"], now)
+                dfs[div] = x["df"]
+                leagues[div] = dict(name=x["name"], teams=x["teams"], ctry=x["ctry"], flag=x["flag"])
+                xmodeled |= set(x["slugs"])
+            print(f"Compétitions ESPN modélisées : {len(xinfo)} ({sum(len(x['df']) for x in xinfo.values())} matchs d'historique).", file=sys.stderr)
+        except Exception as exc:
+            print(f"[avertissement] compétitions ESPN indisponibles : {exc}", file=sys.stderr)
+            hub_events, xfix = hub_events or [], []
         rows_by_div = {d: {(r["Date"], r["HomeTeam"], r["AwayTeam"]): r for r in dfs[d]} for d in dfs}
         settled = tracking.settle(models, now, rows_by_div)              # vérifie les pronostics des matchs terminés
         ext = external_matches(now)
-        try:                                                             # toutes les compétitions du monde (ESPN) : calendrier, résultats enregistrés, fiabilité des cotes
-            hub_events, hub_lo = espn_hub.fetch_events(now, args.days)
-            xacc = espn_hub.update_logs(hub_events, ext, hub_lo)
-            cal = espn_hub.calendar_items(hub_events, hub_lo, args.days)
+        try:                                                             # calendrier des autres compétitions, résultats enregistrés, fiabilité des cotes
+            xacc = espn_hub.update_logs(hub_events, ext, hub_lo) if hub_lo else []
+            cal = espn_hub.calendar_items(hub_events, hub_lo, args.days, exclude=xmodeled) if hub_lo else []
         except Exception as exc:
             print(f"[avertissement] calendrier mondial indisponible : {exc}", file=sys.stderr)
             cal, xacc = [], []
-        fixtures = get_fixtures(now, args.days, leagues, ext)
+        fixtures = sorted(get_fixtures(now, args.days, leagues, ext) + xfix, key=lambda r: (r["Div"], r["Date"], r.get("Time", "")))
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
-        page_args = (models, fixtures, market_probs, now, args.days, leagues, tracking.reliability_data(), dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
+        rel = tracking.reliability_data()
+        live = tracking.league_stats()
+        for d, c in xcal.items():                                        # compétitions ESPN : fiabilité rejouée + suivi réel
+            rel.setdefault("lgs", {})[d] = dict(bt=c, live=live.get(d, {}).get("live"))
+        hist_dfs = {d: ([r for r in rows if r["Date"] >= now - timedelta(days=540)] if d.startswith("x:") else rows) for d, rows in dfs.items()}   # historique envoyé au navigateur (onglet Forme)
+        page_args = (models, fixtures, market_probs, now, args.days, leagues, rel, hist_dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
         esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
         esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
         res = results_update(now, esports)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
