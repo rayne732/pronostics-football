@@ -1353,6 +1353,24 @@
         x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m, cls); }).join('') + '</div></details>';
     };
   }
+  /* haute confiance : pour chaque marché, la sélection la plus « payante » qui reste entre 85 % et 97 % (au-delà, la cote est trop basse pour valoir le coup) */
+  function highConfHTML(M, d) {
+    var byKind = {};
+    M.fams.forEach(function (f) {
+      if (f.lottery) return;
+      var ok = f.sels.filter(function (x) { return x[1] >= 0.85 && x[1] < 0.97; });
+      if (!ok.length) return;
+      var c = { m: f.name, s: ok.reduce(function (a, b) { return b[1] < a[1] ? b : a; }) };       // la plus « payante » du marché
+      if (!byKind[f.kind] || c.s[1] < byKind[f.kind].s[1]) byKind[f.kind] = c;                    // un seul marché par famille (handicaps, écarts, buts d'équipe…)
+    });
+    var best = Object.keys(byKind).map(function (k) { return byKind[k]; });
+    best.sort(function (a, b) { return b.s[1] - a.s[1]; });
+    if (!best.length) return '';
+    return '<div class="sec hc"><span class="dot g"></span>Haute confiance de ce match <small>85 % à 97 %</small></div><div class="fm hcbox">' +
+      best.slice(0, 8).map(function (x) {
+        return '<div class="hcm">' + esc(x.m) + '</div>' + alt(x.s, true, d, x.m, 'g');
+      }).join('') + '<div class="sub">Au-delà de 97 %, la cote est trop basse pour être intéressante : ces sélections sont masquées ici.</div></div>';
+  }
   function predHTML(d, f) {
     var M = Engine.families(d.div, d.home, d.away, f && f.ov), C = Engine.classify(M.fams), p = M.p1x2;
     var mx = Math.max.apply(null, p), fi = p.indexOf(mx), conf = confOf(mx), names = [d.home, 'Match nul', d.away];
@@ -1368,10 +1386,16 @@
       (f && f.ov ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
     if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
+    h += highConfHTML(M, d);
     h += compareHTML(M, d) + heatHTML(M, d);
     h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
       (C.safe.length ? C.safe.map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
     h += '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + C.less.map(mkRow('a', d)).join('');
+    var ex = M.fams.filter(function (f) { return f.extra; }).map(function (f) {
+      var top = f.sels.slice().sort(function (a, b) { return b[1] - a[1]; })[0];
+      return { m: f.name, s: top[0], p: top[1], v: false, f: f };
+    });
+    if (ex.length) h += '<div class="sec"><span class="dot b"></span>Autres marchés <small>handicaps, écarts de buts, combinaisons · hors décompte des pronostics sûrs</small></div>' + ex.map(mkRow('b', d)).join('');
     h += '<div class="sub" style="margin-top:14px">Touche un marché pour voir toutes les sélections et leur cote juste. ' +
       '⚠ = marché non validé par backtest. Voir l’onglet Fiabilité.</div>';
     return h;

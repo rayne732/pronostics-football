@@ -42,9 +42,10 @@ def families(models, home, away, ov=None):
     P = lambda mask: float(grid[mask].sum())
     fams = []
 
-    def add(name, items, validated=False, lottery=False, kind=None):
+    def add(name, items, validated=False, lottery=False, kind=None, extra=False):
+        # extra : marché redondant (handicaps, écarts, combinaisons) affiché dans la fiche match mais hors du décompte des pronostics sûrs / suivis
         fams.append(dict(name=name, kind=kind or name, sels={l: p for l, p, _ in items},
-                         rules={l: f for l, _, f in items}, validated=validated, lottery=lottery))
+                         rules={l: f for l, _, f in items}, validated=validated, lottery=lottery, extra=extra))
 
     p1, pn, p2 = P(D > 0), P(D == 0), P(D < 0)
     add("Résultat du match", [(home, p1, lambda r: r["fh"] > r["fa"]), ("Match nul", pn, lambda r: r["fh"] == r["fa"]),
@@ -61,9 +62,9 @@ def families(models, home, away, ov=None):
                                for x in (1.5, 2.5, 3.5, 4.5, 5.5)])
     for team, lam, key in ((home, lh, "fh"), (away, la, "fa")):
         add(f"Buts de {team} (plus)", [(f"{team} plus de {_f(x)}", poisson.sf(x, lam), lambda r, x=x, key=key: r[key] > x)
-                                       for x in (0.5, 1.5, 2.5)], kind="Buts d'une équipe (plus)")
+                                       for x in (0.5, 1.5, 2.5, 3.5)], kind="Buts d'une équipe (plus)")
         add(f"Buts de {team} (moins)", [(f"{team} moins de {_f(x)}", poisson.cdf(x - 0.5, lam), lambda r, x=x, key=key: r[key] < x)
-                                        for x in (1.5, 2.5)], kind="Buts d'une équipe (moins)")
+                                        for x in (1.5, 2.5, 3.5)], kind="Buts d'une équipe (moins)")
     add("Pair / impair", [("Total pair", P(T % 2 == 0), lambda r: (r["fh"] + r["fa"]) % 2 == 0),
                           ("Total impair", P(T % 2 == 1), lambda r: (r["fh"] + r["fa"]) % 2 == 1)])
     add("Tranche de buts", [("0-1 but", P(T <= 1), lambda r: r["fh"] + r["fa"] <= 1),
@@ -74,6 +75,34 @@ def families(models, home, away, ov=None):
                         (f"{away} (+1)", P(D <= 0), lambda r: r["fh"] - r["fa"] <= 0)])
     add("Victoire sans encaisser", [(f"{home}", P((D > 0) & (AI == 0)), lambda r: r["fh"] > r["fa"] and r["fa"] == 0),
                                     (f"{away}", P((D < 0) & (HI == 0)), lambda r: r["fa"] > r["fh"] and r["fh"] == 0)])
+
+    # --- marchés supplémentaires façon bookmaker : écart de buts, handicaps, remboursé si nul, multichance, combinaisons (MyMatch)
+    for team, sgn in ((home, 1), (away, -1)):
+        for k in (2, 3):
+            pk = P(sgn * D >= k)
+            add(f"{team} gagne par au moins {k} buts",
+                [("Oui", pk, lambda r, k=k, sgn=sgn: sgn * (r["fh"] - r["fa"]) >= k), ("Non", 1 - pk, lambda r, k=k, sgn=sgn: sgn * (r["fh"] - r["fa"]) < k)],
+                kind="Écart de buts (oui/non)", extra=True)
+    sg = lambda x: ("+" if x >= 0 else "-") + _f(abs(x))
+    for hc in (-2.5, -1.5, -0.5, 0.5, 1.5, 2.5):
+        ph = P(D + hc > 0)
+        add(f"Handicap {sg(hc)}", [(f"{home} ({sg(hc)})", ph, lambda r, hc=hc: r["fh"] - r["fa"] + hc > 0),
+                                  (f"{away} ({sg(-hc)})", 1 - ph, lambda r, hc=hc: r["fh"] - r["fa"] + hc < 0)], kind="Handicap (demi-buts)", extra=True)
+    if p1 + p2 > 0:
+        add("Vainqueur (remboursé si match nul)",
+            [(home, p1 / (p1 + p2), lambda r: None if r["fh"] == r["fa"] else r["fh"] > r["fa"]),
+             (away, p2 / (p1 + p2), lambda r: None if r["fh"] == r["fa"] else r["fh"] < r["fa"])])
+    groups = [(f"{home} : 1-0, 2-0 ou 3-0", [(1, 0), (2, 0), (3, 0)]), (f"{home} : 2-1, 3-1 ou 3-2", [(2, 1), (3, 1), (3, 2)]),
+              (f"{away} : 0-1, 0-2 ou 0-3", [(0, 1), (0, 2), (0, 3)]), (f"{away} : 1-2, 1-3 ou 2-3", [(1, 2), (1, 3), (2, 3)]),
+              ("Nul : 0-0, 1-1 ou 2-2", [(0, 0), (1, 1), (2, 2)])]
+    add("Score exact multichance", [(lab, float(sum(grid[i, j] for i, j in cs)), lambda r, cs=cs: (r["fh"], r["fa"]) in cs) for lab, cs in groups], lottery=True)
+    resopts = [(f"{home} gagne", D > 0, lambda r: r["fh"] > r["fa"]), (f"{away} gagne", D < 0, lambda r: r["fh"] < r["fa"]),
+               (f"{home} ou nul", D >= 0, lambda r: r["fh"] >= r["fa"]), (f"{away} ou nul", D <= 0, lambda r: r["fh"] <= r["fa"])]
+    goalopts = [("plus de 0,5 buts", T > 0.5, lambda r: r["fh"] + r["fa"] > 0.5), ("plus de 1,5 buts", T > 1.5, lambda r: r["fh"] + r["fa"] > 1.5),
+                ("plus de 2,5 buts", T > 2.5, lambda r: r["fh"] + r["fa"] > 2.5), ("moins de 2,5 buts", T < 2.5, lambda r: r["fh"] + r["fa"] < 2.5),
+                ("moins de 3,5 buts", T < 3.5, lambda r: r["fh"] + r["fa"] < 3.5), ("les deux équipes marquent", (HI > 0) & (AI > 0), lambda r: r["fh"] > 0 and r["fa"] > 0)]
+    add("Combiné résultat + buts (MyMatch)",
+        [(f"{rl} + {gl}", P(rm & gm), (lambda r, rf=rf, gf=gf: rf(r) and gf(r))) for rl, rm, rf in resopts for gl, gm, gf in goalopts], kind="Combiné MyMatch", extra=True)
 
     # mi-temps : buts de la 1re période ~ Poisson(part * lambda), 2e période indépendante
     s = models["ht"]
@@ -103,6 +132,10 @@ def families(models, home, away, ov=None):
                         (away, la / l * (1 - np.exp(-l)), lambda r: None),
                         ("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)], lottery=True)
 
+    add("Dernier but", [(home, lh / l * (1 - np.exp(-l)), lambda r: None),
+                        (away, la / l * (1 - np.exp(-l)), lambda r: None),
+                        ("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)], lottery=True)
+
     ch = ca = 0.0
     if models.get("corners"):                                # pas de corners pour tous les championnats
         _, (ch, ca) = score_grid(models["corners"], home, away)
@@ -117,6 +150,8 @@ def classify(fams):
     """-> (sûrs, moins_sûrs). Chaque élément : (marché, sélection, proba, validé)."""
     safe, less = [], []
     for f in fams:
+        if f.get("extra"):
+            continue
         items = sorted(f["sels"].items(), key=lambda kv: -kv[1])
         if f["lottery"]:
             less.append((f["name"], items[0][0], items[0][1], f["validated"]))

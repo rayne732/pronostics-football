@@ -38,8 +38,8 @@
   function families(div, home, away, ov) {
     var L = D.leagues[div], F = [];
     var gl = ov || lam(L.g, home, away), lh = gl[0], la = gl[1], g = grid(lh, la);
-    function add(name, items, validated, lottery, kind) {
-      F.push({ name: name, kind: kind || name, sels: items, validated: !!validated, lottery: !!lottery });
+    function add(name, items, validated, lottery, kind, extra) {
+      F.push({ name: name, kind: kind || name, sels: items, validated: !!validated, lottery: !!lottery, extra: !!extra });
     }
     var p1 = gsum(g, function (i, j) { return i > j; }), pn = gsum(g, function (i, j) { return i === j; }),
         p2 = gsum(g, function (i, j) { return i < j; });
@@ -52,9 +52,9 @@
     add('Total buts (moins)', [1.5, 2.5, 3.5, 4.5, 5.5].map(function (x) {
       return ['Moins de ' + fx(x) + ' buts', gsum(g, function (i, j) { return i + j < x; })]; }));
     [[home, lh], [away, la]].forEach(function (t) {
-      add('Buts de ' + t[0] + ' (plus)', [0.5, 1.5, 2.5].map(function (x) { return [t[0] + ' plus de ' + fx(x), sf(x, t[1])]; }),
+      add('Buts de ' + t[0] + ' (plus)', [0.5, 1.5, 2.5, 3.5].map(function (x) { return [t[0] + ' plus de ' + fx(x), sf(x, t[1])]; }),
         false, false, "Buts d'une équipe (plus)");
-      add('Buts de ' + t[0] + ' (moins)', [1.5, 2.5].map(function (x) { return [t[0] + ' moins de ' + fx(x), cdf(x - 0.5, t[1])]; }),
+      add('Buts de ' + t[0] + ' (moins)', [1.5, 2.5, 3.5].map(function (x) { return [t[0] + ' moins de ' + fx(x), cdf(x - 0.5, t[1])]; }),
         false, false, "Buts d'une équipe (moins)");
     });
     add('Pair / impair', [['Total pair', gsum(g, function (i, j) { return (i + j) % 2 === 0; })],
@@ -67,6 +67,31 @@
                         [away + ' (+1)', gsum(g, function (i, j) { return i - j <= 0; })]]);
     add('Victoire sans encaisser', [[home, gsum(g, function (i, j) { return i > j && j === 0; })],
                                     [away, gsum(g, function (i, j) { return j > i && i === 0; })]]);
+
+    // --- marchés supplémentaires façon bookmaker : écart de buts, handicaps, remboursé si nul, multichance, combinaisons (MyMatch)
+    [[home, 1], [away, -1]].forEach(function (t) {
+      [2, 3].forEach(function (k) {
+        var pk = gsum(g, function (i, j) { return t[1] * (i - j) >= k; });
+        add(t[0] + ' gagne par au moins ' + k + ' buts', [['Oui', pk], ['Non', 1 - pk]], false, false, 'Écart de buts (oui/non)', true);
+      });
+    });
+    function sg(x) { return (x >= 0 ? '+' : '-') + fx(Math.abs(x)); }
+    [-2.5, -1.5, -0.5, 0.5, 1.5, 2.5].forEach(function (hc) {
+      var ph = gsum(g, function (i, j) { return i - j + hc > 0; });
+      add('Handicap ' + sg(hc), [[home + ' (' + sg(hc) + ')', ph], [away + ' (' + sg(-hc) + ')', 1 - ph]], false, false, 'Handicap (demi-buts)', true);
+    });
+    if (p1 + p2 > 0) add('Vainqueur (remboursé si match nul)', [[home, p1 / (p1 + p2)], [away, p2 / (p1 + p2)]]);
+    var groups = [[home + ' : 1-0, 2-0 ou 3-0', [[1, 0], [2, 0], [3, 0]]], [home + ' : 2-1, 3-1 ou 3-2', [[2, 1], [3, 1], [3, 2]]],
+                  [away + ' : 0-1, 0-2 ou 0-3', [[0, 1], [0, 2], [0, 3]]], [away + ' : 1-2, 1-3 ou 2-3', [[1, 2], [1, 3], [2, 3]]], ['Nul : 0-0, 1-1 ou 2-2', [[0, 0], [1, 1], [2, 2]]]];
+    add('Score exact multichance', groups.map(function (gr) { return [gr[0], gr[1].reduce(function (s0, c) { return s0 + g[c[0]][c[1]]; }, 0)]; }), false, true);
+    var resopts = [[home + ' gagne', function (i, j) { return i > j; }], [away + ' gagne', function (i, j) { return i < j; }],
+                   [home + ' ou nul', function (i, j) { return i >= j; }], [away + ' ou nul', function (i, j) { return i <= j; }]];
+    var goalopts = [['plus de 0,5 buts', function (i, j) { return i + j > 0.5; }], ['plus de 1,5 buts', function (i, j) { return i + j > 1.5; }],
+                    ['plus de 2,5 buts', function (i, j) { return i + j > 2.5; }], ['moins de 2,5 buts', function (i, j) { return i + j < 2.5; }],
+                    ['moins de 3,5 buts', function (i, j) { return i + j < 3.5; }], ['les deux équipes marquent', function (i, j) { return i > 0 && j > 0; }]];
+    var combos = [];
+    resopts.forEach(function (ro) { goalopts.forEach(function (go) { combos.push([ro[0] + ' + ' + go[0], gsum(g, function (i, j) { return ro[1](i, j) && go[1](i, j); })]); }); });
+    add('Combiné résultat + buts (MyMatch)', combos, false, false, 'Combiné MyMatch', true);
 
     var s = L.ht, ht = grid(s * lh, s * la), sh = grid((1 - s) * lh, (1 - s) * la), names = [home, 'Nul', away];
     var htres = [gsum(ht, function (i, j) { return i > j; }), gsum(ht, function (i, j) { return i === j; }),
@@ -92,6 +117,8 @@
     var l = lh + la;
     add('Premier but', [[home, lh / l * (1 - Math.exp(-l))], [away, la / l * (1 - Math.exp(-l))], ['Aucun but', Math.exp(-l)]], false, true);
 
+    add('Dernier but', [[home, lh / l * (1 - Math.exp(-l))], [away, la / l * (1 - Math.exp(-l))], ['Aucun but', Math.exp(-l)]], false, true);
+
     var cc = [0, 0], ct = 0;
     if (L.c) {                                          // pas de corners pour tous les championnats
       cc = lam(L.c, home, away); ct = cc[0] + cc[1];
@@ -104,6 +131,7 @@
   function classify(F) {
     var safe = [], less = [];
     F.forEach(function (f) {
+      if (f.extra) return;
       var items = f.sels.slice().sort(function (a, b) { return b[1] - a[1]; });
       var rec = function (it) { return { m: f.name, s: it[0], p: it[1], v: f.validated, f: f }; };
       if (f.lottery) { less.push(rec(items[0])); return; }

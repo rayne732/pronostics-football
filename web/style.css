@@ -430,3 +430,10 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .comp .ic{width:16px;height:16px;color:var(--mute)}
 .apil{grid-column:1/-1;font-size:.76rem;color:var(--mute);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #al-topic{font-size:.95rem;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:14px;padding:11px 12px;width:100%;min-width:0}
+.hcbox{border-color:color-mix(in srgb,var(--green) 55%,var(--line))}
+.hcbox .hcm{font-size:.74rem;color:var(--mute);margin-top:8px;text-transform:uppercase;letter-spacing:.04em}
+.hcbox .alt:first-of-type{border-top:0}
+.sec .dot.b{background:var(--blue);box-shadow:0 0 10px var(--blue)}
+.mi.b,.pk.b{color:var(--blue)}
+.mi.b{color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent)}
+.pk.b{color:var(--blue)}
