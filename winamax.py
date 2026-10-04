@@ -258,6 +258,33 @@ def families(models, home, away, ov=None):
     for name, bounds in (("Minute du 1er but (10 min)", [(a, a + 10) for a in range(0, 90, 10)]), ("Minute du 1er but (15 min)", [(a, a + 15) for a in range(0, 90, 15)])):
         ex(name, [(f"{a + 1}-{b}", float(np.exp(-lam_cum(a)) - np.exp(-lam_cum(b))), minute_rule) for a, b in bounds] + [("Aucun but", float(np.exp(-l)), lambda r: r["fh"] + r["fa"] == 0)])
 
+
+    # --- tirs et tirs cadrés (championnats qui ont ces statistiques) : loi binomiale négative (sur-dispersion, alpha = 0,04 réglé sur 25 000 lignes), équipes indépendantes
+    from math import floor
+    from scipy.stats import nbinom
+    KS = np.arange(80)
+    rr_ = 1 / 0.04
+    for mkey, kh, ka, fam, unit, resname in (("shots", "sh", "sa", "Nombre de tirs", "tirs", "Tirs - Résultat"), ("sot", "th", "ta", "Nombre de tirs cadrés", "tirs cadrés", "Tirs cadrés - Résultat")):
+        if not models.get(mkey):
+            continue
+        _, (mh, ma) = score_grid(models[mkey], home, away)
+        ph_, pa_ = nbinom.pmf(KS, rr_, rr_ / (rr_ + mh)), nbinom.pmf(KS, rr_, rr_ / (rr_ + ma))
+        ptot = np.convolve(ph_, pa_)[:80]
+        rs = lambda fn, kh=kh: (lambda r: None if r[kh] is None else fn(r))
+        c0 = floor(mh + ma) + 0.5
+        ln = [c0 + d for d in (-3, -2, -1, 0, 1, 2, 3)]
+        ex(fam, [(f"Plus de {_f(x)} {unit}", float(ptot[KS > x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] > x)) for x in ln] +
+           [(f"Moins de {_f(x)} {unit}", float(ptot[KS < x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] < x)) for x in ln])
+        for team, mu, pm, key in ((home, mh, ph_, kh), (away, ma, pa_, ka)):
+            c1 = floor(mu) + 0.5
+            lt = [c1 + d for d in (-2, -1, 0, 1, 2)]
+            ex(f"{fam} de {team}", [(f"{team} plus de {_f(x)}", float(pm[KS > x].sum()), rs(lambda r, x=x, key=key: r[key] > x)) for x in lt] +
+               [(f"{team} moins de {_f(x)}", float(pm[KS < x].sum()), rs(lambda r, x=x, key=key: r[key] < x)) for x in lt], kind=f"{fam} d'une équipe")
+        pg = float(sum(ph_[i] * pa_[:i].sum() for i in range(80)))
+        pe = float((ph_ * pa_).sum())
+        ex(resname, [(home, pg, rs(lambda r, kh=kh, ka=ka: r[kh] > r[ka])), ("Égalité", pe, rs(lambda r, kh=kh, ka=ka: r[kh] == r[ka])),
+                     (away, max(0.0, 1 - pg - pe), rs(lambda r, kh=kh, ka=ka: r[kh] < r[ka]))])
+
     ch = ca = 0.0
     if models.get("corners"):                                # pas de corners pour tous les championnats
         _, (ch, ca) = score_grid(models["corners"], home, away)

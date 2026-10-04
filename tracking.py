@@ -27,9 +27,11 @@ def result_of(row):
         except (KeyError, ValueError, TypeError):
             return None
     hh, ha, ch, ca = num("HTHG"), num("HTAG"), num("HC"), num("AC")
+    sh, sa, th, ta = num("HS"), num("AS"), num("HST"), num("AST")
     ht_ok, c_ok = hh is not None and ha is not None, ch is not None and ca is not None
     return dict(fh=row["FTHG"], fa=row["FTAG"], hh=hh if ht_ok else None, ha=ha if ht_ok else None,
-                ch=ch if c_ok else None, ca=ca if c_ok else None)
+                ch=ch if c_ok else None, ca=ca if c_ok else None, sh=sh if sh is not None and sa is not None else None, sa=sa if sh is not None and sa is not None else None,
+                th=th if th is not None and ta is not None else None, ta=ta if th is not None and ta is not None else None)
 
 
 def make_picks(models, home, away, ov=None):

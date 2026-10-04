@@ -232,6 +232,31 @@
     exs('Minute du 1er but (10 min)', minutes(b10));
     exs('Minute du 1er but (15 min)', minutes(b15));
 
+
+    // --- tirs et tirs cadrés (championnats qui ont ces statistiques) : loi binomiale négative, équipes indépendantes
+    function nbArr(mu) {
+      var r = 25, a = new Array(80), p = Math.exp(r * Math.log(r / (r + mu)));
+      for (var k = 0; k < 80; k++) { a[k] = p; p = p * (k + r) / (k + 1) * mu / (r + mu); }
+      return a;
+    }
+    function arrSum(a, f) { var s2 = 0; for (var k = 0; k < 80; k++) if (f(k)) s2 += a[k]; return s2; }
+    [['s', 'Nombre de tirs', 'tirs', 'Tirs - Résultat'], ['st', 'Nombre de tirs cadrés', 'tirs cadrés', 'Tirs cadrés - Résultat']].forEach(function (cfg) {
+      if (!L[cfg[0]]) return;
+      var mm = lam(L[cfg[0]], home, away), ph = nbArr(mm[0]), pa2 = nbArr(mm[1]), ptot = new Array(80), k, i;
+      for (k = 0; k < 80; k++) { var s3 = 0; for (i = 0; i <= k; i++) s3 += ph[i] * pa2[k - i]; ptot[k] = s3; }
+      var c0 = Math.floor(mm[0] + mm[1]) + 0.5, ln = [-3, -2, -1, 0, 1, 2, 3].map(function (d) { return c0 + d; });
+      exs(cfg[1], ln.map(function (x) { return ['Plus de ' + fx(x) + ' ' + cfg[2], arrSum(ptot, function (k2) { return k2 > x; })]; })
+        .concat(ln.map(function (x) { return ['Moins de ' + fx(x) + ' ' + cfg[2], arrSum(ptot, function (k2) { return k2 < x; })]; })));
+      [[home, mm[0], ph], [away, mm[1], pa2]].forEach(function (t) {
+        var c1 = Math.floor(t[1]) + 0.5, lt = [-2, -1, 0, 1, 2].map(function (d) { return c1 + d; });
+        exs(cfg[1] + ' de ' + t[0], lt.map(function (x) { return [t[0] + ' plus de ' + fx(x), arrSum(t[2], function (k2) { return k2 > x; })]; })
+          .concat(lt.map(function (x) { return [t[0] + ' moins de ' + fx(x), arrSum(t[2], function (k2) { return k2 < x; })]; })), cfg[1] + " d'une équipe");
+      });
+      var pg = 0, pe = 0;
+      for (i = 0; i < 80; i++) for (var j2 = 0; j2 < 80; j2++) { if (i > j2) pg += ph[i] * pa2[j2]; else if (i === j2) pe += ph[i] * pa2[j2]; }
+      exs(cfg[3], [[home, pg], ['Égalité', pe], [away, Math.max(0, 1 - pg - pe)]]);
+    });
+
     var cc = [0, 0], ct = 0;
     if (L.c) {                                          // pas de corners pour tous les championnats
       cc = lam(L.c, home, away); ct = cc[0] + cc[1];
