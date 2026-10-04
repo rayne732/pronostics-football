@@ -164,6 +164,10 @@
   var LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.4"/>' +
     '<circle cx="16" cy="16" r="7" fill="none" stroke="currentColor" stroke-width="2.4" opacity=".6"/><circle cx="16" cy="16" r="2.6" fill="var(--amber)"/></svg>';
 
+  (function () {                                       // la fiche match ne montre que les marchés proposés par les bookmakers activés (books.js)
+    var raw = Engine.families;
+    Engine.families = function () { var M = raw.apply(Engine, arguments); M.fams = M.fams.filter(Books.has); return M; };
+  })();
   D.ext = (D.ext || []).filter(function (e) { return e.date >= parisToday(); });      // on n'affiche pas la liste d'hier tant que celle d'aujourd'hui n'est pas arrivée
   D.ext.forEach(function (e, i) { e.i = i; e.fav = Math.max.apply(null, e.p); e.favIdx = e.p.indexOf(e.fav); e.conf = confOf(e.fav); });
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
@@ -244,7 +248,8 @@
     var dark = curTheme() === 'dark', S = spOf(st.sport), key = S ? S.cfg.key : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'f1' : st.sport === 'golf' ? 'golf' : null;
     var title = S ? S.cfg.title : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'Formule 1' : st.sport === 'golf' ? 'golf' : 'football', gen = key && D[key] && D[key].generated ? D[key].generated : D.generated;
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + title + '</h1><small>Mis à jour le ' + esc(gen) + '</small></div>' +
-      '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>';
+      '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>' +
+      (st.sport === 'foot' && !S ? Books.bar(st.bkopen) : '');
   }
   function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
     var seen = {}, out = [];
@@ -1348,7 +1353,7 @@
   function mkRow(cls, d) {
     return function (x) {
       return '<details class="mk"><summary><span class="mi ' + cls + '">' + mkIcon(x.m) + '</span><span class="mt">' + esc(x.m) +
-        (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') +
+        (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') + Books.tags(x.f) +
         '</span><span class="pk ' + cls + '">' + esc(x.s) + ' · ' + pct(x.p) + '</span></summary><div class="alts">' +
         x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m, cls); }).join('') + '</div></details>';
     };
@@ -1526,7 +1531,7 @@
     return '<div class="vs"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
       '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
       '<div class="betbar"><button class="bt-b" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari sur ce match</button>' +
-      '<a class="bt-b" data-bwin="' + esc(d.home + ' – ' + d.away) + '" href="https://www.winamax.fr/paris-sportifs" target="_blank" rel="noopener">Voir la cote sur Winamax ↗</a></div>';
+      Books.links(d.home + ' – ' + d.away) + '</div>';
   }
   function detailPage(d) {
     var f = d.fi != null ? D.fixtures[d.fi] : null, lm = lmeta(d.div);
@@ -1587,7 +1592,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1632,6 +1637,9 @@
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
     else if (t.hasAttribute('data-sort')) { st.sort = st.sort === 'time' ? 'conf' : 'time'; render(); }
+    else if (t.hasAttribute('data-bk')) { Books.toggle(t.getAttribute('data-bk')); var yb = window.scrollY; render(); window.scrollTo(0, yb); }
+    else if (t.hasAttribute('data-bkopen')) { st.bkopen = !st.bkopen; var yo = window.scrollY; render(); window.scrollTo(0, yo); }
+    else if (t.hasAttribute('data-bkk')) { var bk = t.getAttribute('data-bkk').split('|'); Books.toggleKind(bk[0], bk.slice(1).join('|')); var yk = window.scrollY; render(); window.scrollTo(0, yk); }
     else if (t.hasAttribute('data-toggle-theme')) {
       var next = curTheme() === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);

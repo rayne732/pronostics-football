@@ -5,7 +5,7 @@ var Bets = (function () {
     ['nfl', 'Foot US'], ['mma', 'MMA'], ['volley', 'Volley'], ['f1', 'Formule 1'], ['golf', 'Golf'], ['autre', 'Autre']];
   var SPN = {};
   SPORTS.forEach(function (s) { SPN[s[0]] = s[1]; });
-  var ui = { period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '', pre: null, cat: '' };
+  var ui = { book: '', period: 'all', sport: 'foot', kind: 'simple', io: '', ask: '', msg: '', pre: null, cat: '' };
   var CATS = ['Pronostic sûr', 'Moins sûr', 'Combiné', 'Autre'];
 
   function load() {
@@ -37,7 +37,7 @@ var Bets = (function () {
     if (changed) save();
   }
   function needsRes() { return mem.bets.some(function (b) { return b.st === 'p' && b.legs && b.legs.length; }); }
-  function prefill(pre) { ui.pre = pre; ui.kind = pre.kind || 'simple'; ui.sport = pre.sport || (pre.kind === 'combine' ? 'foot' : ui.sport); ui.msg = ''; }
+  function prefill(pre) { ui.book = Books.single(); ui.pre = pre; ui.kind = pre.kind || 'simple'; ui.sport = pre.sport || (pre.kind === 'combine' ? 'foot' : ui.sport); ui.msg = ''; }
   function allCats() {
     var seen = {}, out = [];
     CATS.concat(mem.bets.map(function (b) { return b.cat || ''; })).forEach(function (c) { if (c && !seen[c]) { seen[c] = 1; out.push(c); } });
@@ -99,7 +99,7 @@ var Bets = (function () {
     var cls = b.st === 'w' ? 'ok' : b.st === 'l' ? 'ko' : '';
     var ask = ui.ask === b.id;
     return '<div class="bt-row ' + cls + '"><div class="bt-top"><div class="bt-t"><b>' + esc(b.label || 'Pari') + '</b><small>' + dmy(b.d) + ' · ' + esc(SPN[b.sport] || 'Autre') + ' · ' +
-      (b.kind === 'combine' ? 'combiné' : 'simple') + (b.cat ? ' · ' + esc(b.cat) : '') + ' · ' + eur(b.stake) + ' à ' + String(b.odds).replace('.', ',') + '</small>' +
+      (b.kind === 'combine' ? 'combiné' : 'simple') + (b.cat ? ' · ' + esc(b.cat) : '') + (b.book ? ' · ' + esc(Books.name(b.book) || 'Autre bookmaker') : '') + ' · ' + eur(b.stake) + ' à ' + String(b.odds).replace('.', ',') + '</small>' +
       (b.p ? '<small class="bt-p">Notre pronostic : ' + pc(b.p) + (b.auto ? ' · résultat réglé automatiquement' : b.legs && b.legs.length && b.st === 'p' ? ' · réglage automatique dès la fin du match' : '') + '</small>' : '') + '</div><div class="bt-r ' + cls + '">' + res + '</div></div>' +
       statusBtns(b) +
       '<div class="bt-act">' + (b.st !== 'p' ? '<button data-bst="' + b.id + '|p" class="bt-b">Modifier le résultat</button>' : '') +
@@ -143,12 +143,13 @@ var Bets = (function () {
     // formulaire
     h += '<div class="sec"><span class="dot g"></span>Ajouter un pari</div><div class="fm bt-form">' +
       (ui.pre ? '<div class="srcnote">Pré-rempli depuis le site' + (ui.pre.p ? ' : notre probabilité est de <b>' + pc(ui.pre.p) + '</b> (cote juste ' + (1 / ui.pre.p).toFixed(2).replace('.', ',') + ')' : '') +
-        '. Ajoute la <b>mise</b> et la <b>cote réelle vue sur Winamax</b>.</div>' : '') +
+        '. Ajoute la <b>mise</b> et la <b>cote réelle vue chez ton bookmaker</b>.</div>' : '') +
       '<label>Description<input id="bt-label" type="text" maxlength="120" placeholder="ex. PSG gagne, plus de 2,5 buts" value="' + (ui.pre ? esc(ui.pre.label) : '') + '"></label>' +
       '<div class="bt-2"><label>Mise (€)<input id="bt-stake" inputmode="decimal" placeholder="10"></label><label>Cote<input id="bt-odds" inputmode="decimal" placeholder="1,85"></label></div>' +
       '<div class="bt-imp" id="bt-imp"></div>' +
       '<div class="bt-2"><label>Sport<select id="bt-sport">' + SPORTS.map(function (s) { return '<option value="' + s[0] + '"' + (ui.sport === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></label>' +
       '<label>Type<select id="bt-kind"><option value="simple"' + (ui.kind === 'simple' ? ' selected' : '') + '>Simple</option><option value="combine"' + (ui.kind === 'combine' ? ' selected' : '') + '>Combiné</option></select></label></div>' +
+      '<label>Bookmaker<select id="bt-book"><option value="">Non précisé</option>' + Books.list.map(function (b) { return '<option value="' + b[0] + '"' + (ui.book === b[0] ? ' selected' : '') + '>' + b[1] + '</option>'; }).join('') + '<option value="autre"' + (ui.book === 'autre' ? ' selected' : '') + '>Autre</option></select></label>' +
       '<label>Catégorie<input id="bt-cat" type="text" maxlength="30" list="bt-cats" placeholder="ex. Pronostic sûr, Combiné, Test…" value="' + esc(ui.pre && ui.pre.cat ? ui.pre.cat : ui.cat) + '"></label>' +
       '<datalist id="bt-cats">' + allCats().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
       '<label>Date<input id="bt-date" type="date" value="' + today + '"></label>' +
@@ -158,10 +159,11 @@ var Bets = (function () {
     // courbe et répartition
     h += chart(list);
     var bySport = group(list, function (b) { return SPN[b.sport] || 'Autre'; }), byKind = group(list, function (b) { return b.kind === 'combine' ? 'Combinés' : 'Simples'; }),
-      byCat = group(list, function (b) { return b.cat ? 'Catégorie : ' + b.cat : ''; }).filter(function (s) { return s.k; });
-    if (all.n && (bySport.length > 1 || byKind.length > 1 || byCat.length)) {
+      byCat = group(list, function (b) { return b.cat ? 'Catégorie : ' + b.cat : ''; }).filter(function (s) { return s.k; }),
+      byBook = group(list, function (b) { return b.book ? 'Bookmaker : ' + (Books.name(b.book) || 'Autre') : ''; }).filter(function (s) { return s.k; });
+    if (all.n && (bySport.length > 1 || byKind.length > 1 || byCat.length || byBook.length)) {
       h += '<div class="sec"><span class="dot a"></span>Par catégorie, sport et type <small>bénéfice</small></div><div class="fm">' +
-        byCat.concat(bySport, byKind).map(function (s) {
+        byBook.concat(byCat, bySport, byKind).map(function (s) {
           return '<div class="pr ' + (s.profit >= 0 ? 'ok' : 'ko') + '"><span class="pt">' + esc(s.k) + '<small class="sm">' + s.w + '/' + s.n + ' gagnés · ' + pc(s.hit) + '</small></span><span class="pp">' + eur(s.profit, true) + '</span></div>';
         }).join('') + '</div>';
     }
@@ -191,8 +193,8 @@ var Bets = (function () {
   function readForm() {
     var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
     ui.sport = g('bt-sport') || ui.sport; ui.kind = g('bt-kind') || ui.kind;
-    ui.cat = g('bt-cat').trim();
-    return { cat: ui.cat, label: g('bt-label').trim(), stake: num(g('bt-stake')), odds: num(g('bt-odds')), sport: ui.sport, kind: ui.kind, d: g('bt-date') || iso(new Date()) };
+    ui.cat = g('bt-cat').trim(); ui.book = g('bt-book');
+    return { cat: ui.cat, label: g('bt-label').trim(), stake: num(g('bt-stake')), odds: num(g('bt-odds')), sport: ui.sport, kind: ui.kind, book: ui.book, d: g('bt-date') || iso(new Date()) };
   }
   function attach(root, rerender, go) {
     var again = function () { var y = window.scrollY; rerender(); window.scrollTo(0, y); };
@@ -216,7 +218,7 @@ var Bets = (function () {
         var f = readForm();
         if (!(f.stake > 0) || !(f.odds > 1)) { ui.msg = 'Indique une mise supérieure à 0 et une cote supérieure à 1 (ex. 1,85).'; again(); return; }
         ui.msg = '';
-        var nb = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: f.d, label: f.label, sport: f.sport, kind: f.kind, cat: f.cat, stake: Math.round(f.stake * 100) / 100, odds: Math.round(f.odds * 100) / 100, st: 'p' };
+        var nb = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), t: Date.now(), d: f.d, label: f.label, sport: f.sport, kind: f.kind, cat: f.cat, book: f.book || '', stake: Math.round(f.stake * 100) / 100, odds: Math.round(f.odds * 100) / 100, st: 'p' };
         if (ui.pre) { if (ui.pre.p) nb.p = ui.pre.p; if (ui.pre.legs && ui.pre.legs.length) { nb.legs = ui.pre.legs; if (ui.pre.nLegs) nb.nLegs = ui.pre.nLegs; } }
         ui.pre = null;
         mem.bets.push(nb);
