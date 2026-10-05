@@ -240,6 +240,9 @@ def build(now, events, hist):
                          teams=sorted({t for r in rows if r["Date"] >= recent for t in (r["HomeTeam"], r["AwayTeam"])}))
         for it in its:
             row = dict(Div=div, Date=datetime.strptime(it["date"], "%Y-%m-%d"), Time=it["time"], HomeTeam=it["home"], AwayTeam=it["away"])
+            if div[2:] in POOLS:                                      # championnats regroupés (sélections…) : on garde la vraie compétition de chaque match
+                fr_, _, cfr_ = describe(it["slug"], it["lname"])
+                row.update(Comp=fr_, CompCtry=cfr_)
             if it.get("o"):
                 row.update(it["o"])                               # cotes ESPN (B365H…) : alimentent le mélange modèle + marché
             fixtures.append(row)

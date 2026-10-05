@@ -183,7 +183,7 @@ def build_data(models, fixtures, market_probs, leagues, history, generated_at, r
         ov = blend_lams(models[r["Div"]], r) if r["Div"] in models else None
         fx.append(dict(id=f'{r["Div"]}|{r["Date"]:%Y-%m-%d}|{r["HomeTeam"]}|{r["AwayTeam"]}', div=r["Div"],
                        date=f'{r["Date"]:%Y-%m-%d}', time=r.get("Time", ""), home=r["HomeTeam"], away=r["AwayTeam"],
-                       mk=[round(float(x), 4) for x in mk] if mk is not None else None, ov=[round(ov[0], 4), round(ov[1], 4)] if ov else None))
+                       mk=[round(float(x), 4) for x in mk] if mk is not None else None, ov=[round(ov[0], 4), round(ov[1], 4)] if ov else None, **({"cp": r["Comp"], "cc": r.get("CompCtry", "")} if r.get("Comp") else {})))
     hist = []
     for div, rows in (history or {}).items():
         for r in rows:

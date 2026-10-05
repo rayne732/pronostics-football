@@ -173,8 +173,9 @@
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
     var M = Engine.families(f.div, f.home, f.away, f.ov);
     f.i = i; f.p = M.p1x2; f.fav = Math.max.apply(null, f.p); f.favIdx = f.p.indexOf(f.fav); f.conf = confOf(f.fav);
-    f.key = norm(f.home + ' ' + f.away + ' ' + D.leagues[f.div].name);
+    f.key = norm(f.home + ' ' + f.away + ' ' + cpName(f));
   });
+  function cpName(f) { return f.cp || D.leagues[f.div].name; }                  // vraie compétition (Ligue des Nations, qualifications…) pour les championnats regroupés
   function favName(f) { return [f.home, 'Match nul', f.away][f.favIdx]; }
   function kickoff(f) {
     var p = f.date.split('-'), t = (f.time || '00:00').split(':');
@@ -191,7 +192,7 @@
   /* ------------------------------------------------------------ accueil */
   function confIcon(conf) { return conf === 'high' ? svg(IC.flame) : conf === 'mid' ? svg(IC.bolt) : svg(IC.chev); }
   function fcard(f) {
-    return '<div class="fcard ' + f.conf + '"><div class="lg">' + esc(D.leagues[f.div].name) + ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') +
+    return '<div class="fcard ' + f.conf + '"><div class="lg">' + esc(cpName(f)) + ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') +
       '<span class="cd">' + svg(IC.clock) + countdown(f) + '</span></div>' +
       '<div class="duel"><div class="s">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b></div><span class="vsp">VS</span>' +
       '<div class="s">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b></div></div>' + miniBar(f.p) +
@@ -1164,8 +1165,12 @@
   function competitions() {
     var L = [], I = [], O = [], F = [];
     D.order.forEach(function (div) {
-      var n = D.fixtures.filter(function (f) { return f.div === div; }).length;
-      if (n) { var lm = lmeta(div); L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: n }); }
+      var fl = D.fixtures.filter(function (f) { return f.div === div; });
+      if (!fl.length) return;
+      var lm = lmeta(div), sub = {};
+      fl.forEach(function (f) { if (f.cp) { (sub[f.cp] = sub[f.cp] || { n: 0, cc: f.cc }).n++; } });
+      if (Object.keys(sub).length) Object.keys(sub).forEach(function (cp) { I.push({ key: 'L|' + div + '|' + cp, name: cp, sub: (sub[cp].cc || lm[0]) + ' · notre modèle', flag: lm[2], n: sub[cp].n, s: '' }); });
+      else L.push({ key: 'L|' + div, name: D.leagues[div].name, sub: lm[0], flag: lm[2], n: fl.length });
     });
     calGroups().forEach(function (g) { (INTL.test(g.s + '.') ? I : g.w ? F : O).push(g); });
     var cmp = function (a, b) { return a.sub < b.sub ? -1 : a.sub > b.sub ? 1 : a.name < b.name ? -1 : 1; };
@@ -1211,8 +1216,8 @@
   function compHTML(key) {
     var p = key.split('|'), h = '<button class="chip pill" data-day="comps" style="margin-bottom:10px">‹ Toutes les compétitions</button>';
     if (p[0] === 'L') {
-      var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div; }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = lmeta(div);
-      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + esc(lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
+      var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div && (!p[2] || f.cp === p[2]); }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = lmeta(div);
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(p[2] || D.leagues[div].name) + '<small>' + esc((list[0] && list[0].cc) || lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
       if (!list.length) return h + '<div class="empty">Aucun match à venir pour cette compétition dans les prochains jours.</div>';
       var cur = '';
       list.forEach(function (f) {
@@ -1285,7 +1290,7 @@
   var ALMSG = '';
   function favItems() {
     return D.fixtures.filter(function (f) { return favs[f.id]; }).map(function (f) {
-      return { id: f.id, ko: +kickoff(f), title: 'Dans 45 min : ' + f.home + ' – ' + f.away, msg: D.leagues[f.div].name + ' · ' + favName(f) + ' ' + pct(f.fav) };
+      return { id: f.id, ko: +kickoff(f), title: 'Dans 45 min : ' + f.home + ' – ' + f.away, msg: cpName(f) + ' · ' + favName(f) + ' ' + pct(f.fav) };
     });
   }
   function alertsPanel() {
@@ -1305,7 +1310,7 @@
     }
     list.sort(function (a, b) { return kickoff(a) - kickoff(b); });
     return h + '<div class="sub">' + list.length + ' match' + (list.length > 1 ? 's' : '') + ' suivi' + (list.length > 1 ? 's' : '') + ', dans l’ordre des coups d’envoi.</div>' +
-      list.map(function (f) { return '<div class="cdl">' + esc(D.leagues[f.div].name) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('') + alertsPanel();
+      list.map(function (f) { return '<div class="cdl">' + esc(cpName(f)) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('') + alertsPanel();
   }
   function ticketProb() { return ticket.reduce(function (p, t) { return p * t.p; }, 1); }
   function ticketHTML() {
@@ -1536,7 +1541,7 @@
   function detailPage(d) {
     var f = d.fi != null ? D.fixtures[d.fi] : null, lm = lmeta(d.div);
     return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
-      '<div class="who"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[d.div].name) + '</span><small>' +
+      '<div class="who"><span class="lgchip">' + lm[2] + ' ' + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small>' +
       (f ? dm(f.date) + (f.time ? ' · ' + f.time : '') + ' · ' + countdown(f) : '') + '</small></div>' +
       '<button class="ibtn" data-share aria-label="Partager ce pronostic">' + svg(IC.share) + '</button></div>' +
       vsBlock(d) + detailBody(d, f);
