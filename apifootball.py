@@ -46,6 +46,10 @@ def wanted(f):
         return True
     if "u21" in name and "qualif" in name:
         return True
+    if "friendl" in name:                                  # amicaux de jeunes (U17 à U23) : tous gardés
+        t = f.get("teams") or {}
+        if any(re.search(r"(^|\s)U-?(1[5-9]|2[0-3])($|\s)", (t.get(k) or {}).get("name", "")) for k in ("home", "away")):
+            return True
     return any(k in name for k in WANTED_NAMES)
 
 
