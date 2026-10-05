@@ -1243,6 +1243,25 @@
     h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(FR_COMP[p[1]] || p[1]) + '<small>' + esc(FR_CTRY[p[2]] || p[2]) + '</small></div><span class="cnt">' + xs.length + '</span></div>';
     return h + (xs.length ? xs.map(extRow).join('') : '<div class="empty">Aucun match aujourd’hui pour cette compétition.</div>');
   }
+  var YOUTH = /(^|\s)U-?(1[5-9]|2[0-3])($|\s)/;
+  function youthHTML() {                      // matchs de jeunes (U15 à U23) : calendrier ESPN + amicaux API-Football, sous la liste des matchs
+    var rows = [], seen = [];
+    (D.cal || []).forEach(function (c) { if (c.date >= parisToday() && (YOUTH.test(c.home) || YOUTH.test(c.away))) { rows.push({ d: c.date, t: c.time, h: calRow(c) }); seen.push(c); } });
+    D.ext.forEach(function (e) {
+      if (!(YOUTH.test(e.home) || YOUTH.test(e.away))) return;
+      if (seen.some(function (c) { return c.date === e.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); })) return;
+      rows.push({ d: e.date, t: e.time, h: extRow(e) });
+    });
+    if (st.day !== 'all' && /^\d{4}-/.test(st.day)) rows = rows.filter(function (r) { return r.d === st.day; });      // pastille d'un jour : seulement ce jour-là
+    if (!rows.length) return '';
+    rows.sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.t < b.t ? -1 : a.t > b.t ? 1 : 0; });
+    var h = '<div class="sec"><span class="dot a"></span>Matchs de jeunes <small>' + rows.length + ' · U15 à U23, hors de notre modèle</small></div>', cur = '';
+    rows.forEach(function (r) {
+      if (r.d !== cur) { cur = r.d; h += '<div class="cdl">' + dayLabel(r.d) + '</div>'; }
+      h += r.h;
+    });
+    return h;
+  }
   function homeHTML() {
     if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (st.tab === 'home' && st.sport === 'foot' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
     var fx = D.fixtures, days = [], past = pastDates();
@@ -1284,7 +1303,7 @@
       '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button></div>';
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
       return '<button class="chip pill' + (st.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
-    return h + '<div id="list">' + listHTML() + '</div>';
+    return h + '<div id="list">' + listHTML() + '</div>' + (st.filter === 'all' && !st.q ? youthHTML() : '');
   }
 
   var ALMSG = '';
