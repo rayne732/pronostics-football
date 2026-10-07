@@ -81,8 +81,36 @@ def update(events, now_ts=0):
         fetch_teams(m, now_ts)
     os.makedirs("data", exist_ok=True)
     with open(FILE, "w", encoding="utf-8") as fh:
-        json.dump({"m": m}, fh, ensure_ascii=False, separators=(",", ":"))
+        json.dump({"m": m, "lg": _read().get("lg", {})}, fh, ensure_ascii=False, separators=(",", ":"))
     return m
+
+
+def league_logos(slugs):
+    """{compétition ESPN: chemin du logo} ; une requête par compétition nouvelle (au plus 80 par exécution), mémorisée dans data/logos.json."""
+    import sys
+    from concurrent.futures import ThreadPoolExecutor
+    cache = _read()
+    lg = cache.get("lg", {})
+    todo = sorted(s for s in slugs if s not in lg)[:80]
+
+    def one(slug):
+        try:
+            d = _get(f"https://site.api.espn.com/apis/site/v2/sports/soccer/{slug}/scoreboard?limit=1")
+            href = (d["leagues"][0].get("logos") or [{}])[0].get("href") or ""
+            return slug, (href.split("/i/", 1)[1] if "/i/leaguelogos/" in href else "")
+        except Exception as exc:
+            print(f"[avertissement] logo de {slug} indisponible : {exc}", file=sys.stderr)
+            return slug, None
+    with ThreadPoolExecutor(8) as ex:
+        for slug, path in ex.map(one, todo):
+            if path is not None:
+                lg[slug] = path
+    if todo:
+        cache["lg"] = lg
+        os.makedirs("data", exist_ok=True)
+        with open(FILE, "w", encoding="utf-8") as fh:
+            json.dump(cache, fh, ensure_ascii=False, separators=(",", ":"))
+    return {s: lg[s] for s in slugs if lg.get(s)}
 
 
 def names_in(obj, out=None):

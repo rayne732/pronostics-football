@@ -16,7 +16,14 @@
   function tkKey(d, m, sel) { return d.div + '|' + d.home + '|' + d.away + '|' + m + '|' + sel; }
   function inTicket(k) { return ticket.some(function (t) { return t.k === k; }); }
   function saveFavs() { try { localStorage.setItem('pf-fav', JSON.stringify(favs)); } catch (e) { /* stockage indisponible */ } }
-  try { var savedTheme = localStorage.getItem('pf-theme'); if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme); } catch (e) { /* ignoré */ }
+  var THEME = '';                                         // '', 'dark', 'light' ou 'auto' (clair le jour, sombre la nuit)
+  try { THEME = localStorage.getItem('pf-theme') || ''; } catch (e) { /* ignoré */ }
+  function applyTheme() {
+    var t = THEME === 'auto' ? (new Date().getHours() >= 8 && new Date().getHours() < 20 ? 'light' : 'dark') : THEME;
+    if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+  }
+  applyTheme();
+  setInterval(function () { if (THEME === 'auto') applyTheme(); }, 5 * 60 * 1000);
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function pct(p) { return Math.round(p * 100) + '%'; }
@@ -47,6 +54,7 @@
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     bets: '<rect x="3.5" y="6" width="17" height="12" rx="3"/><circle cx="12" cy="12" r="2.6"/><path d="M7 9.5v.01M17 14.5v.01"/>',
     ticket: '<path d="M4 8a2 2 0 0 0 0 4v0a2 2 0 0 1 0 4v2h16v-2a2 2 0 0 1 0-4v0a2 2 0 0 0 0-4V6H4z"/><path d="M13 6v12" stroke-dasharray="2 2.4"/>',
+    auto: '<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>',
     sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6"/>',
     moon: '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>',
     home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
@@ -132,7 +140,10 @@
   }
   var cid = 0;
   var PFLAG = {};                                         // drapeaux des joueurs de tennis (code pays ESPN)
-  function logoUrl(p) { return p.indexOf('http') === 0 ? p : 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/' + p + '&w=96&h=96'; }
+  function lgPath(k) { if (!k || !D.logos) return null; if (String(k).indexOf('x:') === 0) k = k.slice(2); return D.logos['@' + k] || null; }
+  function lgIcon(k, fallback) { var p = lgPath(k); return p ? '<span class="lbf">' + fallback + '</span><img class="lbi" src="' + logoUrl(p) + '" alt="" loading="lazy" onerror="this.remove()">' : fallback; }
+  function compKey(key) { var a = String(key).split('|'); return a[0] === 'L' ? a[1] : a[0] === 'S' ? a[1] : null; }
+  function logoUrl(p) { if (p.indexOf('leaguelogos/') === 0) return 'https://a.espncdn.com/combiner/i?img=/i/' + p + '&w=96&h=96'; return p.indexOf('http') === 0 ? p : 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/' + p + '&w=96&h=96'; }
   function crest(name, big) {
     var lg = (D.logos && D.logos[name]) || PFLAG[name];
     if (lg) return '<span class="crl' + (big ? ' big' : '') + '"><img src="' + logoUrl(lg) + '" alt="" loading="lazy" onerror="this.parentNode.className+=\' nolg\'">' + crestSvg(name, big) + '</span>';
@@ -232,7 +243,7 @@
       if (!sub.length) return;
       if (st.sort === 'conf') sub = sub.slice().sort(function (a, b) { return b.fav - a.fav; });
       var lm = lmeta(div);
-      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) +
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lgIcon(div, lm[2]) + '</span><div class="ln">' + esc(D.leagues[div].name) +
         '<small>' + lm[0] + '</small></div><span class="cnt">' + sub.length + '</span></div>';
       h += sub.map(function (f) { return row(f, st.day === 'all'); }).join('');
     });
@@ -256,7 +267,7 @@
     var dark = curTheme() === 'dark', S = spOf(st.sport), key = S ? S.cfg.key : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'f1' : st.sport === 'golf' ? 'golf' : null;
     var title = S ? S.cfg.title : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'Formule 1' : st.sport === 'golf' ? 'golf' : 'football', gen = key && D[key] && D[key].generated ? D[key].generated : D.generated;
     return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + title + '</h1><small>Mis à jour le ' + esc(gen) + '</small></div>' +
-      '<button class="ibtn" data-toggle-theme aria-label="Changer de thème">' + svg(dark ? IC.sun : IC.moon) + '</button></div>' +
+      '<button class="ibtn" data-toggle-theme aria-label="Thème : ' + (THEME === 'auto' ? 'automatique (clair de 8 h à 20 h)' : dark ? 'sombre' : 'clair') + '. Toucher pour changer" title="' + (THEME === 'auto' ? 'Thème automatique' : dark ? 'Thème sombre' : 'Thème clair') + '">' + (THEME === 'auto' ? svg(IC.auto) : svg(dark ? IC.sun : IC.moon)) + (THEME === 'auto' ? '<i class="ibadge">A</i>' : '') + '</button></div>' +
       (st.sport === 'foot' && !S ? Books.bar(st.bkopen) : '');
   }
   function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
@@ -301,7 +312,7 @@
       var sub = ms.filter(function (m) { return m.div === div; });
       if (!sub.length) return;
       var lm = lmeta(div);
-      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + lm[0] +
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lgIcon(div, lm[2]) + '</span><div class="ln">' + esc(D.leagues[div].name) + '<small>' + lm[0] +
         '</small></div><span class="cnt">' + sub.length + '</span></div>' + sub.map(resCard).join('');
     });
     return h;
@@ -1294,7 +1305,7 @@
     return { L: L, I: I, O: O.sort(cmp), F: F.sort(cmp), X: X, total: L.length + I.length + O.length + F.length + X.length };
   }
   function compRow(c) {
-    return '<button class="comp" data-day="comp:' + esc(c.key) + '"><span class="cf">' + (c.flag || svg(IC.trophy)) + '</span><span class="cn">' + esc(c.name) + '<small>' + esc(c.sub) + '</small></span><span class="cnt">' + c.n + '</span>' + svg(IC.chev) + '</button>';
+    return '<button class="comp" data-day="comp:' + esc(c.key) + '"><span class="cf">' + lgIcon(compKey(c.key), c.flag || svg(IC.trophy)) + '</span><span class="cn">' + esc(c.name) + '<small>' + esc(c.sub) + '</small></span><span class="cnt">' + c.n + '</span>' + svg(IC.chev) + '</button>';
   }
   function compMatch(q, c) { return !q || normT(c.name + ' ' + c.sub).indexOf(normT(q)) >= 0; }
   function compListHTML() {
@@ -1332,7 +1343,7 @@
     var p = key.split('|'), h = '<button class="chip pill" data-day="comps" style="margin-bottom:10px">‹ Toutes les compétitions</button>';
     if (p[0] === 'L') {
       var div = p[1], list = D.fixtures.filter(function (f) { return f.div === div && (!p[2] || f.cp === p[2]); }).sort(function (a, b) { return kickoff(a) - kickoff(b); }), lm = lmeta(div);
-      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lm[2] + '</span><div class="ln">' + esc(p[2] || D.leagues[div].name) + '<small>' + esc((list[0] && list[0].cc) || lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
+      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lgIcon(div, lm[2]) + '</span><div class="ln">' + esc(p[2] || D.leagues[div].name) + '<small>' + esc((list[0] && list[0].cc) || lm[0]) + ' · notre modèle</small></div><span class="cnt">' + list.length + '</span></div>';
       if (!list.length) return h + '<div class="empty">Aucun match à venir pour cette compétition dans les prochains jours.</div>';
       var cur = '';
       list.forEach(function (f) {
@@ -1345,7 +1356,7 @@
       var g = calGroups().filter(function (x) { return x.s === p[1]; })[0] || ((D.cal || []).some(function (c) { return c.s === p[1]; }) ? { name: p[1], sub: '', items: (D.cal || []).filter(function (c) { return c.s === p[1]; }) } : null);
       if (!g) return h + '<div class="empty">Cette compétition n’a plus de match dans les prochains jours.</div>';
       h += '<div class="srcnote">Hors de notre modèle : l’<b>affiche</b>, le <b>score</b> et, quand elles existent, les <b>probabilités déduites des cotes</b> (sans marge). Pas de pronostic « sûr » ici. Les résultats sont enregistrés pour mesurer la fiabilité des cotes (onglet Fiabilité).</div>';
-      h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + svg(IC.trophy) + '</span><div class="ln">' + esc(g.name) + '<small>' + esc(g.sub) + '</small></div><span class="cnt">' + g.items.length + '</span></div>';
+      h += '<div class="lgh"><span class="lb" style="--lc:#5a93ff">' + lgIcon(g.s, svg(IC.trophy)) + '</span><div class="ln">' + esc(g.name) + '<small>' + esc(g.sub) + '</small></div><span class="cnt">' + g.items.length + '</span></div>';
       var items = g.items.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : 1; }), cd = '';
       items.forEach(function (c) {
         if (c.date !== cd) { cd = c.date; h += '<div class="cdl">' + dayLabel(c.date) + '</div>'; }
@@ -1676,7 +1687,7 @@
   function detailPage(d) {
     var f = d.fi != null ? D.fixtures[d.fi] : null, lm = lmeta(d.div);
     return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
-      '<div class="who"><span class="lgchip">' + lm[2] + ' ' + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small>' +
+      '<div class="who"><span class="lgchip">' + (lgPath(d.div) ? '<img class="lci" src="' + logoUrl(lgPath(d.div)) + '" alt="" onerror="this.remove()">' : lm[2] + ' ') + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small>' +
       (f ? dm(f.date) + (f.time ? ' · ' + f.time : '') + ' · ' + countdown(f) : '') + '</small></div>' +
       '<button class="ibtn" data-share aria-label="Partager ce pronostic">' + svg(IC.share) + '</button></div>' +
       vsBlock(d) + detailBody(d, f);
@@ -1794,9 +1805,9 @@
     else if (t.hasAttribute('data-bkopen')) { st.bkopen = !st.bkopen; var yo = window.scrollY; render(); window.scrollTo(0, yo); }
     else if (t.hasAttribute('data-bkk')) { var bk = t.getAttribute('data-bkk').split('|'); Books.toggleKind(bk[0], bk.slice(1).join('|')); var yk = window.scrollY; render(); window.scrollTo(0, yk); }
     else if (t.hasAttribute('data-toggle-theme')) {
-      var next = curTheme() === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('pf-theme', next); } catch (err) { /* ignoré */ }
+      THEME = THEME === 'dark' ? 'light' : THEME === 'light' ? 'auto' : curTheme() === 'dark' && THEME !== 'auto' ? 'light' : 'dark';
+      applyTheme();
+      try { localStorage.setItem('pf-theme', THEME); } catch (err) { /* ignoré */ }
       render();
     }
     else if (t.hasAttribute('data-add')) {

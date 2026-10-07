@@ -35,16 +35,22 @@ def _cards(sm, title):
     return f'<h4>{escape(title)}</h4><div class="rel-cards">{card("Sûrs (≥ 70 %)", sm["safe"])}{card("Moins sûrs", sm["less"])}</div>'
 
 
+def _bars(items):
+    """Une ligne par tranche ou marché : barre = part réellement gagnée, repère = probabilité annoncée (si le repère est dépassé, c'est bon signe)."""
+    out = ""
+    for label, n, said, real, cls in items:
+        out += (f'<div class="cal-r"><span class="cl">{label}<small>{_n(n)} pronostics</small></span>'
+                f'<div class="cal-b"><i class="real {cls}" style="width:{real * 100:.1f}%"></i><b class="said" style="left:{said * 100:.1f}%"></b></div>'
+                f'<span class="cal-v {cls}">{real:.0%}<em>annoncé {said:.0%}</em></span></div>')
+    return out
+
+
 def _tables(sm):
-    rows = "".join(
-        f'<tr><td>{b["lo"]:.0%}–{b["hi"]:.0%}</td><td>{_n(b["n"])}</td><td>{b["p"]:.0%}</td><td class="{_gap_cls(b)}">{b["hit"]:.0%}</td></tr>'
-        for b in sm["buckets"] if b["n"] >= 20)
-    kinds = "".join(
-        f'<tr><td>{escape(k["kind"])}</td><td>{_n(k["n"])}</td><td>{k["p"]:.0%}</td><td class="{_gap_cls(k)}">{k["hit"]:.0%}</td></tr>'
-        for k in sm["kinds"] if k["n"] >= 20)
-    head = "<tr><th>{}</th><th>Pronostics</th><th>Annoncé</th><th>Réel</th></tr>"
-    return (f'<details class="rel-d"><summary>Détail par tranche de probabilité</summary><div class="tblw"><table class="tbl">{head.format("Probabilité annoncée")}{rows}</table></div></details>'
-            f'<details class="rel-d"><summary>Détail par type de marché</summary><div class="tblw"><table class="tbl">{head.format("Marché")}{kinds}</table></div></details>')
+    rows = _bars([(f'{b["lo"]:.0%}–{b["hi"]:.0%}', b["n"], b["p"], b["hit"], _gap_cls(b)) for b in sm["buckets"] if b["n"] >= 20])
+    kinds = _bars([(escape(k["kind"]), k["n"], k["p"], k["hit"], _gap_cls(k)) for k in sm["kinds"] if k["n"] >= 20])
+    legend = '<div class="cal-leg"><span><i class="lg-real"></i>part gagnée</span><span><i class="lg-said"></i>probabilité annoncée</span></div>'
+    return (f'<details class="rel-d"><summary>Détail par tranche de probabilité</summary>{legend}{rows}</details>'
+            f'<details class="rel-d"><summary>Détail par type de marché</summary>{legend}{kinds}</details>')
 
 
 MONTHS = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"]

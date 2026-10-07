@@ -400,6 +400,14 @@ def main():
             for sp in page_args[10:14] + page_args[15:18] + page_args[19:20]:
                 names |= _lg.names_in(sp)
             logo_map = _lg.build(_lg.update(hub_events, now.timestamp()), leagues, names)
+            from fixtures_api import ESPN_SLUGS as _ES
+            slug_div = dict(_lg.TOP_SLUGS)
+            slug_div.update({v: k for k, v in _ES.items()})
+            lgl = _lg.league_logos({it["slug"] for it in hub_events} | set(slug_div))
+            for s_, p_ in lgl.items():
+                logo_map["@" + s_] = p_
+                if s_ in slug_div:
+                    logo_map["@" + slug_div[s_]] = p_
             print(f"Logos : {len(logo_map)} équipes sur {len(names)}.", file=sys.stderr)
         except Exception as exc:
             print(f"[avertissement] logos indisponibles : {exc}", file=sys.stderr)
