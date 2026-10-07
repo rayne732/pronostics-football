@@ -36,6 +36,11 @@ var Bets = (function () {
     });
     if (changed) save();
   }
+  function monthInfo() {                                       // pour l'assistant : budget, mises et résultat du mois en cours
+    var m = iso(new Date()).slice(0, 7), list = mem.bets.filter(function (b) { return b.d.slice(0, 7) === m; });
+    var spent = list.reduce(function (t, b) { return t + (b.st === 'v' ? 0 : b.stake); }, 0), s2 = stats(list);
+    return { budget: mem.budget, spent: spent, profit: s2.profit, n: s2.n, pending: s2.p };
+  }
   function needsRes() { return mem.bets.some(function (b) { return b.st === 'p' && b.legs && b.legs.length; }); }
   function prefill(pre) { ui.book = Books.single(); ui.pre = pre; ui.kind = pre.kind || 'simple'; ui.sport = pre.sport || (pre.kind === 'combine' ? 'foot' : ui.sport); ui.msg = ''; }
   function allCats() {
@@ -145,7 +150,7 @@ var Bets = (function () {
       (ui.pre ? '<div class="srcnote">Pré-rempli depuis le site' + (ui.pre.p ? ' : notre probabilité est de <b>' + pc(ui.pre.p) + '</b> (cote juste ' + (1 / ui.pre.p).toFixed(2).replace('.', ',') + ')' : '') +
         '. Ajoute la <b>mise</b> et la <b>cote réelle vue chez ton bookmaker</b>.</div>' : '') +
       '<label>Description<input id="bt-label" type="text" maxlength="120" placeholder="ex. PSG gagne, plus de 2,5 buts" value="' + (ui.pre ? esc(ui.pre.label) : '') + '"></label>' +
-      '<div class="bt-2"><label>Mise (€)<input id="bt-stake" inputmode="decimal" placeholder="10"></label><label>Cote<input id="bt-odds" inputmode="decimal" placeholder="1,85"></label></div>' +
+      '<div class="bt-2"><label>Mise (€)<input id="bt-stake" inputmode="decimal" placeholder="10" value="' + (ui.pre && ui.pre.stake ? String(ui.pre.stake).replace('.', ',') : '') + '"></label><label>Cote<input id="bt-odds" inputmode="decimal" placeholder="1,85"></label></div>' +
       '<div class="bt-imp" id="bt-imp"></div>' +
       '<div class="bt-2"><label>Sport<select id="bt-sport">' + SPORTS.map(function (s) { return '<option value="' + s[0] + '"' + (ui.sport === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></label>' +
       '<label>Type<select id="bt-kind"><option value="simple"' + (ui.kind === 'simple' ? ' selected' : '') + '>Simple</option><option value="combine"' + (ui.kind === 'combine' ? ' selected' : '') + '>Combiné</option></select></label></div>' +
@@ -208,7 +213,7 @@ var Bets = (function () {
       if (t.hasAttribute('data-bet')) {
         var sp = t.getAttribute('data-bsp') || 'foot';
         var ref = t.getAttribute('data-bref'), mk = t.getAttribute('data-bm'), sl = t.getAttribute('data-bs');
-        ui.pre = { label: t.getAttribute('data-bet'), p: +t.getAttribute('data-bp') || 0, cat: t.getAttribute('data-bcat') || '', legs: ref && mk && sl ? [{ id: ref, m: mk, s: sl }] : [] };
+        ui.pre = { label: t.getAttribute('data-bet'), p: +t.getAttribute('data-bp') || 0, cat: t.getAttribute('data-bcat') || '', legs: ref && mk && sl ? [{ id: ref, m: mk, s: sl }] : [], stake: +t.getAttribute('data-bstake') || 0 };
         ui.sport = SPN[sp] ? sp : 'foot'; ui.kind = 'simple'; ui.msg = '';
         if (go) go();
         return;
@@ -256,5 +261,5 @@ var Bets = (function () {
       box.textContent = o > 1 ? 'Cette cote suppose ' + pc(1 / o) + ' de chances de gagner' + (s > 0 ? ' · gain possible : ' + eur(s * (o - 1), true) : '') + '.' : '';
     });
   }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, resolver: null };
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, resolver: null };
 })();

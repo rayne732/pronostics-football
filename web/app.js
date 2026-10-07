@@ -958,7 +958,7 @@
       if (f.date !== T) return;
       nf++;
       var C = Engine.classify(Engine.families(f.div, f.home, f.away, f.ov).fams), ref = 'data-open="' + f.i + '"';
-      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
+      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
       if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
     });
     if (nf) counts.push(['⚽', 'Football', nf]);
@@ -970,7 +970,7 @@
         if (!m.known) return;
         nk++;
         var home = m.home || m.a, away = m.away || m.b, ref = refOf(m);
-        (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, ref: ref, bid: keyOf + '|' + m.id, bm: r.m, bs: r.s }); });
+        (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, ref: ref, bid: keyOf + '|' + m.id, bm: r.m, bs: r.s }); });
         if (m.conf === 'high') favs2.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: m.favName, p: m.fav, ref: ref });
       });
       if (n) counts.push([icon, name, n, nk]);
@@ -1033,12 +1033,95 @@
     });
     return h;
   }
+  /* ------------------------------------------------------------ assistant : mises conseillées selon ton profil, ta mise de base et ton budget */
+  var AS = { prof: 'eq', unit: 10, daily: 0 };
+  try { var rawA = JSON.parse(localStorage.getItem('pf-assist') || 'null'); if (rawA) AS = { prof: rawA.prof || 'eq', unit: +rawA.unit || 10, daily: +rawA.daily || 0 }; } catch (e) { /* réglage par défaut */ }
+  function asSave() { try { localStorage.setItem('pf-assist', JSON.stringify(AS)); } catch (e) { /* ignoré */ } }
+  var AS_PROF = { pr: { name: 'Prudent', min: 0.85, max: 3, combo: 0 }, eq: { name: 'Équilibré', min: 0.78, max: 4, combo: 2 }, au: { name: 'Audacieux', min: 0.70, max: 6, combo: 3 } };
+  var AS_SPORT = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
+  var AS_CAP = 0.93;                                      // au-delà, la cote est trop basse (≈ 1,07) pour que le pari ait un intérêt
+  var AS_HAIR = 0.03;                                     // marge de prudence retirée à chaque probabilité (nos pronostics « sûrs » sont en moyenne à 2-3 points au-dessus du réel)
+  function asStake(x) { return Math.max(1, Math.round(x * 2) / 2); }
+  function eur2(x) { return String(Math.round(x * 100) / 100).replace('.', ',') + ' €'; }
+  function assistantPlan(R) {
+    var pf = AS_PROF[AS.prof], mi = Bets.monthInfo(), plan = { items: [], combo: null, notes: [], stop: false, total: 0, mi: mi };
+    var mult = 1, remaining = Infinity;
+    if (mi.budget > 0) {
+      var ratio = mi.spent / mi.budget; remaining = mi.budget - mi.spent;
+      if (ratio >= 1) { plan.stop = true; plan.notes.push('Ton budget du mois (' + eur2(mi.budget) + ') est atteint : pas de conseil aujourd’hui. C’est la bonne décision.'); return plan; }
+      if (ratio >= 0.8) { mult = 0.5; plan.notes.push('Tu as déjà misé ' + Math.round(ratio * 100) + ' % de ton budget du mois : je divise les mises par deux.'); }
+    }
+    var budget = Math.min(AS.daily > 0 ? AS.daily : AS.unit * 3, remaining);
+    var seen = {}, pool = [];
+    R.picks.forEach(function (r) {
+      if (!r.bid) return;
+      if (r.time && kickoff({ date: R.T, time: r.time }) < Date.now()) return;           // match déjà commencé
+      if (AS.prof === 'pr' && !r.v) return;                                                 // profil prudent : marchés validés par backtest seulement
+      var pa = r.p - AS_HAIR - (r.v ? 0 : 0.02);                                            // marché non validé : 2 points de prudence en plus
+      if (pa < pf.min || r.p > AS_CAP) return;
+      if (!seen[r.match] || pa > seen[r.match].pa) seen[r.match] = { r: r, pa: pa };
+    });
+    Object.keys(seen).forEach(function (k) { pool.push(seen[k]); });
+    pool.sort(function (a, b) { return b.pa - a.pa; });
+    pool.slice(0, pf.max).forEach(function (x) {
+      var f = x.pa >= 0.88 ? 1 : x.pa >= 0.82 ? 0.5 : x.pa >= 0.74 ? 0.3 : 0.2, stake = asStake(AS.unit * f * mult);
+      if (plan.total + stake > budget + 1e-9) { if (budget - plan.total < 1) return; stake = asStake(budget - plan.total); }
+      plan.total += stake;
+      plan.items.push({ r: x.r, pa: x.pa, stake: stake, tag: x.pa >= 0.88 ? 'Très sûr' : x.pa >= 0.82 ? 'Sûr' : 'Correct' });
+    });
+    if (pf.combo >= 2 && pool.length >= pf.combo && plan.total + 1 <= budget) {
+      var legs = pool.slice(0, pf.combo).map(function (x) { return x.r; }), P = legs.reduce(function (t, r) { return t * (r.p - AS_HAIR); }, 1), cs = asStake(AS.unit * 0.3 * mult);
+      cs = Math.min(cs, Math.max(1, Math.floor((budget - plan.total) * 2) / 2));
+      if (plan.total + cs <= budget + 1e-9) { plan.combo = { legs: legs, P: P, stake: cs }; plan.total += cs; }
+    }
+    return plan;
+  }
+  function assistantHTML(R) {
+    var plan = assistantPlan(R), pf = AS_PROF[AS.prof], mi = plan.mi;
+    var h = '<div class="sec"><span class="dot g"></span>Mon assistant <small>mises conseillées pour aujourd’hui</small></div><div class="fm as-box">';
+    h += '<div class="sub">Ton profil</div><div class="chips">' + Object.keys(AS_PROF).map(function (k) {
+      return '<button class="chip pill' + (AS.prof === k ? ' on' : '') + '" data-as="prof|' + k + '">' + AS_PROF[k].name + '</button>'; }).join('') + '</div>';
+    h += '<div class="sub">Ta mise de base</div><div class="chips">' + [2, 5, 10, 20].map(function (u) {
+      return '<button class="chip pill' + (AS.unit === u ? ' on' : '') + '" data-as="unit|' + u + '">' + u + ' €</button>'; }).join('') + '</div>';
+    h += '<div class="bt-line"><input id="as-daily" inputmode="decimal" placeholder="Budget du jour (€), sinon ' + (AS.unit * 3) + ' €" value="' + (AS.daily > 0 ? String(AS.daily).replace('.', ',') : '') + '"><button class="bt-b" data-as="daily|">Enregistrer</button></div>';
+    if (mi.budget > 0) h += '<div class="sub">Ce mois-ci : misé <b>' + eur2(mi.spent) + '</b> sur ' + eur2(mi.budget) + (mi.n ? ' · résultat <b>' + (mi.profit >= 0 ? '+' : '−') + eur2(Math.abs(mi.profit)) + '</b> sur ' + mi.n + ' paris terminés' : '') + '.</div>';
+    else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte et te dit de t’arrêter quand il est atteint.</div>';
+    plan.notes.forEach(function (n) { h += '<div class="bt-warn">' + esc(n) + '</div>'; });
+    if (!plan.stop) {
+      if (!plan.items.length) h += '<div class="empty">Aucun pari ne passe le seuil « ' + pf.name + ' » (' + Math.round(pf.min * 100) + ' % après prudence) aujourd’hui. Ne rien jouer est aussi une bonne décision.</div>';
+      plan.items.forEach(function (it) {
+        var r = it.r, mn = 1 / it.pa;
+        h += '<div class="as-row"><div class="as-top"><span class="as-tag as-' + (it.tag === 'Très sûr' ? 'a' : it.tag === 'Sûr' ? 'b' : 'c') + '">' + it.tag + '</span><b>' + r.icon + ' ' + esc(r.match) + '</b><small>' + esc(r.time || '') + '</small></div>' +
+          '<div class="as-pick">' + esc(r.pick) + '</div>' +
+          '<div class="as-nums"><span>Réussite estimée <b>' + pct(it.pa) + '</b></span><span>Mise conseillée <b>' + eur2(it.stake) + '</b></span><span>Cote minimale <b>' + mn.toFixed(2).replace('.', ',') + '</b></span></div>' +
+          '<div class="bt-act"><button class="bt-b" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + it.pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Assistant" data-bstake="' + it.stake + '">€ Noter ce pari</button>' +
+          '<button class="voir" ' + r.ref + '>Voir' + svg(IC.chev) + '</button></div></div>';
+      });
+      if (plan.combo) {
+        COMBOS = [{ name: 'Assistant', legs: plan.combo.legs, P: plan.combo.P }];
+        h += '<div class="as-row"><div class="as-top"><span class="as-tag as-c">Combiné</span><b>' + plan.combo.legs.length + ' sélections</b></div>' +
+          plan.combo.legs.map(function (r) { return '<div class="as-pick">' + r.icon + ' ' + esc(r.match) + ' · ' + esc(r.pick) + '</div>'; }).join('') +
+          '<div class="as-nums"><span>Réussite estimée <b>' + pct(plan.combo.P) + '</b></span><span>Mise conseillée <b>' + eur2(plan.combo.stake) + '</b></span><span>Cote minimale <b>' + (1 / plan.combo.P).toFixed(2).replace('.', ',') + '</b></span></div>' +
+          '<div class="bt-act"><button class="bt-b" data-bcombo="0" data-bstake="' + plan.combo.stake + '">€ Noter ce combiné</button></div></div>';
+      }
+      if (plan.items.length) {
+        var pAll = plan.items.reduce(function (t, it) { return t * it.pa; }, 1), exp = plan.items.reduce(function (t, it) { return t + it.pa; }, 0);
+        h += '<div class="srcnote">Total conseillé : <b>' + eur2(plan.total) + '</b> sur ' + (plan.items.length + (plan.combo ? 1 : 0)) + ' paris. On s’attend à environ <b>' + exp.toFixed(1).replace('.', ',') + ' réussite' + (exp >= 2 ? 's' : '') + ' sur ' + plan.items.length + '</b> simples ; ' +
+          'la probabilité que <b>tous</b> les simples passent est de ' + pct(pAll) + '. Plus la probabilité est haute, plus la cote est basse : le gain d’un pari très sûr reste petit.</div>';
+      }
+    }
+    h += '<div class="srcnote"><b>Comment je décide.</b> Je ne garde, par match, que le pronostic le plus probable, après avoir retiré 3 points de prudence. Les marchés non validés par backtest perdent 2 points de plus (et sont exclus du profil prudent). Je laisse de côté les paris au-dessus de 93 % (cote trop basse pour valoir le coup) et les matchs déjà commencés. Mise : 100 % de ta mise de base à partir de 88 %, 50 % de 82 à 88 %, 30 % de 74 à 82 %. ' +
+      '« Cote minimale » : en dessous, le bookmaker te paie moins que le vrai risque, ne joue pas. Ce sont des estimations, pas des certitudes : sur la durée, la marge des bookmakers fait perdre la plupart des parieurs, même avec de bons pronostics. ' +
+      'Ne mise jamais d’argent dont tu as besoin. Joueurs Info Service : 09 74 75 13 13 (gratuit, anonyme).</div></div>';
+    return h;
+  }
   function todayHTML() {
     todayLoad();
     var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
     if (!R.counts.length) return h + '<div class="empty">' + (TODAY.busy ? 'Chargement des matchs du jour…' : 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>';
+    h += assistantHTML(R);
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
     h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
@@ -1616,7 +1699,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1691,10 +1774,17 @@
       Alerts.test().then(function () { ALMSG = 'Notification test envoyée : regarde ton téléphone.'; }, function () { ALMSG = 'Envoi impossible (réseau ?).'; }).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
     else if (t.hasAttribute('data-aloff')) { Alerts.clear(); ALMSG = 'Alertes désactivées.'; render(); }
+    else if (t.hasAttribute('data-as')) {
+      var ap = t.getAttribute('data-as').split('|');
+      if (ap[0] === 'prof') AS.prof = ap[1];
+      else if (ap[0] === 'unit') AS.unit = +ap[1];
+      else if (ap[0] === 'daily') { var dv = parseFloat(String((document.getElementById('as-daily') || {}).value || '').replace(',', '.')); AS.daily = dv > 0 ? dv : 0; }
+      asSave(); var ya = window.scrollY; render(); window.scrollTo(0, ya);
+    }
     else if (t.hasAttribute('data-bcombo')) {
       var cb = COMBOS[+t.getAttribute('data-bcombo')];
       Bets.prefill({ label: cb.legs.map(function (r) { return r.match + ' : ' + r.pick; }).join(' + '), p: cb.P, kind: 'combine', cat: 'Combiné du jour',
-        legs: cb.legs.map(function (r) { return { id: r.bid, m: r.bm, s: r.bs }; }), nLegs: cb.legs.length });
+        legs: cb.legs.map(function (r) { return { id: r.bid, m: r.bm, s: r.bs }; }), nLegs: cb.legs.length, stake: +t.getAttribute('data-bstake') || 0 });
       st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
     }
     else if (t.hasAttribute('data-gosport')) {
