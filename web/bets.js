@@ -76,21 +76,38 @@ var Bets = (function () {
     return Object.keys(g).map(function (k) { var s = stats(g[k]); s.k = k; return s; }).sort(function (a, b) { return b.n - a.n; });
   }
 
+  var MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   function chart(list) {
     var pts = list.filter(function (b) { return b.st === 'w' || b.st === 'l'; }).sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t; });
     if (pts.length < 2) return '';
     var cum = 0, ys = [0];
     pts.forEach(function (b) { cum += b.st === 'w' ? b.stake * (b.odds - 1) : -b.stake; ys.push(cum); });
-    var lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys), W = 320, H = 110, pad = 8;
+    var lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys), W = 320, H = 168, pl = 10, pr = 10, pt = 22, pb = 24;
     if (hi === lo) { hi += 1; lo -= 1; }
-    var X = function (i) { return pad + (W - 2 * pad) * i / (ys.length - 1); }, Y = function (v) { return H - pad - (H - 2 * pad) * (v - lo) / (hi - lo); };
-    var line = ys.map(function (v, i) { return (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); }).join('');
-    var col = cum >= 0 ? 'var(--green)' : 'var(--red)';
-    return '<div class="sec"><span class="dot ' + (cum >= 0 ? 'g' : 'a') + '"></span>Bénéfice cumulé <small>' + pts.length + ' paris terminés</small></div><div class="fm bt-ch">' +
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Courbe du bénéfice cumulé"><line x1="' + pad + '" x2="' + (W - pad) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '" stroke="var(--line)" stroke-dasharray="4 4"/>' +
-      '<path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/>' +
-      '<circle cx="' + X(ys.length - 1).toFixed(1) + '" cy="' + Y(cum).toFixed(1) + '" r="3.6" fill="' + col + '"/></svg>' +
-      '<div class="bt-ax"><span>' + eur(lo, false) + '</span><span>0</span><span>' + eur(hi, true) + '</span></div></div>';
+    var span = hi - lo; lo -= span * 0.08; hi += span * 0.12;
+    var X = function (k) { return pl + (W - pl - pr) * k / (ys.length - 1); }, Y = function (v) { return H - pb - (H - pt - pb) * (v - lo) / (hi - lo); };
+    var line = ys.map(function (v, k) { return (k ? 'L' : 'M') + X(k).toFixed(1) + ' ' + Y(v).toFixed(1); }).join('');
+    var area = line + 'L' + X(ys.length - 1).toFixed(1) + ' ' + Y(0).toFixed(1) + 'L' + X(0).toFixed(1) + ' ' + Y(0).toFixed(1) + 'Z';
+    var y0 = Y(0), up = cum >= 0, col = up ? 'var(--green)' : 'var(--red)', id = 'bc' + Math.floor(Math.random() * 1e6);
+    var dots = pts.length <= 40 ? pts.map(function (b, k) { return '<circle cx="' + X(k + 1).toFixed(1) + '" cy="' + Y(ys[k + 1]).toFixed(1) + '" r="2.8" fill="' + (b.st === 'w' ? 'var(--green)' : 'var(--red)') + '" stroke="var(--surface)" stroke-width="1.4"/>'; }).join('') : '';
+    var ticks = '', prev = '';
+    pts.forEach(function (b, k) {
+      var m = b.d.slice(0, 7);
+      if (m !== prev) { ticks += '<line x1="' + X(k + 1).toFixed(1) + '" x2="' + X(k + 1).toFixed(1) + '" y1="' + pt + '" y2="' + (H - pb) + '" stroke="var(--line)" stroke-dasharray="2 4"/><text x="' + X(k + 1).toFixed(1) + '" y="' + (H - 7) + '" class="bt-m"' + (X(k + 1) > W - 34 ? ' text-anchor="end"' : '') + '>' + MOIS[+b.d.slice(5, 7) - 1] + '</text>'; prev = m; }
+    });
+    var lx = X(ys.length - 1), anchor = lx > W - 60 ? 'end' : 'middle', label = (cum >= 0 ? '+' : '−') + eur(Math.abs(cum));
+    return '<div class="sec"><span class="dot ' + (up ? 'g' : 'a') + '"></span>Bénéfice cumulé <small>' + pts.length + ' paris terminés</small></div><div class="fm bt-ch">' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Courbe du bénéfice cumulé"><defs>' +
+      '<linearGradient id="' + id + 'g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--green)" stop-opacity=".42"/><stop offset="1" stop-color="var(--green)" stop-opacity="0"/></linearGradient>' +
+      '<linearGradient id="' + id + 'r" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="var(--red)" stop-opacity=".42"/><stop offset="1" stop-color="var(--red)" stop-opacity="0"/></linearGradient>' +
+      '<clipPath id="' + id + 'u"><rect x="0" y="0" width="' + W + '" height="' + y0.toFixed(1) + '"/></clipPath><clipPath id="' + id + 'd"><rect x="0" y="' + y0.toFixed(1) + '" width="' + W + '" height="' + H + '"/></clipPath></defs>' +
+      ticks +
+      '<path d="' + area + '" fill="url(#' + id + 'g)" clip-path="url(#' + id + 'u)"/><path d="' + area + '" fill="url(#' + id + 'r)" clip-path="url(#' + id + 'd)"/>' +
+      '<line x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y0.toFixed(1) + '" y2="' + y0.toFixed(1) + '" stroke="var(--mute)" stroke-opacity=".55" stroke-dasharray="4 4"/><text x="' + (W - pr) + '" y="' + (y0 + 11).toFixed(1) + '" text-anchor="end" class="bt-m">0 €</text>' +
+      '<path d="' + line + '" fill="none" stroke="' + col + '" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>' + dots +
+      '<circle cx="' + lx.toFixed(1) + '" cy="' + Y(cum).toFixed(1) + '" r="5.2" fill="' + col + '" stroke="var(--surface)" stroke-width="2"/>' +
+      '<text x="' + lx.toFixed(1) + '" y="' + Math.max(12, Y(cum) - 11).toFixed(1) + '" text-anchor="' + anchor + '" class="bt-v" fill="' + col + '">' + label + '</text></svg>' +
+      '<div class="bt-leg"><span><i class="lw"></i>gagné</span><span><i class="ll"></i>perdu</span></div></div>';
   }
 
   function statusBtns(b) {

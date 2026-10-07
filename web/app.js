@@ -276,10 +276,12 @@
   function resCard(m) {
     var sc = m.res.split('-'), safe = m.picks.filter(function (p) { return p.t === 0; }), less = m.picks.filter(function (p) { return p.t !== 0; });
     var sw = safe.filter(function (p) { return p.h; }).length, lw = less.filter(function (p) { return p.h; }).length;
-    var lm = lmeta(m.div);
-    return '<div class="rc"><div class="rh"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[m.div].name) + '</span><small>' + esc(m.time || '') + '</small></div>' +
-      '<div class="rsc"><div class="s">' + crest(m.home, true) + '<b>' + esc(m.home) + '</b></div><div class="score">' + esc(sc[0] || '?') + ' – ' + esc(sc[1] || '?') +
-      '</div><div class="s">' + crest(m.away, true) + '<b>' + esc(m.away) + '</b></div></div>' +
+    var lm = lmeta(m.div), gh = +sc[0], ga = +sc[1], out = !safe.length ? 'none' : sw === safe.length ? 'ok' : sw === 0 ? 'ko' : 'mix';
+    var dots = safe.map(function (p) { return '<i class="rd-' + (p.h ? 'ok' : 'ko') + '"></i>'; }).join('');
+    return '<div class="rc rc-' + out + '"><div class="rh"><span class="lgchip">' + lm[2] + ' ' + esc(D.leagues[m.div].name) + '</span>' +
+      (safe.length ? '<span class="rbadge rb-' + out + '">' + (out === 'ok' ? '✓' : out === 'ko' ? '✗' : '≈') + ' ' + sw + '/' + safe.length + ' sûrs<span class="rdots">' + dots + '</span></span>' : '') + '<small>' + esc(m.time || '') + '</small></div>' +
+      '<div class="rsc"><div class="s' + (gh > ga ? ' win' : gh < ga ? ' lose' : '') + '">' + crest(m.home, true) + '<b>' + esc(m.home) + '</b></div><div class="score"><span class="' + (gh > ga ? 'w' : '') + '">' + esc(sc[0] || '?') + '</span><i>–</i><span class="' + (ga > gh ? 'w' : '') + '">' + esc(sc[1] || '?') + '</span>' +
+      '</div><div class="s' + (ga > gh ? ' win' : ga < gh ? ' lose' : '') + '">' + crest(m.away, true) + '<b>' + esc(m.away) + '</b></div></div>' +
       '<div class="sec sm"><span class="dot g"></span>Pronostics sûrs <small>' + sw + ' / ' + safe.length + ' gagnés</small></div>' +
       (safe.map(pickRow).join('') || '<div class="sub">Aucun pronostic sûr sur ce match.</div>') +
       (less.length ? '<details class="rd"><summary>Moins sûrs <small>' + lw + ' / ' + less.length + ' gagnés</small></summary>' + less.map(pickRow).join('') + '</details>' : '') + '</div>';
@@ -695,7 +697,8 @@
     if (!LZ[key]) LZ[key] = fetch(D.lazy[key]).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (j) { D[key] = j; D['_ok_' + key] = true; });
     LZ[key].then(function () { if (cb) cb(); }, function () { LZ[key] = null; if (cb) cb(true); });
   }
-  function loadingHTML() { return brand() + sportsBar() + '<div class="empty">Chargement des données…</div>'; }
+  function skel(n) { var h = '<div class="skel" aria-label="Chargement">'; for (var i = 0; i < (n || 4); i++) h += '<div class="sk-card"><i class="sk sk-t"></i><div class="sk-r"><i class="sk sk-c"></i><i class="sk sk-l"></i></div><div class="sk-r"><i class="sk sk-c"></i><i class="sk sk-l"></i></div></div>'; return h + '</div>'; }
+  function loadingHTML() { return brand() + sportsBar() + skel(4); }
 
   /* ------------------------------------------------------------ sports d'équipe : même interface pour tous */
   var SPORT_CFG = {
@@ -1149,7 +1152,7 @@
     var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
-    if (!R.counts.length) return h + '<div class="empty">' + (TODAY.busy ? 'Chargement des matchs du jour…' : 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>';
+    if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
     h += assistantHTML(R);
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
@@ -1313,7 +1316,7 @@
     var C = competitions(), h = '<div class="srcnote">Choisis une compétition pour voir <b>tous ses matchs</b> (<b>' + C.total + '</b> compétitions ont des matchs dans les prochains jours ; la liste change chaque jour). ' +
       'Hors de notre modèle, tu as l’affiche, le score et, quand elles existent, les probabilités déduites des cotes.</div>';
     h += '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="cq" type="search" placeholder="Chercher une compétition ou un pays" autocomplete="off" value="' + esc(st.cq || '') + '"></label></div>';
-    if (!isLoaded('cal')) h += '<div class="sub">Chargement du calendrier mondial…</div>';
+    if (!isLoaded('cal')) h += skel(3);
     return h + '<div id="clist">' + compListHTML() + '</div>';
   }
   function calRow(c) {
