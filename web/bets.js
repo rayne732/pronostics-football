@@ -110,6 +110,37 @@ var Bets = (function () {
       '<div class="bt-leg"><span><i class="lw"></i>gagné</span><span><i class="ll"></i>perdu</span></div></div>';
   }
 
+  function insights(list) {                                  // ce que l'historique de CET appareil dit de tes habitudes
+    var done = list.filter(function (b) { return b.st === 'w' || b.st === 'l'; }).sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t; });
+    if (done.length < 8) return '<div class="sec"><span class="dot a"></span>Ce que dit ton historique</div><div class="srcnote">Il faut au moins <b>8 paris terminés</b> pour que l’analyse ait un sens : tu en as <b>' + done.length + '</b>.</div>';
+    var out = [], profit = function (l) { return l.reduce(function (s, b) { return s + (b.st === 'w' ? b.stake * (b.odds - 1) : -b.stake); }, 0); };
+    var by = function (fn, label) {
+      var g = {}; done.forEach(function (b) { var k = fn(b); if (k) (g[k] = g[k] || []).push(b); });
+      return Object.keys(g).filter(function (k) { return g[k].length >= 4; }).map(function (k) { return { k: label + k, n: g[k].length, p: profit(g[k]), w: g[k].filter(function (b) { return b.st === 'w'; }).length / g[k].length }; });
+    };
+    var groups = by(function (b) { return SPN[b.sport] || 'Autre'; }, '').concat(by(function (b) { return b.kind === 'combine' ? 'les combinés' : 'les paris simples'; }, ''),
+      by(function (b) { return b.cat; }, 'catégorie « ').map(function (x) { x.k += ' »'; return x; }), by(function (b) { return b.book ? (Books.name(b.book) || 'Autre bookmaker') : ''; }, 'chez '),
+      by(function (b) { return b.odds < 1.5 ? 'cotes inférieures à 1,50' : b.odds < 2.2 ? 'cotes de 1,50 à 2,20' : 'cotes supérieures à 2,20'; }, ''));
+    groups = groups.filter(function (g) { return g.n < done.length; });            // un groupe qui contient tous les paris n'apprend rien
+    if (groups.length) {
+      groups.sort(function (a, b) { return b.p - a.p; });
+      var best = groups[0], worst = groups[groups.length - 1];
+      if (best.p > 0) out.push(['🏆', 'Ton meilleur terrain : <b>' + esc(best.k) + '</b>, ' + eur(best.p, true) + ' sur ' + best.n + ' paris (' + pc(best.w) + ' gagnés).']);
+      if (worst.p < 0 && worst !== best) out.push(['⚠️', 'Ton point faible : <b>' + esc(worst.k) + '</b>, ' + eur(worst.p, true) + ' sur ' + worst.n + ' paris (' + pc(worst.w) + ' gagnés). Réfléchis avant d’y remettre de l’argent.']);
+    }
+    var cmb = done.filter(function (b) { return b.kind === 'combine'; }), sim = done.filter(function (b) { return b.kind !== 'combine'; });
+    if (cmb.length >= 3 && sim.length >= 3 && profit(cmb) < 0 && profit(sim) >= 0) out.push(['🧩', 'Les combinés te coûtent <b>' + eur(Math.abs(profit(cmb))) + '</b> alors que tes paris simples rapportent <b>' + eur(profit(sim), true) + '</b>. Un combiné n’est gagné que si tout passe.']);
+    var aL = [], aW = [];                                                   // mise après une perte / après un gain : « course aux pertes » ?
+    done.forEach(function (b, i) { if (!i) return; (done[i - 1].st === 'l' ? aL : aW).push(b.stake); });
+    var mean = function (a) { return a.reduce(function (s, x) { return s + x; }, 0) / a.length; };
+    if (aL.length >= 3 && aW.length >= 3 && mean(aL) >= 1.3 * mean(aW)) out.push(['📈', 'Après une perte tu mises en moyenne <b>' + Math.round((mean(aL) / mean(aW) - 1) * 100) + ' % de plus</b> qu’après un gain (' + eur(mean(aL)) + ' contre ' + eur(mean(aW)) + '). C’est le piège classique de la « course aux pertes » : garde la même mise.']);
+    var run = 0; for (var i = done.length - 1; i >= 0 && done[i].st === 'l'; i--) run++;
+    if (run >= 3) out.push(['⏸️', 'Tu viens de perdre <b>' + run + ' paris d’affilée</b>. C’est le bon moment pour faire une pause.']);
+    var longest = 0, cur = 0; done.forEach(function (b) { cur = b.st === 'l' ? cur + 1 : 0; if (cur > longest) longest = cur; });
+    var hit = done.filter(function (b) { return b.st === 'w'; }).length / done.length, need = done.reduce(function (s, b) { return s + 1 / b.odds; }, 0) / done.length;
+    out.push([hit >= need ? '✅' : '📉', 'Tu gagnes <b>' + pc(hit) + '</b> de tes paris ; avec tes cotes moyennes il en faut <b>' + pc(need) + '</b> pour être à l’équilibre. Plus longue série de pertes : <b>' + longest + '</b>.']);
+    return '<div class="sec"><span class="dot g"></span>Ce que dit ton historique <small>' + done.length + ' paris terminés</small></div><div class="fm ins">' + out.map(function (x) { return '<div class="ins-r"><span>' + x[0] + '</span><div>' + x[1] + '</div></div>'; }).join('') + '<div class="sub">Ces constats viennent de tes paris, sur cet appareil. Ils décrivent tes habitudes : ils ne prédisent pas tes prochains résultats.</div></div>';
+  }
   function statusBtns(b) {
     if (b.st === 'p') {
       return '<div class="bt-act"><button data-bst="' + b.id + '|w" class="bt-b w">Gagné</button><button data-bst="' + b.id + '|l" class="bt-b l">Perdu</button><button data-bst="' + b.id + '|v" class="bt-b">Remboursé</button></div>';
@@ -186,10 +217,11 @@ var Bets = (function () {
     if (all.n && (bySport.length > 1 || byKind.length > 1 || byCat.length || byBook.length)) {
       h += '<div class="sec"><span class="dot a"></span>Par catégorie, sport et type <small>bénéfice</small></div><div class="fm">' +
         byBook.concat(byCat, bySport, byKind).map(function (s) {
-          return '<div class="pr ' + (s.profit >= 0 ? 'ok' : 'ko') + '"><span class="pt">' + esc(s.k) + '<small class="sm">' + s.w + '/' + s.n + ' gagnés · ' + pc(s.hit) + '</small></span><span class="pp">' + eur(s.profit, true) + '</span></div>';
+          return '<div class="pr nostrike ' + (s.profit >= 0 ? 'ok' : 'ko') + '"><span class="pt">' + esc(s.k) + '<small class="sm">' + s.w + '/' + s.n + ' gagnés · ' + pc(s.hit) + '</small></span><span class="pp">' + eur(s.profit, true) + '</span></div>';
         }).join('') + '</div>';
     }
 
+    h += insights(list);
     // tes paris reliés à nos pronostics : ce que nous annoncions contre ce qui est arrivé
     var linked = list.filter(function (b) { return b.p && (b.st === 'w' || b.st === 'l'); });
     if (linked.length) {

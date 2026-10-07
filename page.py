@@ -9,7 +9,7 @@ from html import escape
 from winamax import SAFE_MIN
 
 WEB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
-FONTS = ('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" '
+FONTS = ('<link rel="preconnect" href="https://a.espncdn.com" crossorigin><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" '
          'href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">')
 
 

@@ -7,24 +7,53 @@ import zlib
 
 import numpy as np
 
-SW = """const CACHE = 'pronos-v1';
+SW = r"""const CACHE = 'pronos-v2', IMG = 'pronos-img-v1', MAX_IMG = 800;
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', 'manifest.webmanifest', 'icons/icon-192.png'])));
 });
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE && k !== IMG).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// réseau d'abord (la page est mise à jour chaque jour), cache en secours hors connexion
+async function trim(cache) {
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - MAX_IMG; i++) await cache.delete(keys[i]);
+}
+// images (logos, drapeaux) : d'abord le cache (affichage immédiat, même hors connexion), mise à jour en arrière-plan
+async function image(req) {
+  const cache = await caches.open(IMG), hit = await cache.match(req);
+  const net = fetch(req, { mode: 'no-cors' }).then((r) => { cache.put(req, r.clone()).then(() => trim(cache)); return r; }).catch(() => hit);
+  return hit || net;
+}
+// fichiers de données versionnés (data/xxx.json?v=...) : le numéro change à chaque mise à jour, donc le cache est sûr et la page s'ouvre sans attendre le réseau
+async function versioned(req) {
+  const cache = await caches.open(CACHE), hit = await cache.match(req);
+  if (hit) return hit;
+  const r = await fetch(req);
+  cache.put(req, r.clone()).then(async () => {                         // on supprime les anciennes versions du même fichier (sinon le cache grossit à chaque mise à jour)
+    const path = new URL(req.url).pathname;
+    for (const k of await cache.keys()) if (k.url !== req.url && new URL(k.url).pathname === path) await cache.delete(k);
+  });
+  return r;
+}
+// page et reste : réseau d'abord (elle est mise à jour toute la journée) avec 4 s de patience, puis la dernière copie
+function pageFirst(req) {
+  return new Promise((resolve) => {
+    let done = false;
+    const fromCache = () => caches.match(req).then((r) => r || caches.match('./'));
+    const t = setTimeout(() => { if (!done) fromCache().then((r) => { if (r && !done) { done = true; resolve(r); } }); }, 4000);
+    fetch(req).then((r) => { clearTimeout(t); if (!done) { done = true; resolve(r.clone()); } caches.open(CACHE).then((c) => c.put(req, r)); })
+      .catch(() => { clearTimeout(t); if (!done) { done = true; fromCache().then(resolve); } });
+  });
+}
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).then((r) => {
-      const copy = r.clone();
-      caches.open(CACHE).then((c) => c.put(e.request, copy));
-      return r;
-    }).catch(() => caches.match(e.request).then((r) => r || caches.match('./')))
-  );
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.hostname === 'a.espncdn.com' && /\.(png|jpg|svg)|combiner/.test(url.pathname + url.search) || url.hostname === 'media-cdn.cortextech.io') { e.respondWith(image(req)); return; }
+  if (url.origin !== location.origin) return;                          // API en direct (ESPN, ntfy) : jamais mise en cache
+  if (url.pathname.indexOf('/data/') >= 0 && url.search.indexOf('v=') >= 0) { e.respondWith(versioned(req)); return; }
+  e.respondWith(pageFirst(req));
 });
 """
 

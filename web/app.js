@@ -199,7 +199,52 @@
     var p = f.date.split('-'), t = (f.time || '00:00').split(':');
     return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]);
   }
-  function countdown(f) {                                   // « Dans 2 j 5 h », « Dans 3 h 20 », « En cours »
+  /* scores en direct (football) : flux mondial d'ESPN lu depuis le téléphone, relié à nos matchs par le logo de chaque équipe */
+  var LIVE = {}, LIVE_BUSY = false;
+  function espLogo(t) { var u = (t && t.logo) || '', P = 'https://a.espncdn.com/i/teamlogos/'; return u.indexOf(P) === 0 ? u.slice(P.length) : ''; }
+  function liveFoot(cb) {
+    if (LIVE_BUSY) return;
+    LIVE_BUSY = true;
+    var T = parisToday(), days = [T], now = new Date();
+    if (now.getHours() < 9) days.push(isoDate(new Date(parseD(T).getTime() - 864e5)));       // ESPN classe les matchs par jour américain : la nuit, ceux d'hier soir sont encore en cours
+    Promise.all(days.map(function (d) {
+      return fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?limit=1000&dates=' + d.replace(/-/g, '')).then(function (r) { return r.json(); }).catch(function () { return { events: [] }; });
+    })).then(function (rs) {
+      var list = [];
+      rs.forEach(function (r) {
+        (r.events || []).forEach(function (e) {
+          try {
+            var c = e.competitions[0].competitors, h = c.filter(function (x) { return x.homeAway === 'home'; })[0], a = c.filter(function (x) { return x.homeAway === 'away'; })[0], s = e.status.type.state;
+            if (s === 'pre') return;
+            list.push({ h: h.team.displayName, a: a.team.displayName, hl: espLogo(h.team), al: espLogo(a.team), hs: parseInt(h.score, 10), as: parseInt(a.score, 10), st: s, clock: e.status.type.shortDetail || e.status.displayClock || '' });
+          } catch (x) { /* événement illisible : ignoré */ }
+        });
+      });
+      var L = D.logos || {};
+      D.fixtures.forEach(function (f) {
+        if (f.date !== T && days.length < 2) return;
+        var hit = list.filter(function (v) { return (L[f.home] && L[f.home] === v.hl && L[f.away] && L[f.away] === v.al) || (sameTeam(f.home, v.h) && sameTeam(f.away, v.a)); })[0];
+        if (hit && isFinite(hit.hs) && isFinite(hit.as)) LIVE[f.id] = { st: hit.st, hs: hit.hs, as: hit.as, clock: hit.clock };
+      });
+      LIVE_BUSY = false;
+      if (cb) cb();
+    }, function () { LIVE_BUSY = false; });
+  }
+  function liveWanted() {                                   // y a-t-il un match de foot en cours ou sur le point de commencer ?
+    var T = parisToday(), nowMs = Date.now();
+    return D.fixtures.some(function (f) { if (f.date !== T && f.date !== isoDate(new Date(parseD(T).getTime() - 864e5))) return false; var d = nowMs - kickoff(f); return d > -10 * 60000 && d < 3.5 * 3600000 || (LIVE[f.id] && LIVE[f.id].st === 'in'); });
+  }
+  function liveTick() {
+    if (document.visibilityState !== 'visible' || !liveWanted()) return;
+    liveFoot(function () {
+      var ae = document.activeElement;
+      if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;      // on ne redessine pas pendant une saisie
+      var y0 = window.scrollY; render(); window.scrollTo(0, y0);
+    });
+  }
+  function countdown(f) {                                   // « Dans 2 j 5 h », « Dans 3 h 20 », « En direct · 1-0 · 67' »
+    var LV = f.id && LIVE[f.id];
+    if (LV) return LV.st === 'in' ? 'En direct · ' + LV.hs + '-' + LV.as + ' · ' + LV.clock : 'Terminé · ' + LV.hs + '-' + LV.as;
     var ms = kickoff(f) - new Date();
     if (ms < -2 * 3600 * 1000) return 'Terminé';
     if (ms < 0) return 'En cours';
@@ -218,10 +263,36 @@
       '<div class="pf">' + esc(favName(f)) + ' <b>' + pct(f.fav) + '</b></div>' +
       '<button class="voir wide ' + f.conf + '" data-open="' + f.i + '">Voir le pronostic ' + svg(IC.chev) + '</button></div>';
   }
+  var CMP = [];                                             // matchs choisis pour la comparaison (indices dans D.fixtures)
+  function cmpData(i) {
+    var f = D.fixtures[i], M = Engine.families(f.div, f.home, f.away, f.ov), C = Engine.classify(M.fams), best = C.safe[0] || null, fam = function (name) { return M.fams.filter(function (x) { return x.name === name; })[0]; };
+    var tg = fam('Total buts (plus)'), o25 = tg ? tg.sels.filter(function (s) { return /2,5/.test(s[0]); })[0] : null, bt = fam('Les deux équipes marquent'), by = bt ? bt.sels.filter(function (s) { return s[0] === 'Oui'; })[0] : null;
+    return { f: f, M: M, C: C, best: best, o25: o25 ? o25[1] : null, btts: by ? by[1] : null };
+  }
+  function cmpPage(ids) {
+    var A = cmpData(ids[0]), B = cmpData(ids[1]);
+    function cell(a, b, fmt, higher) {                     // une ligne : la meilleure valeur est mise en avant
+      var wa = higher && a > b + 1e-9, wb = higher && b > a + 1e-9;
+      return '<div class="cv ' + (wa ? 'win' : '') + '">' + fmt(a) + '</div><div class="cv ' + (wb ? 'win' : '') + '">' + fmt(b) + '</div>';
+    }
+    function head(X) { var f = X.f; return '<div class="cph"><div class="cpl">' + esc(cpName(f)) + ' · ' + dm(f.date) + ' ' + esc(f.time || '') + '</div><div class="cpt">' + crest(f.home) + crest(f.away) + '</div><b>' + esc(f.home) + ' – ' + esc(f.away) + '</b></div>'; }
+    var rows = [['Confiance du pronostic', cell(A.f.fav, B.f.fav, pct, true)], ['Favori', '<div class="cv">' + esc(favName(A.f)) + '</div><div class="cv">' + esc(favName(B.f)) + '</div>'],
+      ['Buts attendus', cell(A.M.lh + A.M.la, B.M.lh + B.M.la, function (x) { return x.toFixed(2); }, false)], ['Plus de 2,5 buts', cell(A.o25 || 0, B.o25 || 0, pct, false)],
+      ['Les deux équipes marquent', cell(A.btts || 0, B.btts || 0, pct, false)], ['Pronostics sûrs', cell(A.C.safe.length, B.C.safe.length, String, true)],
+      ['Meilleur pronostic sûr', '<div class="cv ' + (A.best && B.best && A.best.p > B.best.p ? 'win' : '') + '">' + (A.best ? esc(A.best.s) + '<small>' + esc(A.best.m) + ' · ' + pct(A.best.p) + '</small>' : '–') + '</div><div class="cv ' + (A.best && B.best && B.best.p > A.best.p ? 'win' : '') + '">' + (B.best ? esc(B.best.s) + '<small>' + esc(B.best.m) + ' · ' + pct(B.best.p) + '</small>' : '–') + '</div>']];
+    var wA = (A.best ? A.best.p : 0) >= (B.best ? B.best.p : 0), W = wA ? A : B, verdict = W.best ? '<b>' + esc(W.f.home + ' – ' + W.f.away) + '</b> : « ' + esc(W.best.s) + ' » à ' + pct(W.best.p) + ' (' + esc(W.best.m) + ').' : 'Aucun des deux n’a de pronostic sûr.';
+    return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div class="who"><span class="lgchip">⇄ Comparaison</span><small>2 matchs côte à côte</small></div></div>' +
+      '<div class="cpg"><div class="cph0"></div>' + head(A) + head(B) + '</div>' +
+      rows.map(function (r) { return '<div class="cpr"><div class="cpk">' + r[0] + '</div><div class="cpv">' + r[1] + '</div></div>'; }).join('') +
+      '<div class="main high cpv-verdict"><div class="k"><small>Le plus sûr des deux</small></div><div class="sub" style="margin:6px 0 0">' + verdict + '</div></div>' +
+      '<div class="sub" style="margin-top:12px">Les pourcentages sont des estimations de notre modèle ; « le plus sûr » compare seulement le meilleur pronostic de chaque match.</div>';
+  }
   function row(f, multi) {
     var on = !!favs[f.id];
+    var cs = CMP.indexOf(f.i) >= 0;
     return '<div class="mrow ' + f.conf + '"><div class="tm">' + (f.time || '–') + (multi ? '<small>' + dm(f.date) + '</small>' : '') +
-      '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button></div>' +
+      '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button>' +
+      '<button class="cmpb' + (cs ? ' on' : '') + '" data-cmp="' + f.i + '" aria-label="Comparer ce match" title="Comparer">⇄</button></div>' +
       '<div class="tt">' + tn(f.home) + tn(f.away) + '</div>' +
       '<div class="act"><span class="cfp ' + f.conf + '">' + pct(f.fav) + ' · ' + CONF[f.conf] + '</span>' +
       '<button class="voir ' + f.conf + '" data-open="' + f.i + '">' + (f.conf === 'low' ? '' : confIcon(f.conf)) + 'Voir' + svg(IC.chev) + '</button></div>' + miniBar(f.p) + '</div>';
@@ -1158,6 +1229,19 @@
     var R = todayRows();
     Alerts.sync(favItems().concat(asItems(R, assistantPlan(R))));
   }
+  function topPickHTML(R) {                                 // une seule chose à jouer aujourd'hui
+    var plan = assistantPlan(R), pf = AS_PROF[AS.prof];
+    if (plan.stop) return '';
+    var it = plan.items[0];
+    if (!it) return '<div class="top1 none"><div class="t1k">Le pari du jour</div><div class="t1m">Aujourd’hui, mieux vaut ne rien jouer.</div><div class="sub">Aucun pari ne passe ton seuil (profil ' + pf.name + '). Passer son tour fait aussi partie du jeu raisonnable.</div></div>';
+    var r = it.r, mn = 1 / it.pa, saved = (ASREC[R.T] && ASREC[R.T][r.bid] && ASREC[R.T][r.bid].o) || 0;
+    return '<div class="top1"><div class="t1k">Le pari du jour <span class="as-tag as-' + (it.tag === 'Très sûr' ? 'a' : it.tag === 'Sûr' ? 'b' : 'c') + '">' + it.tag + '</span></div>' +
+      '<div class="t1m">' + r.icon + ' ' + esc(r.match) + '<small>' + esc(r.time || '') + '</small></div><div class="t1p">' + esc(r.pick) + '</div>' +
+      '<div class="t1n"><span>Réussite estimée<b>' + pct(it.pa) + '</b></span><span>Mise conseillée<b>' + eur2(it.stake) + '</b></span><span>Cote minimale<b>' + mn.toFixed(2).replace('.', ',') + '</b></span></div>' +
+      asOddsBox('top|' + r.bid, it.pa, it.stake, saved) +
+      '<div class="bt-act"><button class="bt-b pri" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + it.pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Assistant" data-bstake="' + it.stake + '"' + (saved ? ' data-bodds="' + saved + '"' : '') + '>€ Noter ce pari</button>' +
+      '<button class="voir" ' + r.ref + '>Voir le match' + svg(IC.chev) + '</button></div></div>';
+  }
   function assistantHTML(R) {
     var plan = assistantPlan(R), pf = AS_PROF[AS.prof], mi = plan.mi;
     asRemember(R, plan);
@@ -1213,6 +1297,7 @@
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
     if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
+    h += topPickHTML(R);
     h += assistantHTML(R);
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
@@ -1764,7 +1849,7 @@
     var els = app.querySelectorAll('.cd, .tm small');
     for (var i = 0; i < els.length; i++) {
       var t = els[i].textContent.trim();
-      if (t === 'En cours') els[i].classList.add('live'); else if (t === 'Terminé') els[i].classList.add('done');
+      if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
   function renderNav() {
@@ -1783,7 +1868,7 @@
     return sp === 'tennis' ? tennisHTML() : sp === 'golf' ? golfHTML() : f1HTML();
   }
   function render() {
-    if (st.detail) app.innerHTML = st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
+    if (st.detail) app.innerHTML = st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = sportHTML();
     else if (st.tab === 'today') app.innerHTML = todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
@@ -1800,12 +1885,24 @@
     if (!fab) { fab = document.createElement('button'); fab.id = 'fab'; fab.setAttribute('data-ticket', ''); document.body.appendChild(fab); }
     fab.className = 'fab' + (ticket.length && st.tab !== 'ticket' ? '' : ' hide');
     fab.innerHTML = svg(IC.ticket) + '<span>Combiné · ' + ticket.length + ' · ' + pct(ticketProb()) + '</span>';
+    var cb2 = document.getElementById('cmpbar');
+    if (!cb2) {
+      cb2 = document.createElement('div'); cb2.id = 'cmpbar'; document.body.appendChild(cb2);
+      cb2.addEventListener('click', function (e) {                       // la barre est hors de #app : son propre écouteur
+        var t = e.target.closest('[data-cmpgo],[data-cmpclr]');
+        if (!t) return;
+        if (t.hasAttribute('data-cmpclr')) { CMP = []; var yd = window.scrollY; render(); window.scrollTo(0, yd); }
+        else if (CMP.length === 2) { st.scroll = window.scrollY; st.detail = { cmp: CMP.slice() }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); }
+      });
+    }
+    cb2.className = CMP.length && !st.detail ? '' : 'hide';
+    cb2.innerHTML = '<span>⇄ ' + CMP.length + '/2 matchs</span>' + (CMP.length === 2 ? '<button class="bt-b pri" data-cmpgo>Comparer</button>' : '<small>Choisis un 2ᵉ match avec ⇄</small>') + '<button class="bt-b" data-cmpclr aria-label="Vider">✕</button>';
     if (!st.detail && st.tab === 'home') countUp();
   }
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1880,6 +1977,11 @@
       Alerts.test().then(function () { ALMSG = 'Notification test envoyée : regarde ton téléphone.'; }, function () { ALMSG = 'Envoi impossible (réseau ?).'; }).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
     else if (t.hasAttribute('data-aloff')) { Alerts.clear(); ALMSG = 'Alertes désactivées.'; render(); }
+    else if (t.hasAttribute('data-cmp')) {
+      var ci = +t.getAttribute('data-cmp'), at2 = CMP.indexOf(ci);
+      if (at2 >= 0) CMP.splice(at2, 1); else { if (CMP.length >= 2) CMP.shift(); CMP.push(ci); }
+      var yc = window.scrollY; render(); window.scrollTo(0, yc);
+    }
     else if (t.hasAttribute('data-as')) {
       var ap = t.getAttribute('data-as').split('|');
       if (ap[0] === 'open') AS_OPEN = ap[1] === '1';
@@ -1921,9 +2023,9 @@
     var id = t.getAttribute('data-asodds'), pa = +t.getAttribute('data-pa'), stake = +t.getAttribute('data-stake');
     var o = parseFloat(String(t.value).replace(',', '.')), box = app.querySelector('[data-asv="' + id + '"]');
     if (box) box.innerHTML = asVerdict(pa, stake, o);
-    var rec = ASREC[parisToday()] && ASREC[parisToday()][id];
+    var rid = id.indexOf('top|') === 0 ? id.slice(4) : id, rec = ASREC[parisToday()] && ASREC[parisToday()][rid];
     if (rec) { rec.o = o > 1 ? Math.round(o * 100) / 100 : 0; asRecSave(); }
-    var btn = t.closest('.as-row') && t.closest('.as-row').querySelector('[data-bet]');
+    var btn = t.closest('.as-row, .top1') && t.closest('.as-row, .top1').querySelector('[data-bet]');
     if (btn) { if (o > 1) btn.setAttribute('data-bodds', o); else btn.removeAttribute('data-bodds'); }
   });
   app.addEventListener('input', function (e) {
@@ -1963,6 +2065,7 @@
     return null;
   };
   app.classList.add('anim'); setTimeout(function () { app.classList.remove('anim'); }, 1100);
+  setTimeout(liveTick, 2500); setInterval(liveTick, 90000);                    // scores en direct : seulement quand un match est en cours
   loadLazy('logos', function (err) { if (!err && !st.detail) { var yl = window.scrollY; render(); window.scrollTo(0, yl); } });          // logos des équipes : affichés dès qu'ils sont arrivés
   Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
   if (AS.alert && Alerts.topic()) todayLoad();                                  // charge les matchs du jour pour programmer les alertes de l'assistant
