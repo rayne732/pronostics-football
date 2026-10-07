@@ -35,6 +35,10 @@ for key, url in (D.get("lazy") or {}).items():
     if key == "hist":
         check(isinstance(data, list) and len(data) > 100, "hist : historique vide")
         continue
+    if key == "logos":
+        check(isinstance(data, dict), "logos : fichier invalide")
+        print(f"logos     {len(data):4d} équipes avec logo, {os.path.getsize(path) // 1024} Ko")
+        continue
     if key == "cal":
         check(isinstance(data, list), "cal : calendrier mondial absent")
         print(f"cal       {len(data):3d} matchs (calendrier mondial), {os.path.getsize(path) // 1024} Ko")

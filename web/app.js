@@ -131,7 +131,13 @@
     return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || name).slice(0, 2)).toUpperCase();
   }
   var cid = 0;
+  function logoUrl(p) { return 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/' + p + '&w=96&h=96'; }
   function crest(name, big) {
+    var lg = D.logos && D.logos[name];
+    if (lg) return '<span class="crl' + (big ? ' big' : '') + '"><img src="' + logoUrl(lg) + '" alt="" loading="lazy" onerror="this.parentNode.className+=\' nolg\'">' + crestSvg(name, big) + '</span>';
+    return crestSvg(name, big);
+  }
+  function crestSvg(name, big) {
     var t = TC[name];
     if (!t) { var h = 0; for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360; t = ['hsl(' + h + ',52%,38%)', '#f4f4f4', 's']; }
     var c1 = t[0], c2 = t[1], p = t[2], id = 'cp' + (cid++), body = '';
@@ -1860,6 +1866,7 @@
     if (r) for (i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
     return null;
   };
+  loadLazy('logos', function (err) { if (!err && !st.detail) { var yl = window.scrollY; render(); window.scrollTo(0, yl); } });          // logos des équipes : affichés dès qu'ils sont arrivés
   Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
   if (AS.alert && Alerts.topic()) todayLoad();                                  // charge les matchs du jour pour programmer les alertes de l'assistant
   Bets.attach(app, render, function () { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); });

@@ -384,14 +384,30 @@ def main():
         for d, c in xcal.items():                                        # compétitions ESPN : fiabilité rejouée + suivi réel
             rel.setdefault("lgs", {})[d] = dict(bt=c, live=live.get(d, {}).get("live"))
         hist_dfs = {d: ([r for r in rows if r["Date"] >= now - timedelta(days=540)] if d.startswith("x:") else rows) for d, rows in dfs.items()}   # historique envoyé au navigateur (onglet Forme)
+        logo_map = {}
+        try:                                                             # logos / drapeaux des équipes (ESPN)
+            import logos as _lg
+            names = set()
+            for r in fixtures:
+                names.update((r["HomeTeam"], r["AwayTeam"]))
+            for c in cal:
+                names.update((c["home"], c["away"]))
+            for e in ext or []:
+                names.update((e["home"], e["away"]))
+            for lg in leagues.values():
+                names.update(lg["teams"])
+            logo_map = _lg.build(_lg.update(hub_events), leagues, names)
+            print(f"Logos : {len(logo_map)} équipes sur {len(names)}.", file=sys.stderr)
+        except Exception as exc:
+            print(f"[avertissement] logos indisponibles : {exc}", file=sys.stderr)
         page_args = (models, fixtures, market_probs, now, args.days, leagues, rel, hist_dfs, ext, tennis_data(now), basket_data(now), rugby_data(now), handball_data(now), hockey_data(now), f1_data(now), baseball_data(now), nfl_data(now), mma_data(now), golf_data(now), volley_data(now))
         esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
         esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
         res = results_update(now, esports, models=models, rows_by_div=rows_by_div)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
         with open("output/index.html", "w", encoding="utf-8") as fh:
-            fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal, xacc=xacc))
+            fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal, xacc=xacc, logos=logo_map))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)
-            fh.write(build_page(*page_args, artifact=True, res=res, cal=cal, xacc=xacc))
+            fh.write(build_page(*page_args, artifact=True, res=res, cal=cal, xacc=xacc, logos=logo_map))
         write_site("output")                                             # manifeste, icônes, service worker (application installable)
         print(f"Page générée : {os.path.abspath('output/index.html')}")
         state_path, state = "data/notify_state.json", {}

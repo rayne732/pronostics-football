@@ -125,6 +125,11 @@ def describe(slug, name):
 
 
 # ---------------------------------------------------------------- flux global
+def _logo(t):
+    from logos import short
+    return short(t.get("logo"))
+
+
 def _event(e, lg_idx):
     lid = e["uid"].split("~")[1][2:]
     lg = lg_idx.get(lid)
@@ -148,7 +153,8 @@ def _event(e, lg_idx):
         p = [round(x / s, 3) for x in q]
     sc = lambda c: int(c["score"]) if st != "pre" and str(c.get("score", "")).isdigit() else None
     return dict(id=e["id"], slug=lg["slug"], lname=lg["name"], gender=lg["gender"], date=f"{when:%Y-%m-%d}", time=f"{when:%H:%M}", st=st,
-                home=team["home"]["team"].get("displayName", ""), away=team["away"]["team"].get("displayName", ""), hs=sc(team["home"]), as_=sc(team["away"]),
+                home=team["home"]["team"].get("displayName", ""), away=team["away"]["team"].get("displayName", ""),
+                hl=_logo(team["home"]["team"]), al=_logo(team["away"]["team"]), hs=sc(team["home"]), as_=sc(team["away"]),
                 p=p, o=odds, neutral=bool(comp.get("neutralSite")), final=(detail == "STATUS_FULL_TIME" or detail.startswith("STATUS_FINAL")))
 
 
