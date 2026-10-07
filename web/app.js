@@ -1067,6 +1067,52 @@
   var AS_HAIR = 0.03;                                     // marge de prudence retirée à chaque probabilité (nos pronostics « sûrs » sont en moyenne à 2-3 points au-dessus du réel)
   function asStake(x) { return Math.max(1, Math.round(x * 2) / 2); }
   function eur2(x) { return String(Math.round(x * 100) / 100).replace('.', ',') + ' €'; }
+  var ASREC = {};                                          // plan de l'assistant gardé par jour : { date: { id pari: {...} } } (sert au bilan)
+  try { ASREC = JSON.parse(localStorage.getItem('pf-asrec') || '{}') || {}; } catch (e) { ASREC = {}; }
+  function asRecSave() {
+    var keys = Object.keys(ASREC).sort(); while (keys.length > 30) delete ASREC[keys.shift()];
+    try { localStorage.setItem('pf-asrec', JSON.stringify(ASREC)); } catch (e) { /* ignoré */ }
+  }
+  function asRemember(R, plan) {                           // on retient tout ce que l'assistant a conseillé dans la journée (la liste s'allonge tant que des matchs ne sont pas commencés)
+    if (!plan || plan.stop || !plan.items.length) return;
+    var day = ASREC[R.T] || (ASREC[R.T] = {}), ch = false;
+    plan.items.forEach(function (it) {
+      var k = it.r.bid;
+      if (!day[k]) { day[k] = { match: it.r.match, pick: it.r.pick, m: it.r.bm, s: it.r.bs, pa: it.pa, stake: it.stake, icon: it.r.icon }; ch = true; }
+    });
+    if (ch) asRecSave();
+  }
+  function asVerdict(pa, stake, o) {                       // la cote vue chez le bookmaker est-elle assez haute pour le vrai risque ?
+    if (!(o > 1)) return '';
+    var ev = pa * o - 1, mn = 1 / pa, mnT = mn.toFixed(2).replace('.', ',');
+    if (o >= mn) {
+      return '<b class="as-ok">✅ Cote suffisante</b> (minimum ' + mnT + '). Si le pari passe : <b>+' + eur2(stake * (o - 1)) + '</b>. Espérance : <b>' + (ev >= 0 ? '+' : '−') + eur2(Math.abs(ev * stake)) + '</b> sur ' + eur2(stake) + '.' +
+        (ev > 0.25 ? '<br><span class="as-warn">⚠ Un avantage aussi grand vient le plus souvent d’une erreur de notre estimation (onglet Fiabilité) : prudence.</span>' : '');
+    }
+    return '<b class="as-ko">❌ Cote trop basse</b> : il te faut au moins ' + mnT + '. Espérance : <b>−' + eur2(Math.abs(ev * stake)) + '</b> sur ' + eur2(stake) + '. <b>Passe ton tour.</b>';
+  }
+  function asOddsBox(id, pa, stake, saved) {
+    return '<div class="as-odds"><label>Cote vue chez le bookmaker<input inputmode="decimal" autocomplete="off" placeholder="ex. ' + (1 / pa * 1.08).toFixed(2).replace('.', ',') + '" value="' + (saved ? String(saved).replace('.', ',') : '') +
+      '" data-asodds="' + esc(id) + '" data-pa="' + pa.toFixed(4) + '" data-stake="' + stake + '"></label><div class="as-verdict" data-asv="' + esc(id) + '">' + (saved ? asVerdict(pa, stake, saved) : '') + '</div></div>';
+  }
+  function asBilanHTML(R) {
+    var days = Object.keys(ASREC).filter(function (d) { return d < R.T || true; }).sort().reverse().slice(0, 7), tot = { n: 0, w: 0, pa: 0 }, rows = '', pend = false, profit = 0, withOdds = 0;
+    days.forEach(function (d) {
+      var items = Object.keys(ASREC[d]).map(function (k) { var it = ASREC[d][k]; it.id = k; return it; }), n = 0, w = 0, lines = '';
+      items.forEach(function (it) {
+        var r = Bets.resolver(it.id, it.m, it.s);
+        if (r === null) pend = true; else { n++; if (r) w++; tot.n++; tot.pa += it.pa; if (r) tot.w++; if (it.o > 1) { withOdds++; profit += r ? it.stake * (it.o - 1) : -it.stake; } }
+        lines += '<div class="pr ' + (r === null ? '' : r ? 'ok' : 'ko') + '"><span class="mk2">' + (r === null ? '·' : svg(r ? IC.check : IC.x)) + '</span><span class="pt">' + esc(it.match) + '<small class="sm">' + esc(it.pick) + ' · mise ' + eur2(it.stake) + '</small></span><span class="pp">' + pct(it.pa) + '</span></div>';
+      });
+      if (items.length) rows += '<details class="rd"><summary>' + (d === R.T ? 'Aujourd’hui' : WD[parseD(d).getDay()] + ' ' + dm(d)) + ' <small>' + (n ? w + ' / ' + n + ' gagnés' : 'en attente') + (n < items.length ? ' · ' + (items.length - n) + ' à venir' : '') + '</small></summary>' + lines + '</details>';
+    });
+    if (pend && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+    if (!rows) return '';
+    var h = '<div class="sec"><span class="dot a"></span>Bilan de l’assistant <small>7 derniers jours</small></div><div class="fm">';
+    if (tot.n) h += '<div class="sub">Sur <b>' + tot.n + '</b> paris conseillés et terminés : <b>' + tot.w + ' gagnés (' + pct(tot.w / tot.n) + ')</b>, pour <b>' + pct(tot.pa / tot.n) + '</b> annoncés.' +
+      (withOdds ? ' Avec les cotes que tu as saisies (' + withOdds + ' paris) : <b>' + (profit >= 0 ? '+' : '−') + eur2(Math.abs(profit)) + '</b>.' : ' Saisis la cote vue sur le bookmaker pour voir ton gain en euros.') + '</div>';
+    return h + rows + '</div>';
+  }
   function assistantPlan(R) {
     var pf = AS_PROF[AS.prof], mi = Bets.monthInfo(), plan = { items: [], combo: null, notes: [], stop: false, total: 0, mi: mi };
     var mult = 1, remaining = Infinity;
@@ -1114,6 +1160,7 @@
   }
   function assistantHTML(R) {
     var plan = assistantPlan(R), pf = AS_PROF[AS.prof], mi = plan.mi;
+    asRemember(R, plan);
     var h = '<div class="sec"><span class="dot g"></span>Mon assistant <small>mises conseillées pour aujourd’hui</small></div><div class="fm as-box">';
     h += '<div class="as-bar"><button class="chip pill' + (AS_OPEN ? ' on' : '') + '" data-as="open|' + (AS_OPEN ? 0 : 1) + '">⚙ ' + pf.name + ' · ' + AS.unit + ' €' + (AS.daily > 0 ? ' · ' + String(AS.daily).replace('.', ',') + ' €/jour' : '') + ' ' + (AS_OPEN ? '▴' : '▾') + '</button>' +
       '<button class="chip pill' + (AS.alert && Alerts.topic() ? ' on' : '') + '" data-as="alert|' + (AS.alert ? 0 : 1) + '">🔔 Alerte</button></div>';
@@ -1137,7 +1184,8 @@
         h += '<div class="as-row"><div class="as-top"><span class="as-tag as-' + (it.tag === 'Très sûr' ? 'a' : it.tag === 'Sûr' ? 'b' : 'c') + '">' + it.tag + '</span><b>' + r.icon + ' ' + esc(r.match) + '</b><small>' + esc(r.time || '') + '</small></div>' +
           '<div class="as-pick">' + esc(r.pick) + '</div>' +
           '<div class="as-nums"><span>Réussite estimée <b>' + pct(it.pa) + '</b></span><span>Mise conseillée <b>' + eur2(it.stake) + '</b></span><span>Cote minimale <b>' + mn.toFixed(2).replace('.', ',') + '</b></span></div>' +
-          '<div class="bt-act"><button class="bt-b" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + it.pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Assistant" data-bstake="' + it.stake + '">€ Noter ce pari</button>' +
+          asOddsBox(r.bid, it.pa, it.stake, (ASREC[R.T] && ASREC[R.T][r.bid] && ASREC[R.T][r.bid].o) || 0) +
+          '<div class="bt-act"><button class="bt-b" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + it.pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Assistant" data-bstake="' + it.stake + '"' + (ASREC[R.T] && ASREC[R.T][r.bid] && ASREC[R.T][r.bid].o ? ' data-bodds="' + ASREC[R.T][r.bid].o + '"' : '') + '>€ Noter ce pari</button>' +
           '<button class="voir" ' + r.ref + '>Voir' + svg(IC.chev) + '</button></div></div>';
       });
       if (plan.combo) {
@@ -1145,7 +1193,7 @@
         h += '<div class="as-row"><div class="as-top"><span class="as-tag as-c">Combiné</span><b>' + plan.combo.legs.length + ' sélections</b></div>' +
           plan.combo.legs.map(function (r) { return '<div class="as-pick">' + r.icon + ' ' + esc(r.match) + ' · ' + esc(r.pick) + '</div>'; }).join('') +
           '<div class="as-nums"><span>Réussite estimée <b>' + pct(plan.combo.P) + '</b></span><span>Mise conseillée <b>' + eur2(plan.combo.stake) + '</b></span><span>Cote minimale <b>' + (1 / plan.combo.P).toFixed(2).replace('.', ',') + '</b></span></div>' +
-          '<div class="bt-act"><button class="bt-b" data-bcombo="0" data-bstake="' + plan.combo.stake + '">€ Noter ce combiné</button></div></div>';
+          asOddsBox('combo', plan.combo.P, plan.combo.stake, 0) + '<div class="bt-act"><button class="bt-b" data-bcombo="0" data-bstake="' + plan.combo.stake + '">€ Noter ce combiné</button></div></div>';
       }
       if (plan.items.length) {
         var pAll = plan.items.reduce(function (t, it) { return t * it.pa; }, 1), exp = plan.items.reduce(function (t, it) { return t + it.pa; }, 0);
@@ -1153,6 +1201,7 @@
           'la probabilité que <b>tous</b> les simples passent est de ' + pct(pAll) + '. Plus la probabilité est haute, plus la cote est basse : le gain d’un pari très sûr reste petit.</div>';
       }
     }
+    h += asBilanHTML(R);
     h += '<div class="srcnote"><b>Comment je décide.</b> Je ne garde, par match, que le pronostic le plus probable, après avoir retiré 3 points de prudence. Les marchés non validés par backtest perdent 2 points de plus (et sont exclus du profil prudent). Je laisse de côté les paris au-dessus de 93 % (cote trop basse pour valoir le coup) et les matchs déjà commencés. Mise : 100 % de ta mise de base à partir de 88 %, 50 % de 82 à 88 %, 30 % de 74 à 82 %. ' +
       '« Cote minimale » : en dessous, le bookmaker te paie moins que le vrai risque, ne joue pas. Ce sont des estimations, pas des certitudes : sur la durée, la marge des bookmakers fait perdre la plupart des parieurs, même avec de bons pronostics. ' +
       'Ne mise jamais d’argent dont tu as besoin. Joueurs Info Service : 09 74 75 13 13 (gratuit, anonyme).</div></div>';
@@ -1865,6 +1914,17 @@
       saveFavs(); render();
       Alerts.sync(favItems(), true).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
+  });
+  app.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t.hasAttribute || !t.hasAttribute('data-asodds')) return;
+    var id = t.getAttribute('data-asodds'), pa = +t.getAttribute('data-pa'), stake = +t.getAttribute('data-stake');
+    var o = parseFloat(String(t.value).replace(',', '.')), box = app.querySelector('[data-asv="' + id + '"]');
+    if (box) box.innerHTML = asVerdict(pa, stake, o);
+    var rec = ASREC[parisToday()] && ASREC[parisToday()][id];
+    if (rec) { rec.o = o > 1 ? Math.round(o * 100) / 100 : 0; asRecSave(); }
+    var btn = t.closest('.as-row') && t.closest('.as-row').querySelector('[data-bet]');
+    if (btn) { if (o > 1) btn.setAttribute('data-bodds', o); else btn.removeAttribute('data-bodds'); }
   });
   app.addEventListener('input', function (e) {
     if (e.target.id !== 'q') return;

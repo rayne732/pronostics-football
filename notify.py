@@ -207,6 +207,37 @@ def build_weekly(state, now, site_url):
                  message=chr(10).join(lines), priority=3, tags=["calendar"], **({"click": site_url} if site_url else {}))]
 
 
+def _assistant_day(day, sports):
+    """(paris, gagnés) du plan « Équilibré » de l'assistant pour le jour `day` : un pronostic sûr par match, probabilité réduite de 3 points (2 de plus si marché non validé),
+    entre 78 % et 93 %, les 4 meilleurs. Le vrai plan de l'appli dépend du profil et du budget, qui restent sur le téléphone : ceci est un repère."""
+    from digest import TRACK_FILE
+    cands = {}
+
+    def add(key, pa, p, hit):
+        if pa >= 0.78 and p <= 0.93 and (key not in cands or pa > cands[key][0]):
+            cands[key] = (pa, bool(hit))
+    try:
+        with open(TRACK_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+        for m in data["matches"].values():
+            if m["date"] != day or not m["settled"]:
+                continue
+            for p in m["picks"]:
+                if p["tier"] == 0 and p.get("hit") is not None:
+                    add(f"F|{m['home']}|{m['away']}", p["p"] - 0.03 - (0 if p.get("validated") else 0.02), p["p"], p["hit"])
+    except (OSError, ValueError):
+        pass
+    for key, d in (sports or {}).items():
+        for it in (d or {}).get("matches", []):
+            if it.get("state") != "post" or it.get("date") != day:
+                continue
+            for r in it.get("picks", []):
+                if r["t"] == 0 and r.get("h") is not None:
+                    add(f"{key}|{it.get('id')}", r["p"] - 0.05, r["p"], r["h"])
+    top = sorted(cands.values(), key=lambda x: -x[0])[:4]
+    return len(top), sum(1 for _, h in top if h)
+
+
 def build_evening(sports, now, site_url):
     """Bilan du soir : pronostics sûrs gagnés aujourd'hui (tous sports), par sport, et les plus gros ratés. [] s'il y en a trop peu."""
     day = _paris_date(now).isoformat()
@@ -235,6 +266,9 @@ def build_evening(sports, now, site_url):
     if tn < 5:
         return []
     lines = [" · ".join(f"{i} {w_}/{n_}" for i, n_, w_ in per)]
+    an, aw = _assistant_day(day, sports)
+    if an >= 2:
+        lines.append(f"🤖 Assistant (profil Équilibré) : {aw}/{an} paris conseillés gagnés")
     miss.sort(key=lambda x: -x[0])
     if miss:
         lines.append("Plus gros ratés :")
