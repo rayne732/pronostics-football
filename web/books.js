@@ -41,13 +41,13 @@ var Books = (function () {
   function name(id) { var b = LIST.filter(function (x) { return x[0] === id; })[0]; return b ? b[1] : ''; }
   function links(match) {
     return active().map(function (b) {
-      return '<a class="bt-b" data-bwin="' + esc(match) + '" href="' + b[3] + '" target="_blank" rel="noopener">Cote sur ' + b[1] + ' ↗</a>';
+      return '<a class="bt-b sm" data-bwin="' + esc(match) + '" href="' + b[3] + '" target="_blank" rel="noopener" title="Voir la cote sur ' + b[1] + '"><i class="bkdot bk-' + b[0] + '"></i>' + b[1] + ' ↗</a>';
     }).join('');
   }
   function bar(open) {
-    var h = '<div class="bkbar"><span class="bkl">Bookmakers</span>' + LIST.map(function (b) {
-      return '<button class="chip' + (S.on[b[0]] ? ' on' : '') + '" data-bk="' + b[0] + '" aria-pressed="' + (S.on[b[0]] ? 'true' : 'false') + '">' + b[1] + '</button>';
-    }).join('') + '<button class="chip" data-bkopen aria-expanded="' + (open ? 'true' : 'false') + '">Marchés ' + (open ? '▴' : '▾') + '</button></div>';
+    var h = '<div class="bkbar"><span class="bkl">Parier sur</span>' + LIST.map(function (b) {
+      return '<button class="bkchip' + (S.on[b[0]] ? ' on' : '') + '" data-bk="' + b[0] + '" aria-pressed="' + (S.on[b[0]] ? 'true' : 'false') + '"><i class="bkdot bk-' + b[0] + '"></i>' + b[1] + '</button>';
+    }).join('') + '<button class="bkchip ghost" data-bkopen aria-expanded="' + (open ? 'true' : 'false') + '" aria-label="Choisir les marchés par bookmaker">Marchés ' + (open ? '▴' : '▾') + '</button></div>';
     if (!open) return h;
     var keys = Object.keys(seen).sort(function (a, b) { return a < b ? -1 : 1; });
     h += '<div class="fm bkpanel"><div class="sub">Coche les marchés que chaque appli propose. <b>Winamax</b> : d’après tes captures. <b>Betclic</b> : estimation, à corriger selon ce que tu vois dans ton appli ' +

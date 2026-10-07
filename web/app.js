@@ -1048,6 +1048,7 @@
   function asSave() { try { localStorage.setItem('pf-assist', JSON.stringify(AS)); } catch (e) { /* ignoré */ } }
   var AS_PROF = { pr: { name: 'Prudent', min: 0.85, max: 3, combo: 0 }, eq: { name: 'Équilibré', min: 0.78, max: 4, combo: 2 }, au: { name: 'Audacieux', min: 0.70, max: 6, combo: 3 } };
   var AS_SPORT = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
+  var AS_OPEN = false;                                    // réglages de l'assistant dépliés ?
   var AS_CAP = 0.93;                                      // au-delà, la cote est trop basse (≈ 1,07) pour que le pari ait un intérêt
   var AS_HAIR = 0.03;                                     // marge de prudence retirée à chaque probabilité (nos pronostics « sûrs » sont en moyenne à 2-3 points au-dessus du réel)
   function asStake(x) { return Math.max(1, Math.round(x * 2) / 2); }
@@ -1100,18 +1101,21 @@
   function assistantHTML(R) {
     var plan = assistantPlan(R), pf = AS_PROF[AS.prof], mi = plan.mi;
     var h = '<div class="sec"><span class="dot g"></span>Mon assistant <small>mises conseillées pour aujourd’hui</small></div><div class="fm as-box">';
-    h += '<div class="sub">Ton profil</div><div class="chips">' + Object.keys(AS_PROF).map(function (k) {
-      return '<button class="chip pill' + (AS.prof === k ? ' on' : '') + '" data-as="prof|' + k + '">' + AS_PROF[k].name + '</button>'; }).join('') + '</div>';
-    h += '<div class="sub">Ta mise de base</div><div class="chips">' + [2, 5, 10, 20].map(function (u) {
-      return '<button class="chip pill' + (AS.unit === u ? ' on' : '') + '" data-as="unit|' + u + '">' + u + ' €</button>'; }).join('') + '</div>';
-    h += '<div class="bt-line"><input id="as-daily" inputmode="decimal" placeholder="Budget du jour (€), sinon ' + (AS.unit * 3) + ' €" value="' + (AS.daily > 0 ? String(AS.daily).replace('.', ',') : '') + '"><button class="bt-b" data-as="daily|">Enregistrer</button></div>';
+    h += '<div class="as-bar"><button class="chip pill' + (AS_OPEN ? ' on' : '') + '" data-as="open|' + (AS_OPEN ? 0 : 1) + '">⚙ ' + pf.name + ' · ' + AS.unit + ' €' + (AS.daily > 0 ? ' · ' + String(AS.daily).replace('.', ',') + ' €/jour' : '') + ' ' + (AS_OPEN ? '▴' : '▾') + '</button>' +
+      '<button class="chip pill' + (AS.alert && Alerts.topic() ? ' on' : '') + '" data-as="alert|' + (AS.alert ? 0 : 1) + '">🔔 Alerte</button></div>';
+    if (AS_OPEN) {
+      h += '<div class="as-set"><div class="sub">Ton profil</div><div class="chips">' + Object.keys(AS_PROF).map(function (k) {
+        return '<button class="chip pill' + (AS.prof === k ? ' on' : '') + '" data-as="prof|' + k + '">' + AS_PROF[k].name + '</button>'; }).join('') + '</div>';
+      h += '<div class="sub">Ta mise de base</div><div class="chips">' + [2, 5, 10, 20].map(function (u) {
+        return '<button class="chip pill' + (AS.unit === u ? ' on' : '') + '" data-as="unit|' + u + '">' + u + ' €</button>'; }).join('') + '</div>';
+      h += '<div class="bt-line"><input id="as-daily" inputmode="decimal" placeholder="Budget du jour (€), sinon ' + (AS.unit * 3) + ' €" value="' + (AS.daily > 0 ? String(AS.daily).replace('.', ',') : '') + '"><button class="bt-b" data-as="daily|">Enregistrer</button></div></div>';
+    }
     if (mi.budget > 0) h += '<div class="sub">Ce mois-ci : misé <b>' + eur2(mi.spent) + '</b> sur ' + eur2(mi.budget) + (mi.n ? ' · résultat <b>' + (mi.profit >= 0 ? '+' : '−') + eur2(Math.abs(mi.profit)) + '</b> sur ' + mi.n + ' paris terminés' : '') + '.</div>';
-    else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte et te dit de t’arrêter quand il est atteint.</div>';
+    else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte.</div>';
     plan.notes.forEach(function (n) { h += '<div class="bt-warn">' + esc(n) + '</div>'; });
     var hasT = !!Alerts.topic();
-    h += '<div class="bt-act"><button class="chip pill' + (AS.alert && hasT ? ' on' : '') + '" data-as="alert|' + (AS.alert ? 0 : 1) + '">🔔 Alerte 45 min avant chaque pari conseillé</button></div>';
     if (AS.alert && !hasT) h += '<div class="bt-warn">Pour recevoir les alertes, renseigne d’abord le nom de ton sujet ntfy dans l’onglet Favoris (section « Alertes »).</div>';
-    else if (AS.alert) h += '<div class="sub">Alertes programmées à l’ouverture de l’appli, pour les paris conseillés d’aujourd’hui. ' + esc(Alerts.status()) + '</div>';
+    else if (AS.alert) h += '<div class="sub">🔔 ' + esc(Alerts.status() || 'Alertes 45 min avant chaque pari conseillé.') + '</div>';
     if (!plan.stop) {
       if (!plan.items.length) h += '<div class="empty">Aucun pari ne passe le seuil « ' + pf.name + ' » (' + Math.round(pf.min * 100) + ' % après prudence) aujourd’hui. Ne rien jouer est aussi une bonne décision.</div>';
       plan.items.forEach(function (it) {
@@ -1662,7 +1666,7 @@
     var lm = lmeta(d.div);
     return '<div class="vs"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
       '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
-      '<div class="betbar"><button class="bt-b" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari sur ce match</button>' +
+      '<div class="betbar"><button class="bt-b sm pri" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari</button>' +
       Books.links(d.home + ' – ' + d.away) + '</div>';
   }
   function detailPage(d) {
@@ -1801,7 +1805,8 @@
     else if (t.hasAttribute('data-aloff')) { Alerts.clear(); ALMSG = 'Alertes désactivées.'; render(); }
     else if (t.hasAttribute('data-as')) {
       var ap = t.getAttribute('data-as').split('|');
-      if (ap[0] === 'prof') AS.prof = ap[1];
+      if (ap[0] === 'open') AS_OPEN = ap[1] === '1';
+      else if (ap[0] === 'prof') AS.prof = ap[1];
       else if (ap[0] === 'unit') AS.unit = +ap[1];
       else if (ap[0] === 'alert') AS.alert = ap[1] === '1';
       else if (ap[0] === 'daily') { var dv = parseFloat(String((document.getElementById('as-daily') || {}).value || '').replace(',', '.')); AS.daily = dv > 0 ? dv : 0; }
