@@ -485,3 +485,39 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .as-row{border-left:3px solid var(--line);padding-left:10px}
 .as-row:has(.as-a){border-left-color:var(--green)}.as-row:has(.as-b){border-left-color:var(--blue)}.as-row:has(.as-c){border-left-color:var(--amber)}
 .as-row{border-top:0;margin-top:10px}
+
+/* finitions graphiques : logos mis en valeur, favori, animations d'entrée, filigranes, pastilles */
+.crl{position:relative}
+.crl.big::before{content:"";position:absolute;inset:-10px;border-radius:50%;background:radial-gradient(closest-side,color-mix(in srgb,var(--ac,var(--blue)) 28%,transparent),transparent 72%);z-index:0}
+.crl img,.crl .cr{position:relative;z-index:1}
+.fcard{position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease}
+.fcard::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,var(--ac),transparent);opacity:.9}
+.fcard:active,.mrow:active{transform:scale(.99)}
+.mrow{transition:transform .15s ease,box-shadow .15s ease}
+.duel .s.fv b::after{content:" ★";color:var(--amber);font-size:.78em}
+.duel .s.fv .crl,.duel .s.fv .cr{filter:drop-shadow(0 0 10px color-mix(in srgb,var(--ac) 55%,transparent))}
+.duel .s:not(.fv) .crl{opacity:.92}
+.cd.live,.tm small.live{color:var(--red)!important;font-weight:700}
+.cd.live::before,.tm small.live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:1px;animation:blink 1.2s ease-in-out infinite}
+.cd.done,.tm small.done{opacity:.7}
+@keyframes blink{50%{opacity:.25;transform:scale(.7)}}
+#nav button{transition:color .18s ease}
+#nav button .ic{transition:transform .2s ease}
+#nav button.on .ic{transform:translateY(-1px) scale(1.08)}
+#nav .nb{position:absolute;top:5px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--red);color:#fff;font:700 .6rem/17px var(--font);font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.vs.wm::before,.vs.wm::after{content:"";position:absolute;top:-6px;bottom:-14px;width:46%;background:center/contain no-repeat;opacity:.1;filter:blur(1.5px);pointer-events:none;z-index:0}
+.vs.wm::before{left:-8px;background-image:var(--l1,none)}.vs.wm::after{right:-8px;background-image:var(--l2,none)}
+.vs>*{position:relative;z-index:1}
+.pulse b,.cfp,.pf b,.pp{font-variant-numeric:tabular-nums}
+.sec .dot{box-shadow:0 0 8px currentColor}
+.main{position:relative;overflow:hidden}
+.main::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.75}
+.main.mid::before{background:linear-gradient(90deg,transparent,var(--amber),transparent)}.main.low::before{background:linear-gradient(90deg,transparent,var(--blue),transparent)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.anim .fcard,.anim .mrow,.anim .lgh,.anim .pulse,.anim .main{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+.anim .fcard:nth-child(2),.anim .mrow:nth-child(2n){animation-delay:.06s}
+.anim .fcard:nth-child(3),.anim .mrow:nth-child(3n){animation-delay:.12s}
+.anim .fcard:nth-child(n+4){animation-delay:.18s}
+.anim .mb i,.anim .b3 i,.anim .f1b i,.anim .wb i{transform-origin:left center;animation:grow .8s cubic-bezier(.2,.7,.2,1) both .15s}
+@media (prefers-reduced-motion:reduce){.anim *,.cd.live::before,.tm small.live::before{animation:none!important}}

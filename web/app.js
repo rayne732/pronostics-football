@@ -201,8 +201,8 @@
   function fcard(f) {
     return '<div class="fcard ' + f.conf + '"><div class="lg">' + esc(cpName(f)) + ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') +
       '<span class="cd">' + svg(IC.clock) + countdown(f) + '</span></div>' +
-      '<div class="duel"><div class="s">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b></div><span class="vsp">VS</span>' +
-      '<div class="s">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b></div></div>' + miniBar(f.p) +
+      '<div class="duel"><div class="s' + (f.favIdx === 0 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b></div><span class="vsp">VS</span>' +
+      '<div class="s' + (f.favIdx === 2 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b></div></div>' + miniBar(f.p) +
       '<div class="cfp ' + f.conf + '">' + confIcon(f.conf) + CONF[f.conf] + '</div>' +
       '<div class="pf">' + esc(favName(f)) + ' <b>' + pct(f.fav) + '</b></div>' +
       '<button class="voir wide ' + f.conf + '" data-open="' + f.i + '">Voir le pronostic ' + svg(IC.chev) + '</button></div>';
@@ -1664,7 +1664,8 @@
   }
   function vsBlock(d) {
     var lm = lmeta(d.div);
-    return '<div class="vs"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
+    var l1 = D.logos && D.logos[d.home], l2 = D.logos && D.logos[d.away];
+    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
       '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
       '<div class="betbar"><button class="bt-b sm pri" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari</button>' +
       Books.links(d.home + ' – ' + d.away) + '</div>';
@@ -1692,10 +1693,22 @@
   }
 
   /* ------------------------------------------------------------ navigation */
+  function navCount(today) {                                  // petite pastille sur l'onglet : matchs de foot du jour / favoris à venir
+    var T = parisToday();
+    return today ? D.fixtures.filter(function (f) { return f.date === T; }).length : D.fixtures.filter(function (f) { return favs[f.id]; }).length;
+  }
+  function decorate() {                                       // détails après chaque affichage : points « en direct », « terminé »
+    var els = app.querySelectorAll('.cd, .tm small');
+    for (var i = 0; i < els.length; i++) {
+      var t = els[i].textContent.trim();
+      if (t === 'En cours') els[i].classList.add('live'); else if (t === 'Terminé') els[i].classList.add('done');
+    }
+  }
   function renderNav() {
     var items = [['today', 'Aujourd’hui'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
-      return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + '<span>' + x[1] + '</span></button>';
+      var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : 0;
+      return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
     }).join('') + '</div>';
   }
   function sportHTML() {
@@ -1719,6 +1732,7 @@
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     renderNav();
+    decorate();
     var fab = document.getElementById('fab');
     if (!fab) { fab = document.createElement('button'); fab.id = 'fab'; fab.setAttribute('data-ticket', ''); document.body.appendChild(fab); }
     fab.className = 'fab' + (ticket.length && st.tab !== 'ticket' ? '' : ' hide');
@@ -1874,6 +1888,7 @@
     if (r) for (i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
     return null;
   };
+  app.classList.add('anim'); setTimeout(function () { app.classList.remove('anim'); }, 1100);
   loadLazy('logos', function (err) { if (!err && !st.detail) { var yl = window.scrollY; render(); window.scrollTo(0, yl); } });          // logos des équipes : affichés dès qu'ils sont arrivés
   Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
   if (AS.alert && Alerts.topic()) todayLoad();                                  // charge les matchs du jour pour programmer les alertes de l'assistant
