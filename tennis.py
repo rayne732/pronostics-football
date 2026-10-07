@@ -328,7 +328,7 @@ def families(a, b, p, bo, tour="ATP"):
         F.append(("Total sets", [["Plus de " + txt + " sets", tot(lambda x, y: x + y > ln)], ["Moins de " + txt + " sets", tot(lambda x, y: x + y < ln)]], False, False))
     import tennis_games
     for nm, sels in tennis_games.extra_families(a, b, p, bo, tour):
-        F.append((nm, [[n_, v_] for n_, v_ in sels], False, False))
+        F.append((nm, [[n_, v_] for n_, v_ in sels], False, nm == "Score exact du 1er set"))
     ns = sorted({x + y for (x, y) in sc})
     F.append(("Nombre exact de sets", [[f"{n_} sets", tot(lambda x, y, n_=n_: x + y == n_)] for n_ in ns], False, False))
     cells = sorted(sc.items(), key=lambda kv: -kv[1])[:3]
@@ -532,6 +532,30 @@ def _won(rec, raw, F, a_sets, b_sets):
         g = sum(int(x.split("-")[0 if who == a else 1]) for x in raw["sets"])
         ln = float(re.search(r"(\d+,\d)", s).group(1).replace(",", "."))
         return g > ln if s.startswith("Plus") else g < ln
+    sets = [tuple(int(v) for v in x.split("-")) for x in raw["sets"]]
+    if sets:
+        f0, is_tb = sets[0], (lambda q: max(q) == 7 and min(q) == 6)
+        w1 = a if f0[0] > f0[1] else b
+        if rec["m"] == "Vainqueur du 1er set":
+            return s == w1
+        if rec["m"] == "Résultat 1er set / match":
+            x, y = s.split(" au 1er set et ")
+            return x == w1 and y.removesuffix(" le match") == (a if raw["win"] == 0 else b)
+        if rec["m"] in ("Total jeux du match", "Total jeux du 1er set"):
+            ln = float(re.search(r"(\d+,\d)", s).group(1).replace(",", "."))
+            g = sum(x + y for x, y in sets) if rec["m"] == "Total jeux du match" else f0[0] + f0[1]
+            return g > ln if s.startswith("Plus") else g < ln
+        if rec["m"] == "Tie-break dans le match":
+            return (s == "Oui") == any(is_tb(q) for q in sets)
+        if rec["m"] == "Tie-break au 1er set":
+            return (s == "Oui") == is_tb(f0)
+        if rec["m"] == "Nombre de tie-breaks":
+            return min(sum(is_tb(q) for q in sets), 2) == int(s.split()[0])
+        if rec["m"] == "Un set à 6-0":
+            return (s == "Oui") == any(max(q) == 6 and min(q) == 0 for q in sets)
+        if rec["m"] == "Score exact du 1er set":
+            m = re.match(r"(.*) (\d)-(\d)$", s)
+            return bool(m) and m.group(1) == w1 and max(f0) == int(m.group(2)) and min(f0) == int(m.group(3))
     if rec["m"] == "Nombre exact de sets":
         return a_sets + b_sets == int(s.split()[0])
     if rec["m"] == "Total sets":

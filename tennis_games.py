@@ -178,6 +178,36 @@ def _after6(sa, sb):
     return tuple(res)
 
 
+def _dp(sd, bo, init, upd):
+    """Parcourt le match set par set ; `upd(k, n, i, j)` met à jour une information annexe k. -> {(sets A, sets B, k): prob}."""
+    need = (bo + 1) // 2
+    cur = {(0, 0, init): 1.0}
+    out = {}
+    for n in range(bo):
+        nxt = {}
+        for (x, y, k), v in cur.items():
+            for (i, j), pr in sd.items():
+                nx, ny, nk = x + (i > j), y + (j > i), upd(k, n, i, j)
+                key = (nx, ny, nk)
+                if nx == need or ny == need:
+                    out[key] = out.get(key, 0) + v * pr
+                else:
+                    nxt[key] = nxt.get(key, 0) + v * pr
+        cur = nxt
+    return out
+
+
+def _rich(sa, sb, bo):
+    """Distributions annexes pour un niveau de service donné."""
+    sd = set_dist(sa, sb)
+    is_tb = lambda i, j: max(i, j) == 7 and min(i, j) == 6
+    tt = _dp(sd, bo, 0, lambda k, n, i, j: k + i + j)
+    tb = _dp(sd, bo, 0, lambda k, n, i, j: min(k + is_tb(i, j), 2))
+    bg = _dp(sd, bo, 0, lambda k, n, i, j: k or (max(i, j) == 6 and min(i, j) == 0))
+    f1 = _dp(sd, bo, 0, lambda k, n, i, j: k if n else (1 if i > j else 2))
+    return dict(sd=sd, tt=tt, tb=tb, bg=bg, f1=f1)
+
+
 _EX = {}
 
 
@@ -196,17 +226,32 @@ def extras(p, bo, tour):
     d = (lo + hi) / 2
     ga, gb, diff = {}, {}, {}
     fb, six = [0.0, 0.0], [0.0, 0.0, 0.0]
+    R = dict(set1={}, tt={}, tb={}, tb1=0.0, bg=0.0, f1m={})
     for z, w in ((-tau, 0.25), (0.0, 0.5), (tau, 0.25)):
         sa, sb = base + d + z, base - d - z
         for (i, j), v in _full_dist(sa, sb, bo).items():
             ga[i] = ga.get(i, 0) + w * v
             gb[j] = gb.get(j, 0) + w * v
             diff[i - j] = diff.get(i - j, 0) + w * v
+        r = _rich(sa, sb, bo)
+        for (i, j), v in r["sd"].items():
+            R["set1"][(i, j)] = R["set1"].get((i, j), 0) + w * v
+            if max(i, j) == 7 and min(i, j) == 6:
+                R["tb1"] += w * v
+        for (x, y, k), v in r["tt"].items():
+            R["tt"][k] = R["tt"].get(k, 0) + w * v
+        for (x, y, k), v in r["tb"].items():
+            R["tb"][k] = R["tb"].get(k, 0) + w * v
+        for (x, y, k), v in r["bg"].items():
+            R["bg"] += w * v * bool(k)
+        for (x, y, k), v in r["f1"].items():
+            kk = (k, 1 if x > y else 2)
+            R["f1m"][kk] = R["f1m"].get(kk, 0) + w * v
         f = _first_break(sa, sb)
         fb = [fb[0] + w * f[0], fb[1] + w * f[1]]
         a6 = _after6(sa, sb)
         six = [six[m] + w * a6[m] for m in range(3)]
-    _EX[k] = dict(diff=diff, ga=ga, gb=gb, fb=tuple(fb), six=tuple(six))
+    _EX[k] = dict(diff=diff, ga=ga, gb=gb, fb=tuple(fb), six=tuple(six), **R)
     return _EX[k]
 
 
@@ -227,4 +272,28 @@ def extra_families(a, b, p, bo, tour):
             over = sum(v for g, v in G.items() if g > ln)
             sels += [(f"Plus de {t} jeux", over), (f"Moins de {t} jeux", 1 - over)]
         out.append((f"Nombre de jeux de {who}", sels))
+    s1 = E["set1"]
+    pa1 = sum(v for (i, j), v in s1.items() if i > j)
+    out.append(("Vainqueur du 1er set", [(a, pa1), (b, 1 - pa1)]))
+    out.append(("Résultat 1er set / match", [(f"{x} au 1er set et {y} le match", E["f1m"].get((1 if x == a else 2, 1 if y == a else 2), 0.0)) for x in (a, b) for y in (a, b)]))
+    mean = sum(k * v for k, v in E["tt"].items())
+    c = math.floor(mean) + 0.5
+    sels = []
+    for k in range(-3, 4):
+        ln = c + k
+        over = sum(v for g, v in E["tt"].items() if g > ln)
+        t = f"{ln:g}".replace(".", ",")
+        sels += [(f"Plus de {t} jeux", over), (f"Moins de {t} jeux", 1 - over)]
+    out.append(("Total jeux du match", sels))
+    sels = []
+    for ln in (8.5, 9.5, 10.5):
+        over = sum(v for (i, j), v in s1.items() if i + j > ln)
+        t = f"{ln:g}".replace(".", ",")
+        sels += [(f"Plus de {t} jeux", over), (f"Moins de {t} jeux", 1 - over)]
+    out.append(("Total jeux du 1er set", sels))
+    out.append(("Tie-break dans le match", [("Oui", 1 - E["tb"].get(0, 0)), ("Non", E["tb"].get(0, 0))]))
+    out.append(("Tie-break au 1er set", [("Oui", E["tb1"]), ("Non", 1 - E["tb1"])]))
+    out.append(("Nombre de tie-breaks", [("0 tie-break", E["tb"].get(0, 0)), ("1 tie-break", E["tb"].get(1, 0)), ("2 tie-breaks ou plus", E["tb"].get(2, 0))]))
+    out.append(("Un set à 6-0", [("Oui", E["bg"]), ("Non", 1 - E["bg"])]))
+    out.append(("Score exact du 1er set", [(f"{who} {max(i, j)}-{min(i, j)}", v) for (i, j), v in sorted(s1.items(), key=lambda kv: -kv[1]) for who in [a if i > j else b]]))
     return out

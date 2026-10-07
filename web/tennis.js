@@ -113,6 +113,31 @@
     }
     return out;
   }
+  function gSetDist(sa, sb) {
+    var d1 = gSet(sa, sb, true), d2 = gSet(sa, sb, false), sd = [];
+    Object.keys(d1).concat(Object.keys(d2)).filter(function (k, i, arr) { return arr.indexOf(k) === i; }).forEach(function (k) {
+      var q = k.split(',');
+      sd.push([+q[0], +q[1], 0.5 * (d1[k] || 0) + 0.5 * (d2[k] || 0)]);
+    });
+    return sd;
+  }
+  function gDP(sd, bo, init, upd) {
+    var need = (bo + 1) / 2 | 0, cur = {}, out = {}, n;
+    cur['0,0,' + init] = 1;
+    for (n = 0; n < bo; n++) {
+      var nxt = {};
+      Object.keys(cur).forEach(function (key) {
+        var t = key.split(','), x = +t[0], y = +t[1], k = +t[2], v = cur[key];
+        sd.forEach(function (st) {
+          var nx = x + (st[0] > st[1] ? 1 : 0), ny = y + (st[1] > st[0] ? 1 : 0), k2 = nx + ',' + ny + ',' + upd(k, n, st[0], st[1]);
+          if (nx === need || ny === need) out[k2] = (out[k2] || 0) + v * st[2]; else nxt[k2] = (nxt[k2] || 0) + v * st[2];
+        });
+      });
+      cur = nxt;
+    }
+    return out;
+  }
+  function gIsTb(i, j) { return Math.max(i, j) === 7 && Math.min(i, j) === 6; }
   function gFirstBreak(sa, sb) {
     var ba = 1 - gGame(sa), bb = 1 - gGame(sb), den = 1 - (1 - ba) * (1 - bb), pa = 0.5 * ((1 - ba) * bb / den) + 0.5 * (bb / den);
     return [pa, 1 - pa];
@@ -140,13 +165,22 @@
       if (pa < pp) lo = d; else hi = d;
     }
     d = (lo + hi) / 2;
-    var E = { diff: {}, ga: {}, gb: {}, fb: [0, 0], six: [0, 0, 0] };
+    var E = { diff: {}, ga: {}, gb: {}, fb: [0, 0], six: [0, 0, 0], set1: {}, tt: {}, tb: {}, tb1: 0, bg: 0, f1m: {} };
     [[-tau, 0.25], [0, 0.5], [tau, 0.25]].forEach(function (z) {
       var sa = base + d + z[0], sb = base - d - z[0], w = z[1], f = gFull(sa, sb, bo);
       Object.keys(f).forEach(function (k) {
         var t = k.split(','), a2 = +t[0], b2 = +t[1];
         E.ga[a2] = (E.ga[a2] || 0) + w * f[k]; E.gb[b2] = (E.gb[b2] || 0) + w * f[k]; E.diff[a2 - b2] = (E.diff[a2 - b2] || 0) + w * f[k];
       });
+      var sd = gSetDist(sa, sb);
+      sd.forEach(function (st) { var k = st[0] + ',' + st[1]; E.set1[k] = (E.set1[k] || 0) + w * st[2]; if (gIsTb(st[0], st[1])) E.tb1 += w * st[2]; });
+      var tt = gDP(sd, bo, 0, function (k, n, i, j) { return k + i + j; }), tb = gDP(sd, bo, 0, function (k, n, i, j) { return Math.min(k + (gIsTb(i, j) ? 1 : 0), 2); }),
+        bg = gDP(sd, bo, 0, function (k, n, i, j) { return (k || (Math.max(i, j) === 6 && Math.min(i, j) === 0)) ? 1 : 0; }),
+        f1 = gDP(sd, bo, 0, function (k, n, i, j) { return n ? k : (i > j ? 1 : 2); });
+      Object.keys(tt).forEach(function (key) { var t = key.split(','); E.tt[t[2]] = (E.tt[t[2]] || 0) + w * tt[key]; });
+      Object.keys(tb).forEach(function (key) { var t = key.split(','); E.tb[t[2]] = (E.tb[t[2]] || 0) + w * tb[key]; });
+      Object.keys(bg).forEach(function (key) { var t = key.split(','); if (+t[2]) E.bg += w * bg[key]; });
+      Object.keys(f1).forEach(function (key) { var t = key.split(','), kk = t[2] + ',' + (+t[0] > +t[1] ? 1 : 2); E.f1m[kk] = (E.f1m[kk] || 0) + w * f1[key]; });
       var fb = gFirstBreak(sa, sb), a6 = gAfter6(sa, sb);
       E.fb[0] += w * fb[0]; E.fb[1] += w * fb[1];
       for (var q = 0; q < 3; q++) E.six[q] += w * a6[q];
@@ -175,6 +209,26 @@
       }
       out.push(['Nombre de jeux de ' + w[0], sels]);
     });
+    var pa1 = 0; Object.keys(E.set1).forEach(function (k) { var q = k.split(','); if (+q[0] > +q[1]) pa1 += E.set1[k]; });
+    out.push(['Vainqueur du 1er set', [[a, pa1], [b, 1 - pa1]]]);
+    var f1s = [];
+    [a, b].forEach(function (x) { [a, b].forEach(function (y) { f1s.push([x + ' au 1er set et ' + y + ' le match', E.f1m[(x === a ? 1 : 2) + ',' + (y === a ? 1 : 2)] || 0]); }); });
+    out.push(['Résultat 1er set / match', f1s]);
+    var mt = 0; Object.keys(E.tt).forEach(function (k) { mt += +k * E.tt[k]; });
+    var c2 = Math.floor(mt) + 0.5, s2 = [], k2;
+    for (k2 = -3; k2 <= 3; k2++) { var ln2 = c2 + k2, ov = 0; Object.keys(E.tt).forEach(function (g) { if (+g > ln2) ov += E.tt[g]; }); s2.push(['Plus de ' + fx(ln2) + ' jeux', ov], ['Moins de ' + fx(ln2) + ' jeux', 1 - ov]); }
+    out.push(['Total jeux du match', s2]);
+    var s3 = [];
+    [8.5, 9.5, 10.5].forEach(function (ln) { var ov = 0; Object.keys(E.set1).forEach(function (k) { var q = k.split(','); if (+q[0] + +q[1] > ln) ov += E.set1[k]; }); s3.push(['Plus de ' + fx(ln) + ' jeux', ov], ['Moins de ' + fx(ln) + ' jeux', 1 - ov]); });
+    out.push(['Total jeux du 1er set', s3]);
+    var t0 = E.tb['0'] || 0;
+    out.push(['Tie-break dans le match', [['Oui', 1 - t0], ['Non', t0]]]);
+    out.push(['Tie-break au 1er set', [['Oui', E.tb1], ['Non', 1 - E.tb1]]]);
+    out.push(['Nombre de tie-breaks', [['0 tie-break', t0], ['1 tie-break', E.tb['1'] || 0], ['2 tie-breaks ou plus', E.tb['2'] || 0]]]);
+    out.push(['Un set à 6-0', [['Oui', E.bg], ['Non', 1 - E.bg]]]);
+    var ex = Object.keys(E.set1).map(function (k) { var q = k.split(','); return [(+q[0] > +q[1] ? a : b) + ' ' + Math.max(+q[0], +q[1]) + '-' + Math.min(+q[0], +q[1]), E.set1[k]]; });
+    ex.sort(function (u, v) { return v[1] - u[1]; });
+    out.push(['Score exact du 1er set', ex]);
     return out;
   }
   function families(a, b, p, bo, tour) {
@@ -186,7 +240,7 @@
     (bo === 3 ? [2.5] : [3.5, 4.5]).forEach(function (ln) {
       F.push(['Total sets', [['Plus de ' + fx(ln) + ' sets', tot(function (x, y) { return x + y > ln; })], ['Moins de ' + fx(ln) + ' sets', tot(function (x, y) { return x + y < ln; })]], false, false]);
     });
-    gFamilies(a, b, p, bo, tour || 'ATP').forEach(function (f) { F.push([f[0], f[1], false, false]); });
+    gFamilies(a, b, p, bo, tour || 'ATP').forEach(function (f) { F.push([f[0], f[1], false, f[0] === 'Score exact du 1er set']); });
     var ns = []; sc.forEach(function (t) { var n = t[0] + t[1]; if (ns.indexOf(n) < 0) ns.push(n); }); ns.sort();
     F.push(['Nombre exact de sets', ns.map(function (n) { return [n + ' sets', tot(function (x, y) { return x + y === n; })]; }), false, false]);
     var cells = sc.slice().sort(function (u, v) { return v[2] - u[2]; }).slice(0, 3);
@@ -225,6 +279,22 @@
       var who2 = rec.m.slice(18), g2 = 0, ln2 = parseFloat(s.match(/(\d+,\d)/)[1].replace(',', '.'));
       (sets || []).forEach(function (x) { g2 += +x.split('-')[who2 === a ? 0 : 1]; });
       return s.indexOf('Plus') === 0 ? g2 > ln2 : g2 < ln2;
+    }
+    var st1 = (sets || []).map(function (x) { var q = x.split('-'); return [+q[0], +q[1]]; });
+    if (st1.length) {
+      var f0 = st1[0], isTb = function (q) { return Math.max(q[0], q[1]) === 7 && Math.min(q[0], q[1]) === 6; }, tt3 = 0;
+      st1.forEach(function (q) { tt3 += q[0] + q[1]; });
+      if (rec.m === 'Vainqueur du 1er set') return s === (f0[0] > f0[1] ? a : b);
+      if (rec.m === 'Résultat 1er set / match') { var pr = s.split(' au 1er set et '), y2 = pr[1].replace(/ le match$/, ''); return pr[0] === (f0[0] > f0[1] ? a : b) && y2 === (win === 0 ? a : b); }
+      if (rec.m === 'Total jeux du match' || rec.m === 'Total jeux du 1er set') {
+        var ln3 = parseFloat(s.match(/(\d+,\d)/)[1].replace(',', '.')), g3 = rec.m === 'Total jeux du match' ? tt3 : f0[0] + f0[1];
+        return s.indexOf('Plus') === 0 ? g3 > ln3 : g3 < ln3;
+      }
+      if (rec.m === 'Tie-break dans le match') return (s === 'Oui') === st1.some(isTb);
+      if (rec.m === 'Tie-break au 1er set') return (s === 'Oui') === isTb(f0);
+      if (rec.m === 'Nombre de tie-breaks') { var nt = Math.min(st1.filter(isTb).length, 2); return nt === parseInt(s, 10); }
+      if (rec.m === 'Un set à 6-0') return (s === 'Oui') === st1.some(function (q) { return Math.max(q[0], q[1]) === 6 && Math.min(q[0], q[1]) === 0; });
+      if (rec.m === 'Score exact du 1er set') { var mm = s.match(/^(.*) (\d)-(\d)$/); return mm && mm[1] === (f0[0] > f0[1] ? a : b) && Math.max(f0[0], f0[1]) === +mm[2] && Math.min(f0[0], f0[1]) === +mm[3]; }
     }
     if (rec.m === 'Nombre exact de sets') return aS + bS === parseInt(s, 10);
     if (rec.m === 'Total sets') {
