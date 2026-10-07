@@ -315,7 +315,7 @@ def set_prob(p, bo):
     return (lo + hi) / 2
 
 
-def families(a, b, p, bo):
+def families(a, b, p, bo, tour="ATP"):
     """Marchés Winamax du tennis pour A contre B ; p = probabilité que A gagne le match."""
     sc = _score_probs(set_prob(p, bo), bo)
     tot = lambda f: sum(v for (x, y), v in sc.items() if f(x, y))
@@ -326,6 +326,11 @@ def families(a, b, p, bo):
     for ln in lines:
         txt = str(ln).replace(".", ",")
         F.append(("Total sets", [["Plus de " + txt + " sets", tot(lambda x, y: x + y > ln)], ["Moins de " + txt + " sets", tot(lambda x, y: x + y < ln)]], False, False))
+    import tennis_games
+    for nm, sels in tennis_games.extra_families(a, b, p, bo, tour):
+        F.append((nm, [[n_, v_] for n_, v_ in sels], False, False))
+    ns = sorted({x + y for (x, y) in sc})
+    F.append(("Nombre exact de sets", [[f"{n_} sets", tot(lambda x, y, n_=n_: x + y == n_)] for n_ in ns], False, False))
     cells = sorted(sc.items(), key=lambda kv: -kv[1])[:3]
     F.append(("Score en sets", [[(a if x > y else b) + f" {max(x, y)}-{min(x, y)}", v] for (x, y), v in cells], False, True))
     return F
@@ -483,7 +488,7 @@ def build(now, days=5):
         p = e.prob(tdn[0], tdn[1], surf) if all(tdn) else 0.5
         if not all(known):
             p = 0.5                                           # historique insuffisant : aucune opinion
-        F = families(raw["names"][0], raw["names"][1], p, bo)
+        F = families(raw["names"][0], raw["names"][1], p, bo, raw["tour"])
         safe, less = classify(F) if all(known) else ([], [])
         item = dict(id=raw["id"], tour=raw["tour"], tn=raw["tn"], city=raw["city"], surf=surf, round=raw["round"], bo=bo,
                     date=raw["d"].isoformat(), time=raw["t"], state=raw["state"], a=raw["names"][0], b=raw["names"][1],
@@ -496,11 +501,14 @@ def build(now, days=5):
                 item["hit"] = (raw["win"] == 0) == (p > 0.5)
                 a_sets = sum(int(s.split("-")[0]) > int(s.split("-")[1]) for s in raw["sets"])
                 b_sets = len(raw["sets"]) - a_sets
-                item["picks"] = [dict(m=r["m"], s=r["s"], p=r["p"], h=_won(r, raw, F, a_sets, b_sets), t=0) for r in safe]
-                item["picks"] += [dict(m=r["m"], s=r["s"], p=r["p"], h=_won(r, raw, F, a_sets, b_sets), t=1) for r in less]
+                item["picks"] = [dict(m=r["m"], s=r["s"], p=r["p"], h=_won(r, raw, F, a_sets, b_sets), t=0) for r in safe if r["m"] not in UNSETTLED]
+                item["picks"] += [dict(m=r["m"], s=r["s"], p=r["p"], h=_won(r, raw, F, a_sets, b_sets), t=1) for r in less if r["m"] not in UNSETTLED]
         items.append(item)
     items.sort(key=lambda x: (x["date"], x["time"], x["tour"]))
     return dict(matches=items, bt=bt, model=model, generated=f"{now:%d/%m/%Y à %H:%M}")
+
+
+UNSETTLED = {"Premier joueur à réaliser un break", "Résultat après 6 jeux"}          # impossibles à vérifier avec le seul score final (pas de données point par point)
 
 
 def _won(rec, raw, F, a_sets, b_sets):
@@ -513,6 +521,19 @@ def _won(rec, raw, F, a_sets, b_sets):
         name = s.rsplit(" ", 2)[0]
         diff = (a_sets - b_sets) if name == a else (b_sets - a_sets)
         return diff >= 2 if "-1,5" in s else diff > -2
+    if rec["m"] == "Écart de jeux":
+        ga = sum(int(x.split("-")[0]) for x in raw["sets"])
+        gb = sum(int(x.split("-")[1]) for x in raw["sets"])
+        who, sg, val = s.rsplit(" ", 2)[0], s.rsplit(" ", 2)[1], float(s.rsplit(" ", 2)[1][1:].replace(",", "."))
+        diff = (ga - gb) if who == a else (gb - ga)
+        return diff > val if sg[0] == "-" else diff > -val
+    if rec["m"].startswith("Nombre de jeux de "):
+        who = rec["m"][len("Nombre de jeux de "):]
+        g = sum(int(x.split("-")[0 if who == a else 1]) for x in raw["sets"])
+        ln = float(re.search(r"(\d+,\d)", s).group(1).replace(",", "."))
+        return g > ln if s.startswith("Plus") else g < ln
+    if rec["m"] == "Nombre exact de sets":
+        return a_sets + b_sets == int(s.split()[0])
     if rec["m"] == "Total sets":
         n = a_sets + b_sets
         ln = float(re.search(r"(\d,\d)", s).group(1).replace(",", "."))
