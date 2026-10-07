@@ -39,6 +39,13 @@ WANTED_NAMES = ("world cup", "super league", "first division", "primera division
                 "nations league", "euro championship")
 
 
+RENAMED = {"York United": "Inter Toronto", "York United FC": "Inter Toronto"}          # clubs renommés que l'API affiche encore sous l'ancien nom
+
+
+def _club(name):
+    return RENAMED.get(name, name)
+
+
 def wanted(f):
     lg = f["league"]
     name = lg["name"].lower()
@@ -127,7 +134,7 @@ def _normalize(fx, pred):
         except (KeyError, TypeError):
             pass
     return dict(id=fx["fixture"]["id"], lg=fx["league"]["name"], country=fx["league"].get("country", ""), round=fx["league"].get("round", ""),
-                date=fx["fixture"]["date"][:10], time=fx["fixture"]["date"][11:16], home=fx["teams"]["home"]["name"], away=fx["teams"]["away"]["name"],
+                date=fx["fixture"]["date"][:10], time=fx["fixture"]["date"][11:16], home=_club(fx["teams"]["home"]["name"]), away=_club(fx["teams"]["away"]["name"]),
                 p=[_pc(pc.get("home")) or 0, _pc(pc.get("draw")) or 0, _pc(pc.get("away")) or 0],
                 advice=fr_advice(p.get("advice")), uo=_uo(p.get("under_over")),
                 cmp={k: _pair(cmp_, k) for k in ("form", "att", "def", "h2h", "total")}, h2h=h2h)

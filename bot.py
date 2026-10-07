@@ -367,6 +367,12 @@ def main():
         try:                                                             # calendrier des autres compétitions, résultats enregistrés, fiabilité des cotes
             xacc = espn_hub.update_logs(hub_events, ext, hub_lo) if hub_lo else []
             cal = espn_hub.calendar_items(hub_events, hub_lo, args.days, exclude=xmodeled) if hub_lo else []
+            if hub_lo:                                                   # championnats que ESPN ne couvre pas (CPL…) : TheSportsDB
+                try:
+                    import tsdb
+                    cal += tsdb.calendar_items(hub_lo, args.days)
+                except Exception as exc:
+                    print(f"[avertissement] calendrier TheSportsDB indisponible : {exc}", file=sys.stderr)
         except Exception as exc:
             print(f"[avertissement] calendrier mondial indisponible : {exc}", file=sys.stderr)
             cal, xacc = [], []
