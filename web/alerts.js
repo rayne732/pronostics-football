@@ -17,7 +17,7 @@ var Alerts = (function () {
   }
 
   /* items : [{ id, ko (ms), title, msg }] = favoris actuels. Programme les nouveaux, annule ceux qui ne sont plus favoris ou dont l'heure a changé. */
-  function sync(items) {
+  function sync(items, soft) {                                  // soft : on ne touche pas aux alertes de l'assistant (liste de paris pas encore complète)
     var t = topic();
     if (!t || busy) return Promise.resolve();
     busy = true;
@@ -25,12 +25,13 @@ var Alerts = (function () {
     items.forEach(function (it) { want[it.id] = it; });
     Object.keys(s).forEach(function (id) {
       var it = want[id];
+      if (soft && id.indexOf('as|') === 0 && !it) return;
       if (!it || Math.abs(s[id].ts - (it.ko - LEAD)) > 5 * 60 * 1000) { jobs.push(cancel(s[id].mid)); delete s[id]; }
     });
     items.forEach(function (it) {
       var fire = it.ko - LEAD;
       if (s[it.id] || fire < now + 90 * 1000 || fire - now > MAXD) return;        // déjà programmé, trop tard, ou à plus de 3 jours (ntfy refuse) : on reverra à la prochaine ouverture
-      jobs.push(post({ topic: t, title: it.title, message: it.msg, delay: String(Math.floor(fire / 1000)), tags: ['soccer', 'star'], priority: 4, click: url })
+      jobs.push(post({ topic: t, title: it.title, message: it.msg, delay: String(Math.floor(fire / 1000)), tags: it.tags || ['soccer', 'star'], priority: 4, click: url })
         .then(function (r) { s[it.id] = { mid: r.id, ts: fire }; }).catch(function () { note = 'Programmation impossible pour le moment (réseau ?).'; }));
     });
     return Promise.all(jobs).then(function () { saveSched(s); busy = false; }, function () { busy = false; });

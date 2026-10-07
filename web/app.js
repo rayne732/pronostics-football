@@ -939,7 +939,7 @@
     var finish = function () {
       TODAY.step++; left--;
       if (st.tab === 'today' && !st.detail) render();
-      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
     };
     jobs.forEach(function (j) {
       loadLazy(j[0], function (err) {
@@ -1034,8 +1034,8 @@
     return h;
   }
   /* ------------------------------------------------------------ assistant : mises conseillées selon ton profil, ta mise de base et ton budget */
-  var AS = { prof: 'eq', unit: 10, daily: 0 };
-  try { var rawA = JSON.parse(localStorage.getItem('pf-assist') || 'null'); if (rawA) AS = { prof: rawA.prof || 'eq', unit: +rawA.unit || 10, daily: +rawA.daily || 0 }; } catch (e) { /* réglage par défaut */ }
+  var AS = { prof: 'eq', unit: 10, daily: 0, alert: false };
+  try { var rawA = JSON.parse(localStorage.getItem('pf-assist') || 'null'); if (rawA) AS = { prof: rawA.prof || 'eq', unit: +rawA.unit || 10, daily: +rawA.daily || 0, alert: !!rawA.alert }; } catch (e) { /* réglage par défaut */ }
   function asSave() { try { localStorage.setItem('pf-assist', JSON.stringify(AS)); } catch (e) { /* ignoré */ } }
   var AS_PROF = { pr: { name: 'Prudent', min: 0.85, max: 3, combo: 0 }, eq: { name: 'Équilibré', min: 0.78, max: 4, combo: 2 }, au: { name: 'Audacieux', min: 0.70, max: 6, combo: 3 } };
   var AS_SPORT = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
@@ -1076,6 +1076,18 @@
     }
     return plan;
   }
+  function asItems(R, plan) {                              // alertes ntfy des paris conseillés : une notification 45 min avant chaque match
+    if (!AS.alert || !plan || plan.stop) return [];
+    return plan.items.filter(function (it) { return it.r.time; }).map(function (it) {
+      return { id: 'as|' + it.r.bid, ko: kickoff({ date: R.T, time: it.r.time }), tags: ['moneybag'], title: 'Pari conseillé dans 45 min : ' + it.r.match,
+        msg: it.r.pick + ' · mise conseillée ' + eur2(it.stake) + ' · cote minimale ' + (1 / it.pa).toFixed(2).replace('.', ',') };
+    });
+  }
+  function asSync() {                                       // appelé quand la liste du jour est complète (tous les sports chargés)
+    if (!AS.alert || !Alerts.topic() || TODAY.busy) return;
+    var R = todayRows();
+    Alerts.sync(favItems().concat(asItems(R, assistantPlan(R))));
+  }
   function assistantHTML(R) {
     var plan = assistantPlan(R), pf = AS_PROF[AS.prof], mi = plan.mi;
     var h = '<div class="sec"><span class="dot g"></span>Mon assistant <small>mises conseillées pour aujourd’hui</small></div><div class="fm as-box">';
@@ -1087,6 +1099,10 @@
     if (mi.budget > 0) h += '<div class="sub">Ce mois-ci : misé <b>' + eur2(mi.spent) + '</b> sur ' + eur2(mi.budget) + (mi.n ? ' · résultat <b>' + (mi.profit >= 0 ? '+' : '−') + eur2(Math.abs(mi.profit)) + '</b> sur ' + mi.n + ' paris terminés' : '') + '.</div>';
     else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte et te dit de t’arrêter quand il est atteint.</div>';
     plan.notes.forEach(function (n) { h += '<div class="bt-warn">' + esc(n) + '</div>'; });
+    var hasT = !!Alerts.topic();
+    h += '<div class="bt-act"><button class="chip pill' + (AS.alert && hasT ? ' on' : '') + '" data-as="alert|' + (AS.alert ? 0 : 1) + '">🔔 Alerte 45 min avant chaque pari conseillé</button></div>';
+    if (AS.alert && !hasT) h += '<div class="bt-warn">Pour recevoir les alertes, renseigne d’abord le nom de ton sujet ntfy dans l’onglet Favoris (section « Alertes »).</div>';
+    else if (AS.alert) h += '<div class="sub">Alertes programmées à l’ouverture de l’appli, pour les paris conseillés d’aujourd’hui. ' + esc(Alerts.status()) + '</div>';
     if (!plan.stop) {
       if (!plan.items.length) h += '<div class="empty">Aucun pari ne passe le seuil « ' + pf.name + ' » (' + Math.round(pf.min * 100) + ' % après prudence) aujourd’hui. Ne rien jouer est aussi une bonne décision.</div>';
       plan.items.forEach(function (it) {
@@ -1766,7 +1782,7 @@
       var tp = ((document.getElementById('al-topic') || {}).value || '').trim();
       if (!tp) { ALMSG = 'Indique le nom de ton sujet ntfy.'; render(); return; }
       Alerts.setTopic(tp); ALMSG = '';
-      Alerts.sync(favItems()).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
+      Alerts.sync(favItems(), true).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
       render();
     }
     else if (t.hasAttribute('data-altest')) {
@@ -1778,8 +1794,9 @@
       var ap = t.getAttribute('data-as').split('|');
       if (ap[0] === 'prof') AS.prof = ap[1];
       else if (ap[0] === 'unit') AS.unit = +ap[1];
+      else if (ap[0] === 'alert') AS.alert = ap[1] === '1';
       else if (ap[0] === 'daily') { var dv = parseFloat(String((document.getElementById('as-daily') || {}).value || '').replace(',', '.')); AS.daily = dv > 0 ? dv : 0; }
-      asSave(); var ya = window.scrollY; render(); window.scrollTo(0, ya);
+      asSave(); var ya = window.scrollY; render(); window.scrollTo(0, ya); asSync();
     }
     else if (t.hasAttribute('data-bcombo')) {
       var cb = COMBOS[+t.getAttribute('data-bcombo')];
@@ -1804,7 +1821,7 @@
       var g = D.fixtures[+t.getAttribute('data-fav')];
       if (favs[g.id]) delete favs[g.id]; else favs[g.id] = 1;
       saveFavs(); render();
-      Alerts.sync(favItems()).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
+      Alerts.sync(favItems(), true).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
   });
   app.addEventListener('input', function (e) {
@@ -1843,7 +1860,8 @@
     if (r) for (i = 0; i < r.length; i++) if (r[i][0] === m && r[i][1] === sel) return r[i][2] === 1;
     return null;
   };
-  Alerts.sync(favItems());                                                    // programme les alertes des favoris (si le sujet ntfy est renseigné)
+  Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
+  if (AS.alert && Alerts.topic()) todayLoad();                                  // charge les matchs du jour pour programmer les alertes de l'assistant
   Bets.attach(app, render, function () { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); });
   window.addEventListener('popstate', function () { if (st.detail) { st.pushed = false; closeDetail(); } });
 
