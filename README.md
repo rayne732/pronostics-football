@@ -232,3 +232,14 @@ Assistant, suite : **vérificateur de cote** (champ « Cote vue chez le bookmake
 - **Comparer deux matchs** : bouton ⇄ sur chaque ligne de match, puis page côte à côte (confiance, buts attendus, plus de 2,5 buts, deux équipes marquent, pronostics sûrs, meilleur pronostic).
 - **Analyse de tes paris** (Mes paris, `insights`) : meilleur terrain, point faible, combinés contre simples, « course aux pertes » (mise après une perte contre après un gain), série de pertes, réussite contre seuil d'équilibre ; au moins 8 paris terminés.
 - **Hors ligne et vitesse** (`pwa.py`) : logos et drapeaux servis depuis le cache (puis mis à jour), fichiers de données versionnés servis depuis le cache sans attendre le réseau, page en réseau d'abord avec 4 s de patience puis dernière copie, API en direct jamais mises en cache ; connexions préparées vers le CDN d'ESPN.
+
+## Probabilités : ce qui a été testé
+
+- **Calibration par championnat** : `page._gaps` calcule l'écart annoncé − réel des pronostics sûrs de chaque championnat (backtest + suivi réel, au moins 100 pronostics) ; l'assistant enlève au minimum 3 points, et davantage (écart + 1,5 point, jusqu'à 8) si le championnat a montré un écart ; les écarts observés sont aujourd'hui tous inférieurs à 2,5 points, la marge reste donc de 3 points presque partout.
+- **Correction des scores faibles (Dixon-Coles)** : testée sur 8 championnats (≈ 3 000 matchs 2025-2026, ρ réajusté chaque mois sur le passé) ; gain moyen < 0,002 en log-loss, de signe variable selon les championnats : bruit, **non retenue**.
+- **Fatigue / jours de repos** : effet mesuré sur les buts des 3 039 matchs ; les écarts (par exemple 0,95 ± 0,07 buts pour un domicile avec ≤ 3 jours de repos) restent dans la marge d'erreur : **non retenue**.
+- **Mélange avec les cotes du marché** : déjà actif pour tous les matchs qui ont des cotes (football-data, ESPN/DraftKings).
+
+## Graphismes
+
+Anneau de confiance sur chaque ligne de match, forme récente V/N/D (5 derniers matchs, `form` calculé par `bot.py`), affichage compact / confortable (`pf-dens`), terrain en filigrane et formes sur la fiche match, image de partage (canvas avec logos ESPN, partage natif ou téléchargement).

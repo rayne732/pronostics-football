@@ -16,6 +16,8 @@
   function tkKey(d, m, sel) { return d.div + '|' + d.home + '|' + d.away + '|' + m + '|' + sel; }
   function inTicket(k) { return ticket.some(function (t) { return t.k === k; }); }
   function saveFavs() { try { localStorage.setItem('pf-fav', JSON.stringify(favs)); } catch (e) { /* stockage indisponible */ } }
+  var DENS = 'comfort';                                    // affichage des listes : « comfort » ou « compact »
+  try { DENS = localStorage.getItem('pf-dens') || 'comfort'; } catch (e) { /* ignoré */ }
   var THEME = '';                                         // '', 'dark', 'light' ou 'auto' (clair le jour, sombre la nuit)
   try { THEME = localStorage.getItem('pf-theme') || ''; } catch (e) { /* ignoré */ }
   function applyTheme() {
@@ -163,7 +165,7 @@
       '<path d="' + shield + '" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.2"/>' +
       '<text x="18" y="25.5" text-anchor="middle" class="ci">' + esc(initials(name)) + '</text></svg>';
   }
-  function tn(name) { return '<span class="tn">' + crest(name) + '<em>' + esc(name) + '</em></span>'; }
+  function tn(name) { return '<span class="tn">' + crest(name) + '<em>' + esc(name) + '</em>' + formDots(name) + '</span>'; }
   function miniBar(p) {
     return '<div class="mb"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>';
   }
@@ -257,8 +259,8 @@
   function fcard(f) {
     return '<div class="fcard ' + f.conf + '"><div class="lg">' + esc(cpName(f)) + ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') +
       '<span class="cd">' + svg(IC.clock) + countdown(f) + '</span></div>' +
-      '<div class="duel"><div class="s' + (f.favIdx === 0 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b></div><span class="vsp">VS</span>' +
-      '<div class="s' + (f.favIdx === 2 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b></div></div>' + miniBar(f.p) +
+      '<div class="duel"><div class="s' + (f.favIdx === 0 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b>' + formDots(f.home) + '</div><span class="vsp">VS</span>' +
+      '<div class="s' + (f.favIdx === 2 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b>' + formDots(f.away) + '</div></div>' + miniBar(f.p) +
       '<div class="cfp ' + f.conf + '">' + confIcon(f.conf) + CONF[f.conf] + '</div>' +
       '<div class="pf">' + esc(favName(f)) + ' <b>' + pct(f.fav) + '</b></div>' +
       '<button class="voir wide ' + f.conf + '" data-open="' + f.i + '">Voir le pronostic ' + svg(IC.chev) + '</button></div>';
@@ -287,6 +289,14 @@
       '<div class="main high cpv-verdict"><div class="k"><small>Le plus sûr des deux</small></div><div class="sub" style="margin:6px 0 0">' + verdict + '</div></div>' +
       '<div class="sub" style="margin-top:12px">Les pourcentages sont des estimations de notre modèle ; « le plus sûr » compare seulement le meilleur pronostic de chaque match.</div>';
   }
+  function ring(p, conf) {                                  // petit anneau de confiance
+    var r = 8, c = 2 * Math.PI * r;
+    return '<svg class="rg ' + conf + '" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="' + r + '" class="rgt"/><circle cx="11" cy="11" r="' + r + '" class="rgv" stroke-dasharray="' + (c * p).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 11 11)"/></svg>';
+  }
+  function formDots(team) {                                 // 5 derniers résultats : V / N / D
+    var f = D.form && D.form[team];
+    return f ? '<span class="f5" title="Forme récente : ' + f.split('').map(function (c) { return c === 'V' ? 'victoire' : c === 'N' ? 'nul' : 'défaite'; }).join(', ') + '">' + f.split('').map(function (c) { return '<i class="' + c + '"></i>'; }).join('') + '</span>' : '';
+  }
   function row(f, multi) {
     var on = !!favs[f.id];
     var cs = CMP.indexOf(f.i) >= 0;
@@ -294,7 +304,7 @@
       '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button>' +
       '<button class="cmpb' + (cs ? ' on' : '') + '" data-cmp="' + f.i + '" aria-label="Comparer ce match" title="Comparer">⇄</button></div>' +
       '<div class="tt">' + tn(f.home) + tn(f.away) + '</div>' +
-      '<div class="act"><span class="cfp ' + f.conf + '">' + pct(f.fav) + ' · ' + CONF[f.conf] + '</span>' +
+      '<div class="act"><span class="cfp ' + f.conf + '">' + ring(f.fav, f.conf) + pct(f.fav) + ' · ' + CONF[f.conf] + '</span>' +
       '<button class="voir ' + f.conf + '" data-open="' + f.i + '">' + (f.conf === 'low' ? '' : confIcon(f.conf)) + 'Voir' + svg(IC.chev) + '</button></div>' + miniBar(f.p) + '</div>';
   }
   function filtered() {
@@ -1052,7 +1062,7 @@
       if (f.date !== T) return;
       nf++;
       var C = Engine.classify(Engine.families(f.div, f.home, f.away, f.ov).fams), ref = 'data-open="' + f.i + '"';
-      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
+      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, div: f.div, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
       if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
     });
     if (nf) counts.push(['⚽', 'Football', nf]);
@@ -1136,6 +1146,10 @@
   var AS_OPEN = false;                                    // réglages de l'assistant dépliés ?
   var AS_CAP = 0.93;                                      // au-delà, la cote est trop basse (≈ 1,07) pour que le pari ait un intérêt
   var AS_HAIR = 0.03;                                     // marge de prudence retirée à chaque probabilité (nos pronostics « sûrs » sont en moyenne à 2-3 points au-dessus du réel)
+  function asHair(r) {                                    // jamais moins de 3 points ; davantage si ce championnat a montré un écart annoncé - réel (au moins 100 pronostics) : écart + 1,5 point
+    var g = r && r.div && D.gaps ? D.gaps[r.div] : null;
+    return g == null ? AS_HAIR : Math.min(0.08, Math.max(AS_HAIR, g + 0.015));
+  }
   function asStake(x) { return Math.max(1, Math.round(x * 2) / 2); }
   function eur2(x) { return String(Math.round(x * 100) / 100).replace('.', ',') + ' €'; }
   var ASREC = {};                                          // plan de l'assistant gardé par jour : { date: { id pari: {...} } } (sert au bilan)
@@ -1198,7 +1212,7 @@
       if (!r.bid) return;
       if (r.time && kickoff({ date: R.T, time: r.time }) < Date.now()) return;           // match déjà commencé
       if (AS.prof === 'pr' && !r.v) return;                                                 // profil prudent : marchés validés par backtest seulement
-      var pa = r.p - AS_HAIR - (r.v ? 0 : 0.02);                                            // marché non validé : 2 points de prudence en plus
+      var pa = r.p - asHair(r) - (r.v ? 0 : 0.02);                                            // marché non validé : 2 points de prudence en plus
       if (pa < pf.min || r.p > AS_CAP) return;
       if (!seen[r.match] || pa > seen[r.match].pa) seen[r.match] = { r: r, pa: pa };
     });
@@ -1211,7 +1225,7 @@
       plan.items.push({ r: x.r, pa: x.pa, stake: stake, tag: x.pa >= 0.88 ? 'Très sûr' : x.pa >= 0.82 ? 'Sûr' : 'Correct' });
     });
     if (pf.combo >= 2 && pool.length >= pf.combo && plan.total + 1 <= budget) {
-      var legs = pool.slice(0, pf.combo).map(function (x) { return x.r; }), P = legs.reduce(function (t, r) { return t * (r.p - AS_HAIR); }, 1), cs = asStake(AS.unit * 0.3 * mult);
+      var legs = pool.slice(0, pf.combo).map(function (x) { return x.r; }), P = legs.reduce(function (t, r) { return t * (r.p - asHair(r)); }, 1), cs = asStake(AS.unit * 0.3 * mult);
       cs = Math.min(cs, Math.max(1, Math.floor((budget - plan.total) * 2) / 2));
       if (plan.total + cs <= budget + 1e-9) { plan.combo = { legs: legs, P: P, stake: cs }; plan.total += cs; }
     }
@@ -1286,7 +1300,7 @@
       }
     }
     h += asBilanHTML(R);
-    h += '<div class="srcnote"><b>Comment je décide.</b> Je ne garde, par match, que le pronostic le plus probable, après avoir retiré 3 points de prudence. Les marchés non validés par backtest perdent 2 points de plus (et sont exclus du profil prudent). Je laisse de côté les paris au-dessus de 93 % (cote trop basse pour valoir le coup) et les matchs déjà commencés. Mise : 100 % de ta mise de base à partir de 88 %, 50 % de 82 à 88 %, 30 % de 74 à 82 %. ' +
+    h += '<div class="srcnote"><b>Comment je décide.</b> Je ne garde, par match, que le pronostic le plus probable, après avoir retiré une marge de prudence (au moins 3 points, davantage si ce championnat a montré un écart entre l’annoncé et le réel). Les marchés non validés par backtest perdent 2 points de plus (et sont exclus du profil prudent). Je laisse de côté les paris au-dessus de 93 % (cote trop basse pour valoir le coup) et les matchs déjà commencés. Mise : 100 % de ta mise de base à partir de 88 %, 50 % de 82 à 88 %, 30 % de 74 à 82 %. ' +
       '« Cote minimale » : en dessous, le bookmaker te paie moins que le vrai risque, ne joue pas. Ce sont des estimations, pas des certitudes : sur la durée, la marge des bookmakers fait perdre la plupart des parieurs, même avec de bons pronostics. ' +
       'Ne mise jamais d’argent dont tu as besoin. Joueurs Info Service : 09 74 75 13 13 (gratuit, anonyme).</div></div>';
     return h;
@@ -1560,7 +1574,8 @@
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
     h += '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
-      '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button></div>';
+      '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button>' +
+      '<button class="sortb" data-dens aria-label="Affichage compact ou confortable">' + (DENS === 'compact' ? '▤' : '▦') + '</button></div>';
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
       return '<button class="chip pill' + (st.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
     return h + '<div id="list">' + listHTML() + '</div>' + (st.filter === 'all' && !st.q ? youthHTML() : '');
@@ -1735,6 +1750,50 @@
     lines.push('Analyse statistique indicative, pas un conseil de pari.');
     return lines.join('\n');
   }
+  function loadImg(url) {                                   // logo pour l'image de partage (ESPN autorise l'usage dans un canvas) ; null si indisponible
+    return new Promise(function (res) {
+      var im = new Image(), done = false, fin = function (v) { if (!done) { done = true; res(v); } };
+      im.crossOrigin = 'anonymous'; im.onload = function () { fin(im); }; im.onerror = function () { fin(null); }; setTimeout(function () { fin(null); }, 2500); im.src = url;
+    });
+  }
+  function shareImage(d, f) {
+    var M = Engine.families(d.div, d.home, d.away, f && f.ov), C = Engine.classify(M.fams), p = M.p1x2, mx = Math.max.apply(null, p), fi = p.indexOf(mx), conf = confOf(mx);
+    var l1 = D.logos && D.logos[d.home], l2 = D.logos && D.logos[d.away];
+    Promise.all([l1 ? loadImg(logoUrl(l1)) : null, l2 ? loadImg(logoUrl(l2)) : null]).then(function (ims) {
+      var W = 1080, H = 1350, cv = document.createElement('canvas'), x;
+      cv.width = W; cv.height = H; x = cv.getContext('2d');
+      var col = { high: '#33d686', mid: '#f7b03d', low: '#5a93ff' }[conf], g = x.createLinearGradient(0, 0, W, H);
+      g.addColorStop(0, '#0b1230'); g.addColorStop(1, '#070b18'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+      var rg = x.createRadialGradient(W / 2, 330, 40, W / 2, 330, 620); rg.addColorStop(0, col + '40'); rg.addColorStop(1, 'transparent'); x.fillStyle = rg; x.fillRect(0, 0, W, H);
+      x.textAlign = 'center'; x.fillStyle = '#8b96b6'; x.font = '600 34px Poppins, system-ui, sans-serif';
+      x.fillText((f ? cpName(f) : D.leagues[d.div].name) + (f ? ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') : ''), W / 2, 96);
+      [[ims[0], 270, d.home], [ims[1], 810, d.away]].forEach(function (t) {
+        if (t[0]) { var r = Math.min(220 / t[0].width, 220 / t[0].height); x.drawImage(t[0], t[1] - t[0].width * r / 2, 330 - t[0].height * r / 2, t[0].width * r, t[0].height * r); }
+        else { x.fillStyle = '#182042'; x.beginPath(); x.arc(t[1], 330, 100, 0, 6.2832); x.fill(); x.fillStyle = '#f1f4fc'; x.font = '700 64px Poppins, sans-serif'; x.fillText(initials(t[2]), t[1], 352); }
+        x.fillStyle = '#f1f4fc'; x.font = '700 46px Poppins, system-ui, sans-serif';
+        var words = t[2].split(' '), line = '', y = 520, lines = [];
+        words.forEach(function (w) { if (x.measureText(line + ' ' + w).width > 440 && line) { lines.push(line); line = w; } else line = line ? line + ' ' + w : w; });
+        lines.push(line); lines.slice(0, 2).forEach(function (l, i) { x.fillText(l, t[1], y + i * 56); });
+      });
+      x.fillStyle = col; x.font = '700 40px Poppins, sans-serif'; x.fillText('VS', W / 2, 345);
+      x.fillStyle = '#8b96b6'; x.font = '600 30px Poppins, sans-serif'; x.fillText('PRONOSTIC PRINCIPAL', W / 2, 700);
+      x.fillStyle = '#f1f4fc'; x.font = '700 76px Poppins, sans-serif'; x.fillText([d.home, 'Match nul', d.away][fi], W / 2, 790);
+      x.fillStyle = col; x.font = '800 150px Poppins, sans-serif'; x.fillText(pct(mx), W / 2, 950);
+      x.font = '600 34px Poppins, sans-serif'; x.fillText(CONF[conf], W / 2, 1010);
+      var bx = 120, bw = W - 240, cw = [p[0], p[1], p[2]], cx = bx, cc = ['#33d686', '#8b96b6', '#f4665e'];
+      cw.forEach(function (v, i) { x.fillStyle = cc[i]; x.fillRect(cx, 1060, bw * v - 4, 22); cx += bw * v; });
+      x.fillStyle = '#f1f4fc'; x.font = '600 32px Poppins, sans-serif'; x.textAlign = 'left'; x.fillText('1 · ' + pct(p[0]), bx, 1136); x.textAlign = 'center'; x.fillText('X · ' + pct(p[1]), W / 2, 1136); x.textAlign = 'right'; x.fillText('2 · ' + pct(p[2]), W - bx, 1136);
+      x.textAlign = 'center'; x.fillStyle = '#8b96b6'; x.font = '500 28px Poppins, sans-serif';
+      x.fillText('Buts attendus ' + M.lh.toFixed(2) + ' – ' + M.la.toFixed(2) + (C.safe[0] ? ' · ' + C.safe[0].s + ' ' + pct(C.safe[0].p) : ''), W / 2, 1200);
+      x.font = '500 24px Poppins, sans-serif'; x.fillText('Estimation statistique, pas un conseil de pari · 18+ · Joueurs Info Service 09 74 75 13 13', W / 2, 1290);
+      cv.toBlob(function (b) {
+        if (!b) { toast('Image impossible'); return; }
+        var file = new File([b], 'pronostic.png', { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file], title: d.home + ' – ' + d.away }).catch(function () { /* partage annulé */ });
+        else { var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'pronostic.png'; document.body.appendChild(a); a.click(); a.remove(); toast('Image enregistrée'); }
+      }, 'image/png');
+    });
+  }
   function toast(msg) {
     var el = document.createElement('div');
     el.className = 'toast'; el.textContent = msg; document.body.appendChild(el);
@@ -1813,8 +1872,8 @@
   function vsBlock(d) {
     var lm = lmeta(d.div);
     var l1 = D.logos && D.logos[d.home], l2 = D.logos && D.logos[d.away];
-    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b></div><div class="mid"><span class="vsp">VS</span></div>' +
-      '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b></div></div>' +
+    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><i class="pitch" aria-hidden="true"></i><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b>' + formDots(d.home) + '</div><div class="mid"><span class="vsp">VS</span></div>' +
+      '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b>' + formDots(d.away) + '</div></div>' +
       '<div class="betbar"><button class="bt-b sm pri" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari</button>' +
       Books.links(d.home + ' – ' + d.away) + '</div>';
   }
@@ -1823,7 +1882,7 @@
     return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
       '<div class="who"><span class="lgchip">' + (lgPath(d.div) ? '<img class="lci" src="' + logoUrl(lgPath(d.div)) + '" alt="" onerror="this.remove()">' : lm[2] + ' ') + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small>' +
       (f ? dm(f.date) + (f.time ? ' · ' + f.time : '') + ' · ' + countdown(f) : '') + '</small></div>' +
-      '<button class="ibtn" data-share aria-label="Partager ce pronostic">' + svg(IC.share) + '</button></div>' +
+      '<button class="ibtn" data-shareimg aria-label="Partager en image" title="Partager en image">🖼</button><button class="ibtn" data-share aria-label="Copier le pronostic">' + svg(IC.share) + '</button></div>' +
       vsBlock(d) + detailBody(d, f);
   }
 
@@ -1879,6 +1938,7 @@
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
+    app.classList.toggle('dens-compact', DENS === 'compact');
     renderNav();
     decorate();
     var fab = document.getElementById('fab');
@@ -1902,7 +1962,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -1977,6 +2037,8 @@
       Alerts.test().then(function () { ALMSG = 'Notification test envoyée : regarde ton téléphone.'; }, function () { ALMSG = 'Envoi impossible (réseau ?).'; }).then(function () { if (st.tab === 'fav' && !st.detail) render(); });
     }
     else if (t.hasAttribute('data-aloff')) { Alerts.clear(); ALMSG = 'Alertes désactivées.'; render(); }
+    else if (t.hasAttribute('data-dens')) { DENS = DENS === 'compact' ? 'comfort' : 'compact'; try { localStorage.setItem('pf-dens', DENS); } catch (err) { /* ignoré */ } var yq = window.scrollY; render(); window.scrollTo(0, yq); }
+    else if (t.hasAttribute('data-shareimg')) { shareImage(st.detail, st.detail.fi != null ? D.fixtures[st.detail.fi] : null); }
     else if (t.hasAttribute('data-cmp')) {
       var ci = +t.getAttribute('data-cmp'), at2 = CMP.indexOf(ci);
       if (at2 >= 0) CMP.splice(at2, 1); else { if (CMP.length >= 2) CMP.shift(); CMP.push(ci); }

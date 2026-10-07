@@ -616,3 +616,24 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 
 .pr.nostrike .pt{text-decoration:none!important;opacity:1!important}
 .pr.nostrike.ok .pp{color:var(--green);font-weight:700}.pr.nostrike.ko .pp{color:var(--red);font-weight:700}
+
+/* anneau de confiance, forme récente, affichage compact, terrain en filigrane */
+.rg{width:20px;height:20px;flex:none;vertical-align:-5px;margin-right:5px}
+.rgt{fill:none;stroke:currentColor;stroke-opacity:.2;stroke-width:3}
+.rgv{fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round}
+.f5{display:inline-flex;gap:3px;align-items:center;flex:none;margin-left:2px}
+.f5 i{width:7px;height:7px;border-radius:50%;background:var(--mute);opacity:.85}
+.f5 i.V{background:var(--green)}.f5 i.D{background:var(--red)}.f5 i.N{background:var(--mute)}
+.duel .s .f5,.vs .side .f5,.rsc .s .f5{margin:2px 0 0;justify-content:center}
+.vs .side{flex-direction:column;align-items:center}
+.vs{border-radius:22px}
+.vs .pitch{position:absolute;inset:0;border-radius:inherit;pointer-events:none;color:var(--ink);opacity:.06;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 140' fill='none' stroke='black' stroke-width='1.5'%3E%3Crect x='4' y='4' width='292' height='132' rx='6'/%3E%3Cpath d='M150 4v132'/%3E%3Ccircle cx='150' cy='70' r='20'/%3E%3Crect x='4' y='40' width='36' height='60'/%3E%3Crect x='260' y='40' width='36' height='60'/%3E%3C/svg%3E") center/100% 100% no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 140' fill='none' stroke='black' stroke-width='1.5'%3E%3Crect x='4' y='4' width='292' height='132' rx='6'/%3E%3Cpath d='M150 4v132'/%3E%3Ccircle cx='150' cy='70' r='20'/%3E%3Crect x='4' y='40' width='36' height='60'/%3E%3Crect x='260' y='40' width='36' height='60'/%3E%3C/svg%3E") center/100% 100% no-repeat}
+.dens-compact .mrow{padding:8px 10px;gap:4px 8px;margin-bottom:6px;border-radius:13px}
+.dens-compact .mrow .tt{gap:2px;font-size:.84rem}
+.dens-compact .mrow .crl,.dens-compact .mrow .cr{width:20px;height:24px}
+.dens-compact .mrow .voir{padding:6px 10px;font-size:.78rem}
+.dens-compact .mrow .cfp{font-size:.64rem;padding:3px 8px}
+.dens-compact .lgh{margin:16px 0 8px}
+.dens-compact .fcard{width:min(72vw,236px);padding:12px;gap:8px}
