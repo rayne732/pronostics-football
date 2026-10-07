@@ -131,9 +131,10 @@
     return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || name).slice(0, 2)).toUpperCase();
   }
   var cid = 0;
-  function logoUrl(p) { return 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/' + p + '&w=96&h=96'; }
+  var PFLAG = {};                                         // drapeaux des joueurs de tennis (code pays ESPN)
+  function logoUrl(p) { return p.indexOf('http') === 0 ? p : 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/' + p + '&w=96&h=96'; }
   function crest(name, big) {
-    var lg = D.logos && D.logos[name];
+    var lg = (D.logos && D.logos[name]) || PFLAG[name];
     if (lg) return '<span class="crl' + (big ? ' big' : '') + '"><img src="' + logoUrl(lg) + '" alt="" loading="lazy" onerror="this.parentNode.className+=\' nolg\'">' + crestSvg(name, big) + '</span>';
     return crestSvg(name, big);
   }
@@ -549,6 +550,8 @@
   function setTM(list) {
     TM = list;
     TM.forEach(function (m, i) {
+      if (m.fa) PFLAG[m.a] = 'countries/500/' + m.fa.toLowerCase() + '.png';
+      if (m.fb) PFLAG[m.b] = 'countries/500/' + m.fb.toLowerCase() + '.png';
       m.i = i; m.fav = Math.max(m.p, 1 - m.p); m.favIdx = m.p >= 0.5 ? 0 : 1; m.conf = m.known ? confOf(m.fav) : 'low'; m.favName = m.favIdx ? m.b : m.a;
       m.key = norm(m.a + ' ' + m.b + ' ' + m.tn);
     });

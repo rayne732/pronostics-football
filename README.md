@@ -220,3 +220,5 @@ Alerte de l'assistant : le bouton « 🔔 Alerte 45 min avant chaque pari consei
 ## Logos et drapeaux des équipes
 
 `logos.py` garde dans `data/logos.json` le logo ESPN de chaque équipe vue dans les flux de matchs (écusson pour un club, drapeau pour une sélection) puis relie les noms de l'appli (CSV, ESPN, API-Football) à leur logo ; la correspondance se charge à l'ouverture (`data/logos.json` du site) et les images viennent du CDN d'ESPN. Si un logo manque ou ne se charge pas, l'écusson dessiné d'avant s'affiche à la place.
+
+Logos des autres sports : listes d'équipes ESPN pour la NBA, la NHL, la NFL, la MLB et le rugby (Top 14, Premiership, URC), écussons des clubs de l'EuroLeague (API EuroLeague), drapeaux ESPN des joueurs de tennis (code pays de chaque match). Pas de logos pour le handball (l'offre gratuite d'API-Sports n'en donne pas), le volley, le MMA, le golf ni la F1.
