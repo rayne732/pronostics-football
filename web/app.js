@@ -1200,14 +1200,14 @@
     return h + rows + '</div>';
   }
   function assistantPlan(R) {
-    var pf = AS_PROF[AS.prof], mi = Bets.monthInfo(), plan = { items: [], combo: null, notes: [], stop: false, total: 0, mi: mi };
+    var pf = AS_PROF[AS.prof], mi = Bets.monthInfo(), plan = { items: [], combo: null, notes: [], stop: false, total: 0, mi: mi, budget: 0 };
     var mult = 1, remaining = Infinity;
     if (mi.budget > 0) {
       var ratio = mi.spent / mi.budget; remaining = mi.budget - mi.spent;
       if (ratio >= 1) { plan.stop = true; plan.notes.push('Ton budget du mois (' + eur2(mi.budget) + ') est atteint : pas de conseil aujourd’hui. C’est la bonne décision.'); return plan; }
       if (ratio >= 0.8) { mult = 0.5; plan.notes.push('Tu as déjà misé ' + Math.round(ratio * 100) + ' % de ton budget du mois : je divise les mises par deux.'); }
     }
-    var budget = Math.min(AS.daily > 0 ? AS.daily : AS.unit * 3, remaining);
+    var budget = Math.min(AS.daily > 0 ? AS.daily : AS.unit * 3, remaining); plan.budget = budget;
     var seen = {}, pool = [];
     R.picks.forEach(function (r) {
       if (!r.bid) return;
@@ -1270,8 +1270,16 @@
         return '<button class="chip pill' + (AS.unit === u ? ' on' : '') + '" data-as="unit|' + u + '">' + u + ' €</button>'; }).join('') + '</div>';
       h += '<div class="bt-line"><input id="as-daily" inputmode="decimal" placeholder="Budget du jour (€), sinon ' + (AS.unit * 3) + ' €" value="' + (AS.daily > 0 ? String(AS.daily).replace('.', ',') : '') + '"><button class="bt-b" data-as="daily|">Enregistrer</button></div></div>';
     }
-    if (mi.budget > 0) h += '<div class="sub">Ce mois-ci : misé <b>' + eur2(mi.spent) + '</b> sur ' + eur2(mi.budget) + (mi.n ? ' · résultat <b>' + (mi.profit >= 0 ? '+' : '−') + eur2(Math.abs(mi.profit)) + '</b> sur ' + mi.n + ' paris terminés' : '') + '.</div>';
-    else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte.</div>';
+    if (!plan.stop) {
+      var nb = plan.items.length + (plan.combo ? 1 : 0), usedD = plan.budget > 0 ? Math.min(1, plan.total / plan.budget) : 0;
+      h += '<div class="asum"><span><small>À miser</small><b>' + eur2(plan.total) + '</b></span><span><small>Paris</small><b>' + nb + '</b></span><span><small>Budget du jour</small><b>' + eur2(plan.budget) + '</b></span></div>' +
+        '<div class="meter" title="Part du budget du jour utilisée"><i style="width:' + Math.round(usedD * 100) + '%"></i></div>';
+    }
+    if (mi.budget > 0) {
+      var rm = Math.min(1, mi.spent / mi.budget);
+      h += '<div class="mlab"><span>Budget du mois</span><b>' + eur2(mi.spent) + ' / ' + eur2(mi.budget) + '</b></div><div class="meter' + (rm >= 0.8 ? ' hot' : '') + '"><i style="width:' + Math.round(rm * 100) + '%"></i></div>' +
+        (mi.n ? '<div class="sub">Résultat du mois : <b class="' + (mi.profit >= 0 ? 'as-ok' : 'as-ko') + '">' + (mi.profit >= 0 ? '+' : '−') + eur2(Math.abs(mi.profit)) + '</b> sur ' + mi.n + ' paris terminés.</div>' : '');
+    } else h += '<div class="sub">Fixe un budget mensuel dans « Mes paris » : l’assistant s’y adapte.</div>';
     plan.notes.forEach(function (n) { h += '<div class="bt-warn">' + esc(n) + '</div>'; });
     var hasT = !!Alerts.topic();
     if (AS.alert && !hasT) h += '<div class="bt-warn">Pour recevoir les alertes, renseigne d’abord le nom de ton sujet ntfy dans l’onglet Favoris (section « Alertes »).</div>';
@@ -1280,18 +1288,19 @@
       if (!plan.items.length) h += '<div class="empty">Aucun pari ne passe le seuil « ' + pf.name + ' » (' + Math.round(pf.min * 100) + ' % après prudence) aujourd’hui. Ne rien jouer est aussi une bonne décision.</div>';
       plan.items.forEach(function (it) {
         var r = it.r, mn = 1 / it.pa;
-        h += '<div class="as-row"><div class="as-top"><span class="as-tag as-' + (it.tag === 'Très sûr' ? 'a' : it.tag === 'Sûr' ? 'b' : 'c') + '">' + it.tag + '</span><b>' + r.icon + ' ' + esc(r.match) + '</b><small>' + esc(r.time || '') + '</small></div>' +
+        h += '<div class="as-row asc"><div class="as-top"><span class="as-tag as-' + (it.tag === 'Très sûr' ? 'a' : it.tag === 'Sûr' ? 'b' : 'c') + '">' + it.tag + '</span><small>' + (r.time ? '⏰ ' + esc(r.time) : '') + '</small></div>' +
+          '<div class="asm">' + r.icon + ' ' + esc(r.match) + '</div>' +
           '<div class="as-pick">' + esc(r.pick) + '</div>' +
-          '<div class="as-nums"><span>Réussite estimée <b>' + pct(it.pa) + '</b></span><span>Mise conseillée <b>' + eur2(it.stake) + '</b></span><span>Cote minimale <b>' + mn.toFixed(2).replace('.', ',') + '</b></span></div>' +
+          '<div class="t1n"><span>Réussite<b>' + pct(it.pa) + '</b></span><span class="stk">Mise<b>' + eur2(it.stake) + '</b></span><span>Cote min.<b>' + mn.toFixed(2).replace('.', ',') + '</b></span></div>' +
           asOddsBox(r.bid, it.pa, it.stake, (ASREC[R.T] && ASREC[R.T][r.bid] && ASREC[R.T][r.bid].o) || 0) +
           '<div class="bt-act"><button class="bt-b" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + it.pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Assistant" data-bstake="' + it.stake + '"' + (ASREC[R.T] && ASREC[R.T][r.bid] && ASREC[R.T][r.bid].o ? ' data-bodds="' + ASREC[R.T][r.bid].o + '"' : '') + '>€ Noter ce pari</button>' +
           '<button class="voir" ' + r.ref + '>Voir' + svg(IC.chev) + '</button></div></div>';
       });
       if (plan.combo) {
         COMBOS = [{ name: 'Assistant', legs: plan.combo.legs, P: plan.combo.P }];
-        h += '<div class="as-row"><div class="as-top"><span class="as-tag as-c">Combiné</span><b>' + plan.combo.legs.length + ' sélections</b></div>' +
-          plan.combo.legs.map(function (r) { return '<div class="as-pick">' + r.icon + ' ' + esc(r.match) + ' · ' + esc(r.pick) + '</div>'; }).join('') +
-          '<div class="as-nums"><span>Réussite estimée <b>' + pct(plan.combo.P) + '</b></span><span>Mise conseillée <b>' + eur2(plan.combo.stake) + '</b></span><span>Cote minimale <b>' + (1 / plan.combo.P).toFixed(2).replace('.', ',') + '</b></span></div>' +
+        h += '<div class="as-row asc"><div class="as-top"><span class="as-tag as-c">Combiné</span><small>' + plan.combo.legs.length + ' sélections</small></div>' +
+          plan.combo.legs.map(function (r) { return '<div class="as-leg"><span>' + r.icon + ' ' + esc(r.match) + '</span><b>' + esc(r.pick) + '</b></div>'; }).join('') +
+          '<div class="t1n"><span>Réussite<b>' + pct(plan.combo.P) + '</b></span><span class="stk">Mise<b>' + eur2(plan.combo.stake) + '</b></span><span>Cote min.<b>' + (1 / plan.combo.P).toFixed(2).replace('.', ',') + '</b></span></div>' +
           asOddsBox('combo', plan.combo.P, plan.combo.stake, 0) + '<div class="bt-act"><button class="bt-b" data-bcombo="0" data-bstake="' + plan.combo.stake + '">€ Noter ce combiné</button></div></div>';
       }
       if (plan.items.length) {
