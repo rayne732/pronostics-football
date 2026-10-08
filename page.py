@@ -150,7 +150,8 @@ def _model_params(m, teams):
         return dict(mu=round(float(mm["mu"]), 5), ha=round(float(mm["ha"]), 5),
                     t={t: [round(float(mm["att"][idx[t]]), 4), round(float(mm["dfn"][idx[t]]), 4)] for t in teams if t in idx})
     return dict(g=part(m["goals"]), c=part(m["corners"]) if m.get("corners") else None, ht=round(float(m["ht"]), 5),
-                s=part(m["shots"]) if m.get("shots") else None, st=part(m["sot"]) if m.get("sot") else None)
+                s=part(m["shots"]) if m.get("shots") else None, st=part(m["sot"]) if m.get("sot") else None,
+                y=part(m["cards"]) if m.get("cards") else None, rr=round(float(m["red"]), 4) if m.get("red") else None)
 
 
 def _gaps(lgs):

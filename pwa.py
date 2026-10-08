@@ -50,7 +50,7 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.hostname === 'a.espncdn.com' && /\.(png|jpg|svg)|combiner/.test(url.pathname + url.search) || url.hostname === 'media-cdn.cortextech.io') { if (req.mode === 'no-cors') e.respondWith(image(req)); return; }       // les requêtes « cors » (image du partage) passent sans interception
+  if (url.hostname === 'a.espncdn.com' && /\.(png|jpg|svg)|combiner/.test(url.pathname + url.search) || url.hostname === 'media-cdn.cortextech.io' || url.hostname === 'media.api-sports.io') { if (req.mode === 'no-cors') e.respondWith(image(req)); return; }       // les requêtes « cors » (image du partage) passent sans interception
   if (url.origin !== location.origin) return;                          // API en direct (ESPN, ntfy) : jamais mise en cache
   if (url.pathname.indexOf('/data/') >= 0 && url.search.indexOf('v=') >= 0) { e.respondWith(versioned(req)); return; }
   e.respondWith(pageFirst(req));

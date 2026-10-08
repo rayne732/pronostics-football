@@ -243,3 +243,8 @@ Assistant, suite : **vérificateur de cote** (champ « Cote vue chez le bookmake
 ## Graphismes
 
 Anneau de confiance sur chaque ligne de match, forme récente V/N/D (5 derniers matchs, `form` calculé par `bot.py`), affichage compact / confortable (`pf-dens`), terrain en filigrane et formes sur la fiche match, image de partage (canvas avec logos ESPN, partage natif ou téléchargement).
+
+## Cartons, corners par équipe, logos des autres sports (suite)
+
+- **Nouveaux marchés football** (affichés dans « Autres marchés », hors décompte des pronostics sûrs) : nombre de **cartons jaunes** (match et par équipe, équipe avec le plus de cartons), **carton rouge dans le match** (fréquence du championnat), **corners par équipe** et **équipe avec le plus de corners**. Dispersion mesurée sur les matchs 2025-2026 : cartons jaunes ≈ loi de Poisson (alpha ≈ 0), corners alpha 0,08 par équipe. Ces marchés sont peu prévisibles (log-loss ≈ 0,68-0,69 sur des lignes médianes, contre 0,693 pour un tirage à pile ou face) : ils sont calibrés mais sans grand pouvoir prédictif. Seuls les championnats football-data qui fournissent les cartons (HY / AY / HR / AR) et les corners sont concernés.
+- **Logos** : handball (logo de l'équipe fourni par API-Sports), drapeaux des combattants MMA et des joueurs de golf (ESPN), pastille de couleur de l'écurie en F1.

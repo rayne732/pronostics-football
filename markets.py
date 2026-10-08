@@ -22,8 +22,16 @@ def fit_all(train, ref_date):
     has_corners = any(r.get("HC") not in (None, "") for r in train)       # absents pour certains championnats (ex. Brésil)
     has_shots = any(r.get("HS") not in (None, "") for r in train)          # tirs et tirs cadrés : championnats football-data de format « saison » seulement
     has_sot = any(r.get("HST") not in (None, "") for r in train)
+    has_cards = any(r.get("HY") not in (None, "") for r in train)           # cartons jaunes et rouges (football-data)
+    reds = []
+    for r in train:
+        try:
+            reds.append(float(r["HR"]) + float(r["AR"]))
+        except (KeyError, ValueError, TypeError):
+            pass
     return dict(goals=fit(train, ref_date), corners=fit(train, ref_date, target=("HC", "AC")) if has_corners else None, ht=ht_share(train),
-                shots=fit(train, ref_date, target=("HS", "AS")) if has_shots else None, sot=fit(train, ref_date, target=("HST", "AST")) if has_sot else None)
+                shots=fit(train, ref_date, target=("HS", "AS")) if has_shots else None, sot=fit(train, ref_date, target=("HST", "AST")) if has_sot else None,
+                cards=fit(train, ref_date, target=("HY", "AY")) if has_cards else None, red=(sum(reds) / len(reds)) if len(reds) > 200 else None)
 
 
 def _1x2(grid):

@@ -398,9 +398,13 @@ def main():
                 names.update((e["home"], e["away"]))
             for lg in leagues.values():
                 names.update(lg["teams"])
+            own = {}
             for sp in page_args[10:14] + page_args[15:18] + page_args[19:20]:
                 names |= _lg.names_in(sp)
+                own.update(_lg.logo_pairs(sp))
             logo_map = _lg.build(_lg.update(hub_events, now.timestamp()), leagues, names)
+            for k_, v_ in own.items():                                   # logos fournis par les données elles-mêmes (handball, drapeaux MMA)
+                logo_map.setdefault(k_, v_)
             for r in fixtures:                                           # 5 derniers résultats de chaque équipe des matchs affichés (V / N / D, du plus ancien au plus récent)
                 rows_ = dfs.get(r["Div"]) or []
                 for t in (r["HomeTeam"], r["AwayTeam"]):

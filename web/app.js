@@ -1013,7 +1013,7 @@
       h += '<div class="sec"><span class="dot a"></span>Moins sûrs</div><div class="fm">' + P.less.map(gRow).join('') + '</div>';
       h += '<div class="sec"><span class="dot g"></span>Favoris</div><div class="fm f1t"><div class="f1h"><span>Joueur</span><span>Victoire</span><span>Top 5</span><span>Top 10</span><span>Top 20</span></div>' +
         top.map(function (d) {
-          return '<div class="f1r"><span class="f1n">' + esc(d.n) + '<small>' + (ev.state === 'in' ? gScore(d.cur) + (d.out ? ' · éliminé' : d.h ? ' · trou ' + d.h : '') : (d.known ? '' : 'peu connu')) + '</small></span>' +
+          return '<div class="f1r"><span class="f1n">' + (d.fl ? '<img class="pfl" src="' + logoUrl(d.fl) + '" alt="" loading="lazy" onerror="this.remove()"> ' : '') + esc(d.n) + '<small>' + (ev.state === 'in' ? gScore(d.cur) + (d.out ? ' · éliminé' : d.h ? ' · trou ' + d.h : '') : (d.known ? '' : 'peu connu')) + '</small></span>' +
             f1Bar(d.win, 'g') + f1Bar(d.top5, 'g') + f1Bar(d.top10, 'a') + f1Bar(d.top20, 'a') + '</div>'; }).join('') + '</div>';
     });
     (G.last || []).forEach(function (l) {
@@ -1325,6 +1325,7 @@
 
   /* ------------------------------------------------------------ Formule 1 */
   D.f1 = D.f1 || {};
+  var F1COL = { mercedes: '#27f4d2', ferrari: '#e8002d', red_bull: '#3671c6', mclaren: '#ff8000', aston_martin: '#229971', alpine: '#ff87bc', williams: '#64c4ff', rb: '#6692ff', haas: '#b6babd', audi: '#d6c8a4', sauber: '#52e252', cadillac: '#c9a227' };
   var F1M = { win: 'Vainqueur du GP', pod: 'Podium', top6: 'Top 6', top10: 'Top 10 (points)' };
   function f1Date(iso, t) {
     if (!iso) return '';
@@ -1368,7 +1369,7 @@
         return '<div class="pr"><span class="pt">' + esc(x.n) + '</span><span class="pp">' + pct(x.p) + '</span></div>'; }).join('') + '</div>';
       h += '<div class="sec"><span class="dot g"></span>Toutes les probabilités</div><div class="fm f1t"><div class="f1h"><span>Pilote</span><span>Victoire</span><span>Podium</span><span>Top 6</span><span>Top 10</span></div>' +
         N.drivers.map(function (d) {
-          return '<div class="f1r"><span class="f1n">' + esc(d.n) + '<small>' + esc(d.cn) + (d.grid ? ' · grille ' + d.grid : '') + '</small></span>' + f1Bar(d.win, 'g') + f1Bar(d.pod, 'g') + f1Bar(d.top6, 'a') + f1Bar(d.top10, 'a') + '</div>'; }).join('') + '</div>';
+          return '<div class="f1r"><span class="f1n"><i class="tdot" style="background:' + (F1COL[d.c] || 'var(--mute)') + '"></i>' + esc(d.n) + '<small>' + esc(d.cn) + (d.grid ? ' · grille ' + d.grid : '') + '</small></span>' + f1Bar(d.win, 'g') + f1Bar(d.pod, 'g') + f1Bar(d.top6, 'a') + f1Bar(d.top10, 'a') + '</div>'; }).join('') + '</div>';
     } else {
       h += '<div class="empty">Pas de Grand Prix cette semaine.</div>';
     }

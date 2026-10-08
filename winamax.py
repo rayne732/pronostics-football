@@ -263,27 +263,38 @@ def families(models, home, away, ov=None):
     from math import floor
     from scipy.stats import nbinom
     KS = np.arange(80)
-    rr_ = 1 / 0.04
-    for mkey, kh, ka, fam, unit, resname in (("shots", "sh", "sa", "Nombre de tirs", "tirs", "Tirs - Résultat"), ("sot", "th", "ta", "Nombre de tirs cadrés", "tirs cadrés", "Tirs cadrés - Résultat")):
+    # (clé du modèle, résultat dom., résultat ext., libellé, unité, libellé « équipe avec le plus », alpha de sur-dispersion, ajoute le total ?)
+    # alpha mesuré sur les matchs 2025-2026 : tirs 0,04 ; corners 0,08 par équipe ; cartons jaunes ≈ 0 (loi de Poisson)
+    for mkey, kh, ka, fam, unit, resname, alpha, with_total in (
+            ("shots", "sh", "sa", "Nombre de tirs", "tirs", "Tirs - Résultat", 0.04, True),
+            ("sot", "th", "ta", "Nombre de tirs cadrés", "tirs cadrés", "Tirs cadrés - Résultat", 0.04, True),
+            ("corners", "ch", "ca", "Nombre de corners", "corners", "Corners - Résultat", 0.08, False),
+            ("cards", "yh", "ya", "Nombre de cartons jaunes", "cartons jaunes", "Cartons jaunes - Résultat", 0.005, True)):
         if not models.get(mkey):
             continue
+        rr_ = 1 / alpha
         _, (mh, ma) = score_grid(models[mkey], home, away)
         ph_, pa_ = nbinom.pmf(KS, rr_, rr_ / (rr_ + mh)), nbinom.pmf(KS, rr_, rr_ / (rr_ + ma))
         ptot = np.convolve(ph_, pa_)[:80]
         rs = lambda fn, kh=kh: (lambda r: None if r[kh] is None else fn(r))
         c0 = floor(mh + ma) + 0.5
-        ln = [c0 + d for d in (-3, -2, -1, 0, 1, 2, 3)]
-        ex(fam, [(f"Plus de {_f(x)} {unit}", float(ptot[KS > x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] > x)) for x in ln] +
-           [(f"Moins de {_f(x)} {unit}", float(ptot[KS < x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] < x)) for x in ln])
+        ln = [c0 + d for d in (-3, -2, -1, 0, 1, 2, 3) if c0 + d > 0]
+        if with_total:
+            ex(fam, [(f"Plus de {_f(x)} {unit}", float(ptot[KS > x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] > x)) for x in ln] +
+               [(f"Moins de {_f(x)} {unit}", float(ptot[KS < x].sum()), rs(lambda r, x=x, kh=kh, ka=ka: r[kh] + r[ka] < x)) for x in ln])
         for team, mu, pm, key in ((home, mh, ph_, kh), (away, ma, pa_, ka)):
             c1 = floor(mu) + 0.5
-            lt = [c1 + d for d in (-2, -1, 0, 1, 2)]
+            lt = [c1 + d for d in (-2, -1, 0, 1, 2) if c1 + d > 0]
             ex(f"{fam} de {team}", [(f"{team} plus de {_f(x)}", float(pm[KS > x].sum()), rs(lambda r, x=x, key=key: r[key] > x)) for x in lt] +
                [(f"{team} moins de {_f(x)}", float(pm[KS < x].sum()), rs(lambda r, x=x, key=key: r[key] < x)) for x in lt], kind=f"{fam} d'une équipe")
         pg = float(sum(ph_[i] * pa_[:i].sum() for i in range(80)))
         pe = float((ph_ * pa_).sum())
         ex(resname, [(home, pg, rs(lambda r, kh=kh, ka=ka: r[kh] > r[ka])), ("Égalité", pe, rs(lambda r, kh=kh, ka=ka: r[kh] == r[ka])),
                      (away, max(0.0, 1 - pg - pe), rs(lambda r, kh=kh, ka=ka: r[kh] < r[ka]))])
+    if models.get("red"):                                    # carton rouge : fréquence du championnat (une équipe isolée a trop peu de rouges pour un modèle propre)
+        pr = 1 - float(np.exp(-models["red"]))
+        rd = lambda fn: (lambda r: None if r.get("rd") is None else fn(r))
+        ex("Carton rouge dans le match", [("Oui", pr, rd(lambda r: r["rd"] > 0)), ("Non", 1 - pr, rd(lambda r: r["rd"] == 0))])
 
     ch = ca = 0.0
     if models.get("corners"):                                # pas de corners pour tous les championnats

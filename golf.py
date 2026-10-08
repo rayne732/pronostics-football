@@ -28,6 +28,12 @@ MARKETS = (("win", "Vainqueur du tournoi"), ("top5", "Top 5"), ("top10", "Top 10
 
 
 # ------------------------------------------------------------------ données
+def _flag(c):
+    """Drapeau ESPN d'un compétiteur (chemin court « countries/500/usa.png »), None s'il manque."""
+    h = ((c.get("athlete") or {}).get("flag") or {}).get("href") or ""
+    return h.split("/i/teamlogos/", 1)[1] if "/i/teamlogos/" in h else None
+
+
 def _rounds(comp, done=False):
     """Scores (coups) des tours complets d'un joueur. Tournoi en cours : 18 trous saisis ; tournoi terminé : un score de tour plausible suffit
     (certains circuits ne détaillent pas les trous)."""
@@ -243,7 +249,7 @@ def _current(ev):
                 k += 1
             elif holes:
                 h = len(holes)
-        players.append(dict(n=c["athlete"]["displayName"], cur=_score(c.get("score")), k=k, h=h, cut=False, pos=c.get("order", 999)))
+        players.append(dict(n=c["athlete"]["displayName"], cur=_score(c.get("score")), k=k, h=h, cut=False, pos=c.get("order", 999), fl=_flag(c)))
     if state != "pre" and period >= 3:
         for p in players:
             if p["k"] <= 2 and p["h"] == 0 and period >= 3 and p["k"] < period - 1:
@@ -293,7 +299,7 @@ def build(now):
             pr = simulate(players, sk, sd)
             rows = []
             for i, p in enumerate(players):
-                rows.append(dict(n=p["n"], cur=p["cur"], k=p["k"], h=p["h"], out=p["cut"], known=p["n"] in sk,
+                rows.append(dict(n=p["n"], cur=p["cur"], k=p["k"], h=p["h"], out=p["cut"], fl=p.get("fl"), known=p["n"] in sk,
                                  **{m: round(float(pr[m][i]), 4) for m, _ in MARKETS}))
             rows.sort(key=lambda r: -r["win"])
             out["events"].append(dict(tour=label, id=str(ev["id"]), name=name, state=state, round=period, start=ev["date"][:10], end=(ev.get("endDate") or ev["date"])[:10],

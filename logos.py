@@ -113,6 +113,21 @@ def league_logos(slugs):
     return {s: lg[s] for s in slugs if lg.get(s)}
 
 
+def logo_pairs(obj, out=None):
+    """{nom: logo} pour les éléments qui portent leur propre logo ou drapeau (champs home / hl et away / al)."""
+    out = {} if out is None else out
+    if isinstance(obj, dict):
+        for nk, lk in (("home", "hl"), ("away", "al")):
+            if isinstance(obj.get(nk), str) and obj.get(lk):
+                out[obj[nk]] = obj[lk]
+        for v in obj.values():
+            logo_pairs(v, out)
+    elif isinstance(obj, list):
+        for v in obj:
+            logo_pairs(v, out)
+    return out
+
+
 def names_in(obj, out=None):
     """Tous les noms d'équipes (champs « home » / « away ») trouvés dans une structure de données."""
     out = set() if out is None else out

@@ -637,3 +637,6 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 .dens-compact .mrow .cfp{font-size:.64rem;padding:3px 8px}
 .dens-compact .lgh{margin:16px 0 8px}
 .dens-compact .fcard{width:min(72vw,236px);padding:12px;gap:8px}
+
+.pfl{width:20px;height:14px;object-fit:cover;border-radius:3px;vertical-align:-2px;margin-right:6px;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
+.tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:0}

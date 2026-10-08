@@ -22,6 +22,12 @@ MIN_FIGHTS = 2                  # en dessous, le combattant est « peu connu » 
 
 
 # ------------------------------------------------------------------ données
+def _flag(c):
+    """Drapeau ESPN d'un compétiteur (chemin court « countries/500/usa.png »), None s'il manque."""
+    h = ((c.get("athlete") or {}).get("flag") or {}).get("href") or ""
+    return h.split("/i/teamlogos/", 1)[1] if "/i/teamlogos/" in h else None
+
+
 def _fight(ev, c, idx, n):
     """Combat -> [id, date UTC, A, B, vainqueur (0 / 1 / -1 = nul ou sans résultat), round de fin, rounds prévus, décision (0/1), catégorie, événement, ordre]"""
     cs = sorted(c["competitors"], key=lambda x: x.get("order", 0))
@@ -241,7 +247,7 @@ def _window(start, end):
                 out.append(dict(id=str(c["id"]), d=c["date"][:16], a=cs[0]["athlete"]["displayName"], b=cs[1]["athlete"]["displayName"], state=c["status"]["type"]["state"],
                                 win=next((k for k, x in enumerate(cs) if x.get("winner")), -1), period=c["status"].get("period", 0), clock=c["status"].get("clock", 0),
                                 rounds=(c.get("format") or {}).get("regulation", {}).get("periods", 3), dec=any(x.get("linescores") for x in cs), cls=(c.get("type") or {}).get("abbreviation", ""),
-                                ev=ev["name"], ord=i, n=len(comps), ra=rec(cs[0]), rb=rec(cs[1])))
+                                ev=ev["name"], ord=i, n=len(comps), ra=rec(cs[0]), rb=rec(cs[1]), fa=_flag(cs[0]), fb=_flag(cs[1])))
         day += timedelta(days=1)
     return out
 
@@ -283,7 +289,7 @@ def build(now, days=5):
             p = 0.5 + (p - 0.5) * 0.5
         F = families(g["a"], g["b"], p, g["rounds"], rates)
         safe, less = classify(F) if known else ([], [])
-        it = dict(id=g["id"], date=when.date().isoformat(), time=f"{when:%H:%M}", state=g["state"], home=g["a"], away=g["b"], p=round(p, 4), known=known,
+        it = dict(id=g["id"], date=when.date().isoformat(), time=f"{when:%H:%M}", state=g["state"], home=g["a"], away=g["b"], hl=g.get("fa"), al=g.get("fb"), p=round(p, 4), known=known,
                   label=f'{g["cls"]} · {"carte principale" if g["ord"] >= g["n"] - 5 else "préliminaires"} · {g["rounds"]} rounds' if g["cls"] else "", ev=g["ev"], ord=g["ord"],
                   rounds=g["rounds"], rec=[g["ra"], g["rb"]], safe=safe, less=less)
         if g["state"] == "post" and g["win"] >= 0:

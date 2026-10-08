@@ -97,7 +97,7 @@ def window(today):
         for g in d.get("response", []):
             if g["league"]["id"] in LEAGUES:
                 out.append(dict(lg=g["league"]["id"], id=f'H{g["id"]}', d=g["date"][:16], home=g["teams"]["home"]["name"], away=g["teams"]["away"]["name"],
-                                short=g["status"]["short"], hs=g["scores"]["home"], as_=g["scores"]["away"]))
+                                hl=g["teams"]["home"].get("logo"), al=g["teams"]["away"].get("logo"), short=g["status"]["short"], hs=g["scores"]["home"], as_=g["scores"]["away"]))
         time.sleep(PAUSE if off < 1 else 0)
     with open(CACHE_FILE, "w", encoding="utf-8") as fh:
         json.dump(dict(day=today.isoformat(), t=time.time(), games=out), fh, ensure_ascii=False)
@@ -196,7 +196,7 @@ def build(now, days=1):
         ph, pd, pa = probs(M, lh, la)
         safe, less = classify(families(M, g["home"], g["away"], lh, la)) if known else ([], [])
         state = "post" if g["short"] in FINISHED else "in" if g["short"] in LIVE else "pre"
-        it = dict(id=g["id"], lg=g["lg"], date=when.date().isoformat(), time=f"{when:%H:%M}", state=state, home=g["home"], away=g["away"],
+        it = dict(id=g["id"], lg=g["lg"], date=when.date().isoformat(), time=f"{when:%H:%M}", state=state, home=g["home"], away=g["away"], hl=g.get("hl"), al=g.get("al"),
                   p=[round(ph, 4), round(pd, 4), round(pa, 4)], lh=round(lh, 1), la=round(la, 1), known=known, safe=safe, less=less)
         if state == "post" and g["hs"] is not None and g["as_"] is not None:
             it.update(hs=g["hs"], as_=g["as_"])
