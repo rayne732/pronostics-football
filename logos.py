@@ -113,6 +113,41 @@ def league_logos(slugs):
     return {s: lg[s] for s in slugs if lg.get(s)}
 
 
+# noms complets des clubs que les sources donnent en version courte (liste à compléter au besoin)
+MANUAL_FULL = {"HJK": "HJK Helsinki", "VPS": "VPS Vaasa", "KuPS": "KuPS Kuopio", "Ilves": "Ilves Tampere", "SJK": "SJK Seinäjoki", "Gnistan": "IF Gnistan",
+               "Jaro": "FF Jaro", "Lahti": "FC Lahti", "Mariehamn": "IFK Mariehamn", "TPS": "TPS Turku"}
+
+
+def full_names(m, leagues, ext):
+    """{nom court de l'appli: nom complet} d'après ESPN et API-Football (le plus long des noms qui désignent la même équipe) ; seulement quand ils diffèrent."""
+    from fixtures_api import ESPN_SLUGS, EXT_LEAGUES, to_csv_name
+    slug2div = dict(TOP_SLUGS)
+    slug2div.update({v: k for k, v in ESPN_SLUGS.items()})
+    cand = {}
+    for display, path, slug in (v for k, v in m.items() if k != "_ts"):
+        div = slug2div.get(slug)
+        if div in leagues:
+            nm, ok = to_csv_name(display, set(leagues[div]["teams"]))
+            if ok:
+                cand.setdefault(nm, []).append(display)
+    for e in ext or []:
+        div = EXT_LEAGUES.get((e.get("country"), e.get("lg")))
+        if div in leagues:
+            for name in (e["home"], e["away"]):
+                nm, ok = to_csv_name(name, set(leagues[div]["teams"]))
+                if ok:
+                    cand.setdefault(nm, []).append(name)
+    out = {}
+    for nm, lst in cand.items():
+        best = max(lst, key=len)
+        if norm(best) != norm(nm):
+            out[nm] = best
+    for short, full in MANUAL_FULL.items():
+        if any(short in lg["teams"] for lg in leagues.values()) and (short not in out or len(full) > len(out[short])):
+            out[short] = full
+    return out
+
+
 def logo_pairs(obj, out=None):
     """{nom: logo} pour les éléments qui portent leur propre logo ou drapeau (champs home / hl et away / al)."""
     out = {} if out is None else out

@@ -165,7 +165,8 @@
       '<path d="' + shield + '" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="1.2"/>' +
       '<text x="18" y="25.5" text-anchor="middle" class="ci">' + esc(initials(name)) + '</text></svg>';
   }
-  function tn(name) { return '<span class="tn">' + crest(name) + '<em>' + esc(name) + '</em>' + formDots(name) + '</span>'; }
+  function nm(name) { return (D.full && D.full[name]) || name; }                       // nom complet du club quand on le connaît (« HJK Helsinki » pour « HJK »)
+  function tn(name) { return '<span class="tn">' + crest(name) + '<em>' + esc(nm(name)) + '</em>' + formDots(name) + '</span>'; }
   function miniBar(p) {
     return '<div class="mb"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>';
   }
@@ -193,7 +194,7 @@
   D.fixtures.forEach(function (f, i) {                // confiance de chaque match : probabilité du favori (1X2, validé)
     var M = Engine.families(f.div, f.home, f.away, f.ov);
     f.i = i; f.p = M.p1x2; f.fav = Math.max.apply(null, f.p); f.favIdx = f.p.indexOf(f.fav); f.conf = confOf(f.fav);
-    f.key = norm(f.home + ' ' + f.away + ' ' + cpName(f));
+    f.key = norm(f.home + ' ' + f.away + ' ' + ((D.full && D.full[f.home]) || '') + ' ' + ((D.full && D.full[f.away]) || '') + ' ' + cpName(f));
   });
   function cpName(f) { return f.cp || D.leagues[f.div].name; }                  // vraie compétition (Ligue des Nations, qualifications…) pour les championnats regroupés
   function favName(f) { return [f.home, 'Match nul', f.away][f.favIdx]; }
@@ -259,8 +260,8 @@
   function fcard(f) {
     return '<div class="fcard ' + f.conf + '"><div class="lg">' + esc(cpName(f)) + ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') +
       '<span class="cd">' + svg(IC.clock) + countdown(f) + '</span></div>' +
-      '<div class="duel"><div class="s' + (f.favIdx === 0 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.home, true) + '<b>' + esc(f.home) + '</b>' + formDots(f.home) + '</div><span class="vsp">VS</span>' +
-      '<div class="s' + (f.favIdx === 2 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.away, true) + '<b>' + esc(f.away) + '</b>' + formDots(f.away) + '</div></div>' + miniBar(f.p) +
+      '<div class="duel"><div class="s' + (f.favIdx === 0 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.home, true) + '<b>' + esc(nm(f.home)) + '</b>' + formDots(f.home) + '</div><span class="vsp">VS</span>' +
+      '<div class="s' + (f.favIdx === 2 && f.fav >= 0.5 ? ' fv' : '') + '">' + crest(f.away, true) + '<b>' + esc(nm(f.away)) + '</b>' + formDots(f.away) + '</div></div>' + miniBar(f.p) +
       '<div class="cfp ' + f.conf + '">' + confIcon(f.conf) + CONF[f.conf] + '</div>' +
       '<div class="pf">' + esc(favName(f)) + ' <b>' + pct(f.fav) + '</b></div>' +
       '<button class="voir wide ' + f.conf + '" data-open="' + f.i + '">Voir le pronostic ' + svg(IC.chev) + '</button></div>';
@@ -277,7 +278,7 @@
       var wa = higher && a > b + 1e-9, wb = higher && b > a + 1e-9;
       return '<div class="cv ' + (wa ? 'win' : '') + '">' + fmt(a) + '</div><div class="cv ' + (wb ? 'win' : '') + '">' + fmt(b) + '</div>';
     }
-    function head(X) { var f = X.f; return '<div class="cph"><div class="cpl">' + esc(cpName(f)) + ' · ' + dm(f.date) + ' ' + esc(f.time || '') + '</div><div class="cpt">' + crest(f.home) + crest(f.away) + '</div><b>' + esc(f.home) + ' – ' + esc(f.away) + '</b></div>'; }
+    function head(X) { var f = X.f; return '<div class="cph"><div class="cpl">' + esc(cpName(f)) + ' · ' + dm(f.date) + ' ' + esc(f.time || '') + '</div><div class="cpt">' + crest(f.home) + crest(f.away) + '</div><b>' + esc(nm(f.home)) + ' – ' + esc(nm(f.away)) + '</b></div>'; }
     var rows = [['Confiance du pronostic', cell(A.f.fav, B.f.fav, pct, true)], ['Favori', '<div class="cv">' + esc(favName(A.f)) + '</div><div class="cv">' + esc(favName(B.f)) + '</div>'],
       ['Buts attendus', cell(A.M.lh + A.M.la, B.M.lh + B.M.la, function (x) { return x.toFixed(2); }, false)], ['Plus de 2,5 buts', cell(A.o25 || 0, B.o25 || 0, pct, false)],
       ['Les deux équipes marquent', cell(A.btts || 0, B.btts || 0, pct, false)], ['Pronostics sûrs', cell(A.C.safe.length, B.C.safe.length, String, true)],
@@ -1062,7 +1063,7 @@
       if (f.date !== T) return;
       nf++;
       var C = Engine.classify(Engine.families(f.div, f.home, f.away, f.ov).fams), ref = 'data-open="' + f.i + '"';
-      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, div: f.div, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
+      C.safe.slice(0, 2).forEach(function (r) { picks.push({ icon: '⚽', match: nm(f.home) + ' – ' + nm(f.away), time: f.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, div: f.div, ref: ref, bid: f.id, bm: r.m, bs: r.s }); });
       if (f.conf === 'high') favs2.push({ icon: '⚽', match: f.home + ' – ' + f.away, time: f.time, pick: favName(f), p: f.fav, ref: ref });
     });
     if (nf) counts.push(['⚽', 'Football', nf]);
@@ -1768,7 +1769,7 @@
       var rg = x.createRadialGradient(W / 2, 330, 40, W / 2, 330, 620); rg.addColorStop(0, col + '40'); rg.addColorStop(1, 'transparent'); x.fillStyle = rg; x.fillRect(0, 0, W, H);
       x.textAlign = 'center'; x.fillStyle = '#8b96b6'; x.font = '600 34px Poppins, system-ui, sans-serif';
       x.fillText((f ? cpName(f) : D.leagues[d.div].name) + (f ? ' · ' + dm(f.date) + (f.time ? ' · ' + f.time : '') : ''), W / 2, 96);
-      [[ims[0], 270, d.home], [ims[1], 810, d.away]].forEach(function (t) {
+      [[ims[0], 270, nm(d.home)], [ims[1], 810, nm(d.away)]].forEach(function (t) {
         if (t[0]) { var r = Math.min(220 / t[0].width, 220 / t[0].height); x.drawImage(t[0], t[1] - t[0].width * r / 2, 330 - t[0].height * r / 2, t[0].width * r, t[0].height * r); }
         else { x.fillStyle = '#182042'; x.beginPath(); x.arc(t[1], 330, 100, 0, 6.2832); x.fill(); x.fillStyle = '#f1f4fc'; x.font = '700 64px Poppins, sans-serif'; x.fillText(initials(t[2]), t[1], 352); }
         x.fillStyle = '#f1f4fc'; x.font = '700 46px Poppins, system-ui, sans-serif';
@@ -1873,8 +1874,8 @@
   function vsBlock(d) {
     var lm = lmeta(d.div);
     var l1 = D.logos && D.logos[d.home], l2 = D.logos && D.logos[d.away];
-    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><i class="pitch" aria-hidden="true"></i><div class="side">' + crest(d.home, true) + '<b>' + esc(d.home) + '</b>' + formDots(d.home) + '</div><div class="mid"><span class="vsp">VS</span></div>' +
-      '<div class="side">' + crest(d.away, true) + '<b>' + esc(d.away) + '</b>' + formDots(d.away) + '</div></div>' +
+    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><i class="pitch" aria-hidden="true"></i><div class="side">' + crest(d.home, true) + '<b>' + esc(nm(d.home)) + '</b>' + formDots(d.home) + '</div><div class="mid"><span class="vsp">VS</span></div>' +
+      '<div class="side">' + crest(d.away, true) + '<b>' + esc(nm(d.away)) + '</b>' + formDots(d.away) + '</div></div>' +
       '<div class="betbar"><button class="bt-b sm pri" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari</button>' +
       Books.links(d.home + ' – ' + d.away) + '</div>';
   }
