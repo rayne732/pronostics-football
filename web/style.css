@@ -647,4 +647,5 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 @media (max-width:480px){
   .mrow .act .cfp .cl{display:none}
   .tn .f5{display:none}
+  .mrow .tn em{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15}
 }
