@@ -649,3 +649,32 @@ details.rd summary small{color:var(--mute);margin-left:6px}
   .tn .f5{display:none}
   .mrow .tn em{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.15}
 }
+
+/* finitions : profondeur, typographie et micro-interactions */
+:root{--r-card:18px;--ease:cubic-bezier(.2,.8,.2,1)}
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;letter-spacing:.005em}
+h1,h2,h3,.lgh .ln{text-wrap:balance;letter-spacing:-.01em}
+.mrow,.fcard,.tabs,.chip{backdrop-filter:saturate(1.15)}
+.mrow{border-radius:var(--r-card);box-shadow:0 1px 0 color-mix(in srgb,var(--ink) 6%,transparent) inset,0 8px 22px -14px var(--shadow);
+  background-image:linear-gradient(90deg,color-mix(in srgb,var(--ac) 9%,transparent),transparent 38%)}
+.mrow::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--ac);opacity:.85}
+.mrow{position:relative}
+.mrow .tm{font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.mrow .tn em{font-style:normal;font-weight:550}
+.lgh{padding-bottom:8px;border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
+.lgh .cnt{font-variant-numeric:tabular-nums;font-weight:600}
+.chip{transition:transform .18s var(--ease),box-shadow .18s var(--ease),background .18s}
+.chip:active{transform:scale(.96)}
+.tabs button{transition:background .2s var(--ease),color .2s,box-shadow .2s}
+.fcard{box-shadow:0 14px 30px -18px var(--shadow),0 1px 0 color-mix(in srgb,var(--ink) 7%,transparent) inset}
+.fcard::after{content:"";position:absolute;right:-40px;top:-40px;width:120px;height:120px;border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--ac) 22%,transparent),transparent 70%);pointer-events:none}
+.crl,.cr{filter:drop-shadow(0 2px 3px rgba(0,0,0,.28))}
+button{-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offset:2px;border-radius:10px}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--mute) 40%,transparent);border-radius:8px}
+@keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.mrow,.fcard{animation:rise .35s var(--ease) both}
+.mrow:nth-child(2){animation-delay:.03s}.mrow:nth-child(3){animation-delay:.06s}.mrow:nth-child(4){animation-delay:.09s}.mrow:nth-child(n+5){animation-delay:.12s}
+@media (prefers-reduced-motion:reduce){.mrow,.fcard{animation:none}*{transition:none!important}}
