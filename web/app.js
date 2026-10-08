@@ -2140,3 +2140,30 @@
   if (Date.now() - (LEDGER.t || 0) > 3 * 3600 * 1000) setTimeout(function () { bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) render(); }); }, 4000);
   loadLazy('hist', function () { if (st.detail && st.detail.fi != null) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });   // historique pour l'onglet « Forme », chargé en arrière-plan
 })();
+
+/* confort d'usage : retour en haut, bandeau hors ligne, puce active toujours visible */
+(function () {
+  var top = document.createElement('button');
+  top.className = 'totop'; top.type = 'button'; top.setAttribute('aria-label', 'Retour en haut'); top.textContent = '↑';
+  top.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  var off = document.createElement('div');
+  off.className = 'offbar'; off.setAttribute('role', 'status'); off.textContent = 'Hors ligne : les données affichées sont celles de la dernière visite';
+  document.body.appendChild(top); document.body.appendChild(off);
+  var tick = false;
+  window.addEventListener('scroll', function () {
+    if (tick) return; tick = true;
+    requestAnimationFrame(function () { tick = false; top.classList.toggle('show', window.scrollY > 700); });
+  }, { passive: true });
+  function net() { off.classList.toggle('show', navigator.onLine === false); }
+  window.addEventListener('online', net); window.addEventListener('offline', net); net();
+  var app = document.getElementById('app'), busy = false;
+  function center() {
+    busy = false;
+    var els = app.querySelectorAll('.chips .chip.on');
+    for (var i = 0; i < els.length; i++) {
+      var c = els[i].parentNode, x = els[i].offsetLeft - (c.clientWidth - els[i].offsetWidth) / 2;
+      if (Math.abs(c.scrollLeft - x) > 8) c.scrollLeft = x;
+    }
+  }
+  if (app && window.MutationObserver) new MutationObserver(function () { if (!busy) { busy = true; requestAnimationFrame(center); } }).observe(app, { childList: true, subtree: true });
+})();
