@@ -640,3 +640,11 @@ details.rd summary small{color:var(--mute);margin-left:6px}
 
 .pfl{width:20px;height:14px;object-fit:cover;border-radius:3px;vertical-align:-2px;margin-right:6px;box-shadow:0 0 0 1px rgba(0,0,0,.25)}
 .tdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:0}
+
+/* petits écrans : les noms d'équipes doivent rester lisibles (colonne de droite et points de forme plus discrets) */
+.mrow .act{min-width:0;max-width:150px}
+.mrow .act .cfp{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:480px){
+  .mrow .act .cfp .cl{display:none}
+  .tn .f5{display:none}
+}

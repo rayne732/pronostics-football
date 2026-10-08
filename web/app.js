@@ -304,7 +304,7 @@
       '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button>' +
       '<button class="cmpb' + (cs ? ' on' : '') + '" data-cmp="' + f.i + '" aria-label="Comparer ce match" title="Comparer">⇄</button></div>' +
       '<div class="tt">' + tn(f.home) + tn(f.away) + '</div>' +
-      '<div class="act"><span class="cfp ' + f.conf + '">' + ring(f.fav, f.conf) + pct(f.fav) + ' · ' + CONF[f.conf] + '</span>' +
+      '<div class="act"><span class="cfp ' + f.conf + '">' + ring(f.fav, f.conf) + pct(f.fav) + '<span class="cl"> · ' + CONF[f.conf] + '</span></span>' +
       '<button class="voir ' + f.conf + '" data-open="' + f.i + '">' + (f.conf === 'low' ? '' : confIcon(f.conf)) + 'Voir' + svg(IC.chev) + '</button></div>' + miniBar(f.p) + '</div>';
   }
   function filtered() {
