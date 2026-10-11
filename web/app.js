@@ -6,7 +6,7 @@
   var SAFE = D.safeMin, app = document.getElementById('app'), nav = document.getElementById('nav');
   var CONF = { high: 'Haute confiance', mid: 'Confiance moyenne', low: 'Match ouvert' };
   var WD = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', status: 'all', closed: {}, q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
+  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', status: 'all', closed: {}, group: true, plSport: 'all', plSort: 'p', q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
              an: { div: D.order[0], h: 0, a: 1 } };
   var favs = {};
   try { favs = JSON.parse(localStorage.getItem('pf-fav') || '{}'); } catch (e) { favs = {}; }
@@ -298,6 +298,11 @@
     var f = D.form && D.form[team];
     return f ? '<span class="f5" title="Forme récente : ' + f.split('').map(function (c) { return c === 'V' ? 'victoire' : c === 'N' ? 'nul' : 'défaite'; }).join(', ') + '">' + f.split('').map(function (c) { return '<i class="' + c + '"></i>'; }).join('') + '</span>' : '';
   }
+  function lgTag(f, on) {                                   // nom du championnat au-dessus des équipes quand la liste n'est pas groupée
+    if (!on) return '';
+    var lm = lmeta(f.div);
+    return '<span class="rlg"><b>' + esc(lm[2]) + '</b>' + esc(D.leagues[f.div].name) + '</span>';
+  }
   function fscore(f) {                                      // score connu d'un match (en direct, ou terminé d'après le journal des résultats)
     var LV = f.id && LIVE[f.id];
     if (LV) return { h: LV.hs, a: LV.as, live: LV.st === 'in', clock: LV.clock };
@@ -312,20 +317,20 @@
     loadLazy('res', function () { if (st.tab === 'home' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } else if (st.detail) render(); });
   }
   function tnS(name, n, lv) { return '<span class="tnr">' + tn(name) + '<b class="scn' + (lv ? ' lv' : '') + '">' + n + '</b></span>'; }
-  function row(f, multi) {
+  function row(f, multi, showLg) {
     var on = !!favs[f.id], cs = CMP.indexOf(f.i) >= 0, fs = fstate(f), sc = fs === 'soon' ? null : fscore(f), hit = fs === 'done' && sc && !sc.live ? mainHit(f) : null;
     if (fs === 'live' || fs === 'done') {
       var lv = fs === 'live', verdict = lv ? '<span class="cfp livechip"><i></i>EN DIRECT</span>' :
         hit === true ? '<span class="cfp rv ok">' + svg(IC.check) + 'Pronostic réussi</span>' : hit === false ? '<span class="cfp rv ko">' + svg(IC.x) + 'Raté</span>' : '<span class="cfp rv">Terminé</span>';
       return '<div class="mrow ' + f.conf + (lv ? ' islive' : hit === true ? ' rok' : hit === false ? ' rko' : ' rdone') + '"><div class="tm' + (lv ? ' lvt' : '') + '">' + (lv ? esc(sc && sc.clock ? sc.clock : 'En cours') : 'FIN') + '<small>' + (f.time || '') + (multi ? ' · ' + dm(f.date) : '') + '</small>' +
         '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button></div>' +
-        '<div class="tt">' + (sc ? tnS(f.home, sc.h, lv) + tnS(f.away, sc.a, lv) : tn(f.home) + tn(f.away)) + '</div>' +
+        '<div class="tt">' + lgTag(f, showLg) + (sc ? tnS(f.home, sc.h, lv) + tnS(f.away, sc.a, lv) : tn(f.home) + tn(f.away)) + '</div>' +
         '<div class="act">' + verdict + '<button class="voir ' + (lv ? 'mid' : hit === true ? 'high' : hit === false ? 'low' : f.conf) + '" data-open="' + f.i + '">' + (lv ? 'Live' : sc ? 'Bilan' : 'Voir') + svg(IC.chev) + '</button></div></div>';
     }
     return '<div class="mrow ' + f.conf + '"><div class="tm">' + (f.time || '–') + (multi ? '<small>' + dm(f.date) + '</small>' : '') +
       '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button>' +
       '<button class="cmpb' + (cs ? ' on' : '') + '" data-cmp="' + f.i + '" aria-label="Comparer ce match" title="Comparer">⇄</button></div>' +
-      '<div class="tt">' + tn(f.home) + tn(f.away) + '</div>' +
+      '<div class="tt">' + lgTag(f, showLg) + tn(f.home) + tn(f.away) + '</div>' +
       '<div class="act"><span class="cfp ' + f.conf + '">' + ring(f.fav, f.conf) + pct(f.fav) + '<span class="cl"> · ' + CONF[f.conf] + '</span></span>' +
       '<button class="voir ' + f.conf + '" data-open="' + f.i + '">' + (f.conf === 'low' ? '' : confIcon(f.conf)) + 'Voir' + svg(IC.chev) + '</button></div>' + miniBar(f.p) + '</div>';
   }
@@ -342,6 +347,7 @@
       return '<button data-status="' + x[0] + '" class="' + (st.status === x[0] ? 'on' : '') + '">' + x[1] + (x[2] !== '' && x[2] > 0 ? '<b>' + (x[2] > 99 ? '99+' : x[2]) + '</b>' : '') + '</button>';
     }).join('') + '</div>';
   }
+  try { if (localStorage.getItem('pf-grp') === '0') st.group = false; } catch (e) { /* ignoré */ }
   function filtered() {
     var q = norm(st.q.trim());
     return D.fixtures.filter(function (f) {
@@ -355,6 +361,10 @@
     if (!list.length) return '<div class="empty">Aucun match pour ce filtre.</div>';
     if (list.some(function (f) { return fstate(f) === 'done'; })) ensureRes();
     var h = '';
+    if (!st.group) {                                         // liste à plat, dans l'ordre d'arrivée des matchs (ou de confiance)
+      var flat = list.slice().sort(st.sort === 'conf' ? function (a, b) { return b.fav - a.fav; } : function (a, b) { return kickoff(a) - kickoff(b); });
+      return '<div class="flat">' + flat.map(function (f) { return row(f, st.day === 'all', true); }).join('') + '</div>';
+    }
     D.order.forEach(function (div) {
       var sub = list.filter(function (f) { return f.div === div; });
       if (!sub.length) return;
@@ -1399,14 +1409,21 @@
   }
   function todayHTML() {
     todayLoad();
-    var R = todayRows(), h = '<div class="top"><h1>Plans du jour</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
+    var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans du jour</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
-    if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
+    if (R.counts.length) {
+      var okSp = R.counts.some(function (c) { return c[0] === st.plSport; });
+      if (!okSp) st.plSport = 'all';
+      h += '<div class="chips sprow"><button class="chip' + (st.plSport === 'all' ? ' on' : '') + '" data-plsp="all">Tous<b>' + R.counts.reduce(function (t, c) { return t + c[2]; }, 0) + '</b></button>' + R.counts.map(function (c) {
+        return '<button class="chip' + (st.plSport === c[0] ? ' on' : '') + '" data-plsp="' + c[0] + '">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</button>'; }).join('') + '</div>';
+      if (st.plSport !== 'all') R = { picks: R0.picks.filter(function (r) { return r.icon === st.plSport; }), favs: R0.favs.filter(function (r) { return r.icon === st.plSport; }), counts: R0.counts, T: R0.T };
+    }
     if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
     h += plansHTML(R);
     h += assistantHTML(R);
-    h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
-    var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
+    h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
+      '<div class="chips"><button class="chip pill' + (st.plSort === 'p' ? ' on' : '') + '" data-plsort="p">Les plus probables</button><button class="chip pill' + (st.plSort === 't' ? ' on' : '') + '" data-plsort="t">Par heure</button></div>';
+    var seen = {}, shown = (st.plSort === 't' ? R.picks.slice().sort(function (a, b) { return (a.time || '99:99') < (b.time || '99:99') ? -1 : (a.time || '99:99') > (b.time || '99:99') ? 1 : b.p - a.p; }) : R.picks).filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
     h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
     var seenF = {};
     var fv = R.favs.filter(function (r) { if (seenF[r.match]) return false; seenF[r.match] = 1; return true; }).slice(0, 10);
@@ -1665,7 +1682,7 @@
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
-    h += statusBar() + '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
+    h += statusBar() + '<label class="grpsw"><input type="checkbox" data-grp' + (st.group ? ' checked' : '') + '><span class="bx"></span>Classer par championnat<small>' + (st.group ? 'décoche pour voir les matchs dans l’ordre d’arrivée' : 'ordre d’arrivée des matchs') + '</small></label><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
       '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button>' +
       '<button class="sortb" data-dens aria-label="Affichage compact ou confortable">' + (DENS === 'compact' ? '▤' : '▦') + '</button></div>';
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
@@ -2255,7 +2272,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-plsp],[data-plsort],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2299,6 +2316,8 @@
       closeDetail();
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
+    else if (t.hasAttribute('data-plsp')) { st.plSport = t.getAttribute('data-plsp'); var yp = window.scrollY; render(); window.scrollTo(0, yp); }
+    else if (t.hasAttribute('data-plsort')) { st.plSort = t.getAttribute('data-plsort'); var yq2 = window.scrollY; render(); window.scrollTo(0, yq2); }
     else if (t.hasAttribute('data-bf')) { st.bf = t.getAttribute('data-bf'); var yb2 = window.scrollY; render(); window.scrollTo(0, yb2); }
     else if (t.hasAttribute('data-status')) { st.status = t.getAttribute('data-status'); var ys = window.scrollY; render(); window.scrollTo(0, ys); }
     else if (t.hasAttribute('data-lgc')) { var kc = t.getAttribute('data-lgc'); st.closed[kc] = !st.closed[kc]; var yc2 = window.scrollY; render(); window.scrollTo(0, yc2); }
@@ -2385,6 +2404,12 @@
     if (rec) { rec.o = o > 1 ? Math.round(o * 100) / 100 : 0; asRecSave(); }
     var btn = t.closest('.as-row, .top1, .plan') && t.closest('.as-row, .top1, .plan').querySelector('[data-bet], [data-bcombo]');
     if (btn) { if (o > 1) btn.setAttribute('data-bodds', o); else btn.removeAttribute('data-bodds'); }
+  });
+  app.addEventListener('change', function (e) {
+    if (!e.target.hasAttribute || !e.target.hasAttribute('data-grp')) return;
+    st.group = e.target.checked;
+    try { localStorage.setItem('pf-grp', st.group ? '1' : '0'); } catch (err) { /* ignoré */ }
+    var yg = window.scrollY; render(); window.scrollTo(0, yg);
   });
   app.addEventListener('input', function (e) {
     if (e.target.id !== 'q') return;

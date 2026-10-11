@@ -11,9 +11,9 @@ from datetime import datetime, timedelta, timezone
 
 URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={d}&l={l}"
 CACHE = os.path.join("data", "tsdb_cache.json")
-MAX_REQ = 45                      # requêtes réseau par passage (≈ 2 minutes)
+MAX_REQ = 60                      # requêtes réseau par passage (≈ 2 minutes)
 TTL_NEAR = 5 * 3600               # aujourd'hui et demain : rafraîchis toutes les ~5 h
-TTL_FAR = 20 * 3600               # plus loin : une fois par jour
+TTL_FAR = 30 * 3600               # plus loin : une fois par jour
 # id TheSportsDB : (nom français, pays en anglais, féminin)
 LEAGUES = {4820: ("Premier League canadienne", "Canada", 0), 5602: ("Northern Super League (F)", "Canada", 1), 5922: ("Championnat canadien", "Canada", 0),
            4642: ("Besta deild karla", "Iceland", 0), 4906: ("1. deild karla", "Iceland", 0),
@@ -24,11 +24,24 @@ LEAGUES = {4820: ("Premier League canadienne", "Canada", 0), 5602: ("Northern Su
            4638: ("Erovnuli Liga (Géorgie)", "Georgia", 0), 4649: ("Première ligue du Kazakhstan", "Kazakhstan", 0), 4617: ("Superliga (Albanie)", "Albania", 0),
            4694: ("Division nationale (Luxembourg)", "Luxembourg", 0), 4713: ("Challenge League (Suisse)", "Switzerland", 0),
            4623: ("Challenger Pro League (Belgique)", "Belgium", 0), 4796: ("2. Liga (Autriche)", "Austria", 0), 4661: ("I liga (Pologne)", "Poland", 0),
-           4637: ("Ligue 3", "France", 0)}
+           4637: ("Ligue 3", "France", 0),
+           4650: ("Virslīga (Lettonie)", "Latvia", 0), 4651: ("A Lyga (Lituanie)", "Lithuania", 0), 4634: ("Meistriliiga (Estonie)", "Estonia", 0),
+           4619: ("Première ligue d’Arménie", "Armenia", 0), 4693: ("Première ligue d’Azerbaïdjan", "Azerbaijan", 0), 4655: ("Division nationale (Moldavie)", "Moldova", 0),
+           4656: ("Première ligue du Monténégro", "Montenegro", 0), 4622: ("Vysshaya Liga (Biélorussie)", "Belarus", 0), 4742: ("Persian Gulf Pro League (Iran)", "Iran", 0),
+           4743: ("Thai League 1", "Thailand", 0), 4803: ("V.League 1 (Vietnam)", "Vietnam", 0), 4790: ("Super League (Indonésie)", "Indonesia", 0),
+           4792: ("Super League (Malaisie)", "Malaysia", 0), 4520: ("Botola Pro (Maroc)", "Morocco", 0), 4753: ("Ligue 1 (Algérie)", "Algeria", 0),
+           4828: ("Ligue 1 (Tunisie)", "Tunisia", 0), 4974: ("Premier League (Ghana)", "Ghana", 0), 4827: ("NPFL (Nigeria)", "Nigeria", 0),
+           4745: ("Premier League (Kenya)", "Kenya", 0), 4676: ("TFF 1. Lig (Turquie)", "Turkey", 0), 4824: ("J2 League", "Japan", 0),
+           4628: ("China League One", "China", 0), 4457: ("OBOS-ligaen (Norvège)", "Norway", 0), 4683: ("1re division (Danemark)", "Denmark", 0),
+           5209: ("Damallsvenskan (F)", "Sweden", 1), 5208: ("Toppserien (F)", "Norway", 1), 5202: ("A-Liga (F, Danemark)", "Denmark", 1)}
 CFR = {"Canada": "Canada", "Iceland": "Islande", "Croatia": "Croatie", "Serbia": "Serbie", "Ukraine": "Ukraine", "Bulgaria": "Bulgarie", "Hungary": "Hongrie",
        "Slovakia": "Slovaquie", "Slovenia": "Slovénie", "South Korea": "Corée du Sud", "United Arab Emirates": "Émirats arabes unis", "Egypt": "Égypte",
        "Qatar": "Qatar", "Georgia": "Géorgie", "Kazakhstan": "Kazakhstan", "Albania": "Albanie", "Luxembourg": "Luxembourg", "Switzerland": "Suisse",
-       "Belgium": "Belgique", "Austria": "Autriche", "Poland": "Pologne", "France": "France"}
+       "Belgium": "Belgique", "Austria": "Autriche", "Poland": "Pologne", "France": "France",
+       "Latvia": "Lettonie", "Lithuania": "Lituanie", "Estonia": "Estonie", "Armenia": "Arménie", "Azerbaijan": "Azerbaïdjan", "Moldova": "Moldavie",
+       "Montenegro": "Monténégro", "Belarus": "Biélorussie", "Iran": "Iran", "Thailand": "Thaïlande", "Vietnam": "Vietnam", "Indonesia": "Indonésie",
+       "Malaysia": "Malaisie", "Morocco": "Maroc", "Algeria": "Algérie", "Tunisia": "Tunisie", "Ghana": "Ghana", "Nigeria": "Nigeria", "Kenya": "Kenya",
+       "Turkey": "Turquie", "Japan": "Japon", "China": "Chine", "Norway": "Norvège", "Denmark": "Danemark", "Sweden": "Suède"}
 
 
 def _get(url):

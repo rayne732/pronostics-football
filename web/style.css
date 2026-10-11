@@ -873,3 +873,22 @@ details.mk.won .pk{background:color-mix(in srgb,var(--green) 22%,var(--surface2)
 .br.ko .bsel{background:color-mix(in srgb,var(--red) 11%,var(--surface));border-color:color-mix(in srgb,var(--red) 35%,var(--line));color:var(--red);text-decoration:line-through}
 .bp{text-align:right}.bp b{display:block;font-size:.9rem;font-variant-numeric:tabular-nums}.bp i{display:block;height:4px;border-radius:99px;margin-top:5px;background:var(--mute);opacity:.5}
 .br.ok .bp i{background:var(--green);opacity:1}.br.ko .bp i{background:var(--red);opacity:.8}
+
+/* découvrir : liste à plat ; plans : filtre par sport */
+.grpsw{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin:0 0 10px;padding:10px 12px;border-radius:15px;background:var(--surface);border:1px solid var(--line);font-size:.86rem;font-weight:600;cursor:pointer}
+.grpsw input{position:absolute;opacity:0;pointer-events:none}
+.grpsw .bx{display:grid;place-items:center;width:22px;height:22px;border-radius:7px;border:2px solid var(--mute);flex:none;transition:background .15s,border-color .15s}
+.grpsw input:checked + .bx{background:var(--green);border-color:var(--green)}
+.grpsw input:checked + .bx::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.grpsw input:focus-visible + .bx{outline:2px solid var(--blue);outline-offset:2px}
+.grpsw small{flex:1 1 100%;color:var(--mute);font-weight:400;font-size:.72rem;padding-left:32px;margin-top:-2px}
+.flat{display:flex;flex-direction:column}
+.rlg{display:flex;align-items:center;gap:6px;font-size:.7rem;font-weight:600;color:var(--mute);margin-bottom:2px;min-width:0}
+.rlg i{font-style:normal;display:inline-grid;place-items:center;width:16px;height:16px;flex:none}
+.rlg i img{width:100%;height:100%;object-fit:contain}
+.sprow .chip{cursor:pointer}
+button.chip small{display:block}
+.rlg i{width:16px;height:16px;overflow:hidden}
+.rlg img,.rlg svg{width:16px!important;height:16px!important;max-width:16px!important;object-fit:contain;display:block;margin:0!important;padding:0!important;filter:none!important}
+.rlg{white-space:nowrap}.rlg span,.rlg{overflow:hidden;text-overflow:ellipsis}
+.rlg b{font-size:.62rem;padding:1px 5px;border-radius:5px;background:var(--surface2);border:1px solid var(--line);color:var(--ink);flex:none}
