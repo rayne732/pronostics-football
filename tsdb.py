@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={d}&l={l}"
 # id TheSportsDB : (nom français, pays, féminin)
 LEAGUES = {4820: ("Premier League canadienne", "Canada", 0), 5602: ("Northern Super League (F)", "Canada", 1), 5922: ("Championnat canadien", "Canada", 0),
-           4642: ("Besta deild karla", "Iceland", 0)}
+           4642: ("Besta deild karla", "Iceland", 0), 4906: ("1. deild karla", "Iceland", 0)}
 CFR = {"Canada": "Canada", "Iceland": "Islande"}
 
 
