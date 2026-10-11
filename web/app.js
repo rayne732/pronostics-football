@@ -2011,17 +2011,9 @@
       '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(h2hRow).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
   }
   function bilanTab(d, f) {
-    var sc = fscore(f), M = Engine.families(d.div, d.home, d.away, f.ov), C = Engine.classify(M.fams), rows = [], seen = {};
+    var sc = fscore(f), M = Engine.families(d.div, d.home, d.away, f.ov), C = Engine.classify(M.fams);
     function pOf(m, sel) { var fam = M.fams.filter(function (x) { return x.name === m; })[0], it = fam && fam.sels.filter(function (x) { return x[0] === sel; })[0]; return it ? it[1] : null; }
     var ann = (D.res && D.res.m && D.res.m[f.id]) || null;                              // pronostics réellement annoncés avant le match
-    function group(title, list) {
-      var ok = list.filter(function (x) { return x.r === true; }).length, tot = list.filter(function (x) { return x.r !== null; }).length;
-      if (!list.length) return '';
-      return '<div class="sec"><span class="dot ' + (title.indexOf('sûrs') >= 0 && title.indexOf('Moins') < 0 ? 'g' : title.indexOf('Moins') >= 0 ? 'a' : 'b') + '"></span>' + title + ' <small>' + ok + ' / ' + tot + ' justes</small></div><div class="fm">' +
-        list.map(function (x) {
-          return '<div class="pr ' + (x.r === null ? '' : x.r ? 'ok' : 'ko') + '"><span class="mk2">' + (x.r === null ? '·' : svg(x.r ? IC.check : IC.x)) + '</span><span class="pt">' + esc(x.m) + '<small class="sm">' + esc(x.s) + '</small></span><span class="pp">' + (x.p == null ? '' : pct(x.p)) + '</span></div>';
-        }).join('') + '</div>';
-    }
     function mk(arr) { return arr.map(function (x) { return { m: x.m, s: x.s, p: x.p, r: Bets.resolver(f.id, x.m, x.s) }; }); }
     var safe, less, extra = [];
     if (ann) {
@@ -2029,11 +2021,32 @@
       safe = all.filter(function (x) { return x.p != null && x.p >= Engine.SAFE; }); less = all.filter(function (x) { return !(x.p != null && x.p >= Engine.SAFE); });
     } else { safe = mk(C.safe); less = mk(C.less); }
     M.fams.filter(function (x) { return x.extra; }).forEach(function (x) { var top = x.sels.slice().sort(function (a, b) { return b[1] - a[1]; })[0]; extra.push({ m: x.name, s: top[0], p: top[1], r: Bets.resolver(f.id, x.name, top[0]) }); });
-    var all2 = safe.concat(less).concat(extra), ok = all2.filter(function (x) { return x.r === true; }).length, tot = all2.filter(function (x) { return x.r !== null; }).length;
-    var h = '<div class="bsum"><div class="bk">Terminé</div><div class="bsc">' + esc(nm(d.home)) + ' <b>' + sc.h + ' - ' + sc.a + '</b> ' + esc(nm(d.away)) + '</div>' +
-      (tot ? '<div class="bst"><span class="ok">' + ok + ' justes</span><span class="ko">' + (tot - ok) + ' ratés</span><span>' + Math.round(ok / tot * 100) + ' % de réussite</span></div>' : '') + '</div>';
-    return h + group('Pronostics sûrs', safe) + group('Moins sûrs', less) + group('Autres marchés', extra) +
-      '<div class="sub">✓ = sélection gagnée, ✗ = perdue. Les sélections « sûres » sont celles annoncées à 70 % et plus avant le match.</div>';
+    var every = safe.concat(less).concat(extra), ok = every.filter(function (x) { return x.r === true; }).length, tot = every.filter(function (x) { return x.r !== null; }).length, ko = tot - ok, flt = st.bf || 'all';
+    var main = Bets.resolver(f.id, 'Résultat du match', favName(f)), fav = favName(f), pc = tot ? ok / tot : 0, C2 = 2 * Math.PI * 34;
+    function ringBig() {
+      return '<div class="bring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34" class="bt0"/><circle cx="40" cy="40" r="34" class="bt1" stroke-dasharray="' + (C2 * pc).toFixed(1) + ' ' + C2.toFixed(1) + '" transform="rotate(-90 40 40)"/></svg><div><b>' + ok + '<i>/' + tot + '</i></b><small>justes</small></div></div>';
+    }
+    var res = sc.h > sc.a ? nm(d.home) : sc.h < sc.a ? nm(d.away) : 'Match nul', g = sc.h + sc.a;
+    var facts = [['Résultat', res], ['Total de buts', g + ' but' + (g > 1 ? 's' : '')], ['Les deux équipes marquent', sc.h > 0 && sc.a > 0 ? 'Oui' : 'Non']];
+    var h = '<div class="bhero"><div class="bhk"><span class="bdone">TERMINÉ</span><span>' + esc(cpName(f)) + ' · ' + dm(f.date) + '</span></div>' +
+      '<div class="bhm"><div class="bhs">' + crest(d.home, true) + '<b>' + esc(nm(d.home)) + '</b></div><div class="bhc"><span class="bhn' + (sc.h > sc.a ? ' w' : '') + '">' + sc.h + '</span><span class="bhd">–</span><span class="bhn' + (sc.a > sc.h ? ' w' : '') + '">' + sc.a + '</span></div><div class="bhs">' + crest(d.away, true) + '<b>' + esc(nm(d.away)) + '</b></div></div>' +
+      '<div class="bfacts">' + facts.map(function (x) { return '<span><small>' + x[0] + '</small><b>' + esc(x[1]) + '</b></span>'; }).join('') + '</div></div>';
+    if (main !== null) h += '<div class="bmain ' + (main ? 'ok' : 'ko') + '"><span class="bmi">' + svg(main ? IC.check : IC.x) + '</span><div><small>Pronostic principal</small><b>' + esc(fav) + '</b></div><span class="bmv">' + (main ? 'Réussi' : 'Raté') + '</span></div>';
+    if (tot) h += '<div class="bscore">' + ringBig() + '<div class="bstat"><div class="bsr ok"><span>' + svg(IC.check) + '</span><b>' + ok + '</b> pronostic' + (ok > 1 ? 's' : '') + ' juste' + (ok > 1 ? 's' : '') + '</div><div class="bsr ko"><span>' + svg(IC.x) + '</span><b>' + ko + '</b> raté' + (ko > 1 ? 's' : '') + '</div><div class="bsp">' + Math.round(pc * 100) + ' % de réussite sur ce match</div></div></div>';
+    h += '<div class="seg3 bseg">' + [['all', 'Tous', tot], ['ok', '✓ Justes', ok], ['ko', '✗ Ratés', ko]].map(function (x) {
+      return '<button data-bf="' + x[0] + '" class="' + (flt === x[0] ? 'on' : '') + '">' + x[1] + '<b>' + x[2] + '</b></button>'; }).join('') + '</div>';
+    function group(title, cls, list) {
+      var l = list.filter(function (x) { return flt === 'all' || (flt === 'ok' && x.r === true) || (flt === 'ko' && x.r === false); });
+      if (!l.length) return '';
+      var gok = list.filter(function (x) { return x.r === true; }).length, gt = list.filter(function (x) { return x.r !== null; }).length;
+      return '<div class="sec"><span class="dot ' + cls + '"></span>' + title + ' <small>' + gok + ' / ' + gt + ' justes</small></div><div class="bl">' +
+        l.map(function (x) {
+          return '<div class="br ' + (x.r === null ? 'na' : x.r ? 'ok' : 'ko') + '"><span class="bi">' + (x.r === null ? '·' : svg(x.r ? IC.check : IC.x)) + '</span><div class="bt"><b>' + esc(x.m) + '</b><span class="bsel">' + esc(x.s) + '</span></div>' +
+            '<div class="bp">' + (x.p == null ? '' : '<b>' + pct(x.p) + '</b><i style="width:' + Math.round(x.p * 100) + '%"></i>') + '</div></div>';
+        }).join('') + '</div>';
+    }
+    var body = group('Pronostics sûrs', 'g', safe) + group('Moins sûrs', 'a', less) + group('Autres marchés', 'b', extra);
+    return h + (body || '<div class="empty">Aucun pronostic dans cette catégorie.</div>') + '<div class="sub">✓ = sélection gagnée, ✗ = perdue. Les paris « sûrs » sont ceux annoncés à 70 % et plus avant le match.</div>';
   }
   /* prédiction en direct : buts attendus réduits au temps restant, puis combinés au score actuel (loi de Poisson) */
   var LH = {};                                              // historique des probabilités vues pendant le match : { id: [[minute, p1, pn, p2], …] }
@@ -2242,7 +2255,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2286,6 +2299,7 @@
       closeDetail();
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
+    else if (t.hasAttribute('data-bf')) { st.bf = t.getAttribute('data-bf'); var yb2 = window.scrollY; render(); window.scrollTo(0, yb2); }
     else if (t.hasAttribute('data-status')) { st.status = t.getAttribute('data-status'); var ys = window.scrollY; render(); window.scrollTo(0, ys); }
     else if (t.hasAttribute('data-lgc')) { var kc = t.getAttribute('data-lgc'); st.closed[kc] = !st.closed[kc]; var yc2 = window.scrollY; render(); window.scrollTo(0, yc2); }
     else if (t.hasAttribute('data-sort')) { st.sort = st.sort === 'time' ? 'conf' : 'time'; render(); }
