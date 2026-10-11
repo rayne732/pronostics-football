@@ -1686,6 +1686,46 @@
         return '<div class="hcm">' + esc(x.m) + '</div>' + alt(x.s, true, d, x.m, 'g');
       }).join('') + '<div class="sub">Au-delà de 97 %, la cote est trop basse pour être intéressante : ces sélections sont masquées ici.</div></div>';
   }
+  function nearHalf(fam) { return fam.sels.reduce(function (a, b) { return Math.abs(b[1] - 0.5) < Math.abs(a[1] - 0.5) ? b : a; }); }
+  function topSel(fam) { return fam.sels.reduce(function (a, b) { return b[1] > a[1] ? b : a; }); }
+  function overviewHTML(M, d) {                             // marchés principaux dans l'ordre habituel, une seule sélection mise en avant
+    var by = {}; M.fams.forEach(function (x) { by[x.name] = x; });
+    var rows = [], over = M.over25 >= 0.5;
+    function add(fam, sel, label) {
+      if (!fam) return;
+      var s0 = sel || topSel(fam);
+      rows.push({ m: label || fam.name, s: s0[0], p: s0[1], v: fam.validated, f: fam });
+    }
+    add(by['Résultat du match']);
+    add(by['Double chance']);
+    add(by['Les deux équipes marquent']);
+    add(by['Premier but']);
+    add(by['Résultat à la mi-temps']);
+    add(by['Score exact']);
+    var gf = by[over ? 'Total buts (plus)' : 'Total buts (moins)'];
+    if (gf) add(gf, gf.sels.filter(function (x) { return x[0].indexOf('2,5') >= 0; })[0], gf.name);
+    [d.home, d.away].forEach(function (t) { var tf = by['Buts de ' + t + (over ? ' (plus)' : ' (moins)')] || by['Buts de ' + t + ' (plus)']; if (tf) add(tf, nearHalf(tf)); });
+    var cf = by['Corners (plus)'];
+    if (cf) add(cf, nearHalf(cf));
+    return '<div class="sec"><span class="dot g"></span>Les marchés principaux <small>touche pour voir toutes les sélections</small></div><div class="ovw">' +
+      rows.map(function (x) { return mkRow(x.p >= 0.62 ? 'g' : 'a', d)(x); }).join('') + '</div>';
+  }
+  function htftHTML(M, d) {
+    var fam = M.fams.filter(function (x) { return x.name === 'Mi-temps / Fin de match'; })[0];
+    if (!fam || fam.sels.length !== 9) return '';
+    var ps = fam.sels.map(function (x) { return x[1]; }), sorted = ps.slice().sort(function (a, b) { return b - a; }),
+      eq = '<span class="eqs">=</span>';
+    function head(i) { return '<div class="hh">' + (i === 0 ? crest(d.home) + '<small>' + esc(initials(nm(d.home))) + '</small>' : i === 1 ? eq + '<small>Nul</small>' : crest(d.away) + '<small>' + esc(initials(nm(d.away))) + '</small>') + '</div>'; }
+    var h = '<div class="sec"><span class="dot a"></span>Mi-temps / Fin de match <small>lignes : mi-temps · colonnes : fin</small></div><div class="htft"><div class="hh hc0">MT / FT</div>' + head(0) + head(1) + head(2);
+    for (var a = 0; a < 3; a++) {
+      h += head(a);
+      for (var c = 0; c < 3; c++) {
+        var v = ps[a * 3 + c], rank = v === sorted[0] ? ' r1' : v === sorted[1] ? ' r2' : '';
+        h += '<div class="hc' + rank + '"><b>' + (['1', 'N', '2'][a]) + '/' + (['1', 'N', '2'][c]) + '</b><span>' + (v * 100).toFixed(1).replace('.', ',') + ' %</span></div>';
+      }
+    }
+    return h + '</div>';
+  }
   function predHTML(d, f) {
     var M = Engine.families(d.div, d.home, d.away, f && f.ov), C = Engine.classify(M.fams), p = M.p1x2;
     var mx = Math.max.apply(null, p), fi = p.indexOf(mx), conf = confOf(mx), names = [d.home, 'Match nul', d.away];
@@ -1701,6 +1741,7 @@
       (f && f.ov ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
     if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
+    h += overviewHTML(M, d) + htftHTML(M, d);
     h += highConfHTML(M, d);
     h += compareHTML(M, d) + heatHTML(M, d);
     h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
@@ -1870,10 +1911,21 @@
     }).join('');
     return '<div class="fm"><h4><span class="tn">' + crest(team) + '<em>' + esc(team) + '</em></span><span class="dots">' + dots + '</span></h4>' + ms.map(matchLine).join('') + '</div>';
   }
+  function h2hRow(r) {
+    return '<div class="h2r"><span class="dd">' + dmNum(r[1]) + '</span><span class="tt1">' + crest(r[2]) + '<em>' + esc(nm(r[2])) + '</em></span><span class="sc">' + r[4] + ' - ' + r[5] + '</span><span class="tt2"><em>' + esc(nm(r[3])) + '</em>' + crest(r[3]) + '</span></div>';
+  }
+  function h2hTotals(d, hh) {
+    var w = 0, n = 0, l = 0;
+    hh.forEach(function (r) { var a = r[2] === d.home ? r[4] : r[5], b = r[2] === d.home ? r[5] : r[4]; if (a > b) w++; else if (a === b) n++; else l++; });
+    var t = hh.length || 1;
+    return '<div class="h2t"><div class="h2k">Résultats totaux <small>' + hh.length + ' match' + (hh.length > 1 ? 's' : '') + '</small></div><div class="h2b"><div><b class="w">' + w + '</b>' + crest(d.home) + '<small>' + Math.round(w / t * 100) + ' %</small></div>' +
+      '<div><b class="n">' + n + '</b><span class="eqs">=</span><small>' + Math.round(n / t * 100) + ' %</small></div><div><b class="l">' + l + '</b>' + crest(d.away) + '<small>' + Math.round(l / t * 100) + ' %</small></div></div>' +
+      '<div class="b3"><i class="h" style="width:' + w / t * 100 + '%"></i><i class="d" style="width:' + n / t * 100 + '%"></i><i class="a" style="width:' + l / t * 100 + '%"></i></div></div>';
+  }
   function formHTML(d) {
     var hh = h2h(d.div, d.home, d.away, 5);
-    return formBlock(d.div, d.home) + formBlock(d.div, d.away) +
-      '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(matchLine).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
+    return (hh.length ? h2hTotals(d, hh) : '') + formBlock(d.div, d.home) + formBlock(d.div, d.away) +
+      '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(h2hRow).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
   }
   function detailBody(d, f) {
     return '<div class="tabs"><button data-dtab="pred" class="' + (st.dtab === 'pred' ? 'on' : '') + '">Prédictions</button>' +
@@ -1891,8 +1943,9 @@
   function detailPage(d) {
     var f = d.fi != null ? D.fixtures[d.fi] : null, lm = lmeta(d.div);
     return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
-      '<div class="who"><span class="lgchip">' + (lgPath(d.div) ? '<img class="lci" src="' + logoUrl(lgPath(d.div)) + '" alt="" onerror="this.remove()">' : lm[2] + ' ') + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small>' +
-      (f ? dm(f.date) + (f.time ? ' · ' + f.time : '') + ' · ' + countdown(f) : '') + '</small></div>' +
+      '<div class="who"><span class="lgchip">' + (lgPath(d.div) ? '<img class="lci" src="' + logoUrl(lgPath(d.div)) + '" alt="" onerror="this.remove()">' : lm[2] + ' ') + esc(f ? cpName(f) : D.leagues[d.div].name) + '</span><small class="dch">' +
+      (f ? '<i>📅 ' + dm(f.date) + '</i>' + (f.time ? '<i>🕒 ' + f.time + '</i>' : '') + '<i>' + countdown(f) + '</i>' : '') + '</small></div>' +
+      (f ? '<button class="ibtn' + (favs[f.id] ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (favs[f.id] ? '★' : '☆') + '</button>' : '') +
       '<button class="ibtn" data-shareimg aria-label="Partager en image" title="Partager en image">🖼</button><button class="ibtn" data-share aria-label="Copier le pronostic">' + svg(IC.share) + '</button></div>' +
       vsBlock(d) + detailBody(d, f);
   }
