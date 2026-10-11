@@ -1927,10 +1927,42 @@
     return (hh.length ? h2hTotals(d, hh) : '') + formBlock(d.div, d.home) + formBlock(d.div, d.away) +
       '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(h2hRow).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
   }
+  /* classement de la saison en cours, recalculé d'après les résultats connus (la saison commence après la dernière coupure de plus de 45 jours) */
+  var TBL_REQ = false;
+  function dayN(n) { var t = String(n); return Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8)) / 864e5; }
+  function tableHTML(d) {
+    if (!isLoaded('hist')) {
+      if (!TBL_REQ) { TBL_REQ = true; loadLazy('hist', function () { if (st.detail && st.dtab === 'table') { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
+      return skel(6);
+    }
+    var rows = D.hist.filter(function (r) { return r[0] === d.div; }).sort(function (a, b) { return a[1] - b[1]; });
+    if (!rows.length) return '<div class="empty">Pas de résultats pour ce championnat.</div>';
+    var i0 = 0;
+    for (var i = rows.length - 1; i > 0; i--) if (dayN(rows[i][1]) - dayN(rows[i - 1][1]) > 45) { i0 = i; break; }
+    var T = {};
+    function team(n) { return T[n] || (T[n] = { n: n, j: 0, v: 0, d: 0, l: 0, bp: 0, bc: 0, pts: 0 }); }
+    rows.slice(i0).forEach(function (r) {
+      var a = team(r[2]), b = team(r[3]), x = +r[4], y = +r[5];
+      if (isNaN(x) || isNaN(y)) return;
+      a.j++; b.j++; a.bp += x; a.bc += y; b.bp += y; b.bc += x;
+      if (x > y) { a.v++; b.l++; a.pts += 3; } else if (x < y) { b.v++; a.l++; b.pts += 3; } else { a.d++; b.d++; a.pts++; b.pts++; }
+    });
+    var L = Object.keys(T).map(function (k) { return T[k]; }).sort(function (a, b) { return b.pts - a.pts || (b.bp - b.bc) - (a.bp - a.bc) || b.bp - a.bp; });
+    var h = '<div class="tbl"><div class="tbh"><b>' + esc(D.leagues[d.div].name) + '</b><span><i class="k1"></i>' + esc(initials(nm(d.home))) + '<i class="k2"></i>' + esc(initials(nm(d.away))) + '</span></div>' +
+      '<div class="tbr th"><span>#</span><span>Équipe</span><span>J</span><span>V</span><span>N</span><span>D</span><span>DB</span><span>Pts</span></div>';
+    L.forEach(function (t, k) {
+      var db = t.bp - t.bc, cl = t.n === d.home ? ' me1' : t.n === d.away ? ' me2' : '';
+      h += '<div class="tbr' + cl + '"><span>' + (k + 1) + '</span><span class="tn">' + crest(t.n) + '<em>' + esc(nm(t.n)) + '</em></span><span>' + t.j + '</span><span>' + t.v + '</span><span>' + t.d + '</span><span>' + t.l + '</span>' +
+        '<span class="' + (db > 0 ? 'up' : db < 0 ? 'dn' : '') + '">' + (db > 0 ? '+' : '') + db + '</span><span class="pt">' + t.pts + '</span></div>';
+    });
+    return h + '</div><div class="sub">Classement recalculé d’après les résultats connus de la saison en cours ' + (L.length ? '(' + L[0].j + ' matchs au plus par équipe)' : '') + ' : il ne tient pas compte des points retirés, des phases finales ni des barrages.</div>';
+  }
   function detailBody(d, f) {
-    return '<div class="tabs"><button data-dtab="pred" class="' + (st.dtab === 'pred' ? 'on' : '') + '">Prédictions</button>' +
-      '<button data-dtab="form" class="' + (st.dtab === 'form' ? 'on' : '') + '">Forme &amp; H2H</button></div>' +
-      (st.dtab === 'pred' ? predHTML(d, f) : formHTML(d));
+    var hasT = !!D.leagues[d.div], dt = st.dtab === 'table' && !hasT ? 'pred' : st.dtab;
+    return '<div class="tabs"><button data-dtab="pred" class="' + (dt === 'pred' ? 'on' : '') + '">Prédictions</button>' +
+      '<button data-dtab="form" class="' + (dt === 'form' ? 'on' : '') + '">Forme &amp; H2H</button>' +
+      (hasT ? '<button data-dtab="table" class="' + (dt === 'table' ? 'on' : '') + '">Classement</button>' : '') + '</div>' +
+      (dt === 'pred' ? predHTML(d, f) : dt === 'table' ? tableHTML(d) : formHTML(d));
   }
   function vsBlock(d) {
     var lm = lmeta(d.div);
