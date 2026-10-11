@@ -1411,7 +1411,7 @@
     'Mexico': 'Mexique', 'Japan': 'Japon', 'Norway': 'Norvège', 'Sweden': 'Suède', 'Denmark': 'Danemark', 'Poland': 'Pologne', 'Romania': 'Roumanie', 'Switzerland': 'Suisse',
     'Finland': 'Finlande', 'Ireland': 'Irlande', 'Saudi-Arabia': 'Arabie saoudite', 'Australia': 'Australie', 'South-Korea': 'Corée du Sud', 'Morocco': 'Maroc', 'Austria': 'Autriche',
     'Czech-Republic': 'Tchéquie', 'Croatia': 'Croatie', 'Hungary': 'Hongrie', 'Serbia': 'Serbie', 'Bulgaria': 'Bulgarie', 'Slovakia': 'Slovaquie', 'Belarus': 'Biélorussie',
-    'Colombia': 'Colombie', 'Ecuador': 'Équateur', 'Estonia': 'Estonie', 'Canada': 'Canada' };
+    'Colombia': 'Colombie', 'Ecuador': 'Équateur', 'Estonia': 'Estonie', 'Canada': 'Canada', 'Iceland': 'Islande' };
   // championnats que notre modèle couvre : leurs matchs « API-Football » ne sont pas listés une deuxième fois
   var EXT_DIV = { 'France|Ligue 1': 'F1', 'France|Ligue 2': 'F2', 'England|Premier League': 'E0', 'England|Championship': 'E1', 'Spain|La Liga': 'SP1', 'Spain|Segunda División': 'SP2',
     'Germany|Bundesliga': 'D1', 'Germany|2. Bundesliga': 'D2', 'Italy|Serie A': 'I1', 'Italy|Serie B': 'I2', 'Netherlands|Eredivisie': 'N1', 'Belgium|Jupiler Pro League': 'B1',
