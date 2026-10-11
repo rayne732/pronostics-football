@@ -763,3 +763,16 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offse
 .tbr.me1{--c:var(--blue)}.tbr.me2{--c:var(--amber)}
 .tbr.me1::before,.tbr.me2::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--c)}
 @media (max-width:360px){.tbr{grid-template-columns:20px minmax(0,1fr) 22px 22px 22px 22px 30px 28px;font-size:.74rem}}
+
+/* filtre par statut (à venir / en direct / terminés) et ligues repliables */
+.seg3{display:grid;grid-template-columns:repeat(4,auto);gap:4px;padding:4px;margin:2px 0 10px;border-radius:15px;background:var(--surface);border:1px solid var(--line)}
+.seg3 button{display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 6px;border-radius:11px;color:var(--mute);font-weight:600;font-size:.8rem;white-space:nowrap}
+.seg3 button.on{background:var(--surface2);color:var(--ink);box-shadow:0 2px 8px var(--shadow)}
+.seg3 b{font-size:.7rem;padding:1px 7px;border-radius:99px;background:color-mix(in srgb,var(--mute) 22%,transparent);color:var(--ink);font-variant-numeric:tabular-nums}
+.seg3 .ld{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px color-mix(in srgb,var(--red) 25%,transparent);animation:ldp 1.4s ease-in-out infinite}
+@keyframes ldp{50%{opacity:.35}}
+.lgh[data-lgc]{cursor:pointer;-webkit-user-select:none;user-select:none}
+.lgh .chv{display:grid;place-items:center;width:22px;color:var(--mute);transition:transform .2s}
+.lgh .chv svg{width:16px;height:16px;transform:rotate(90deg)}
+.lgh.shut .chv{transform:rotate(-90deg)}
+.seg3{grid-template-columns:repeat(4,minmax(0,1fr))}.seg3 button{padding:0 2px;font-size:.76rem}

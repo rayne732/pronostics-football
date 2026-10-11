@@ -6,7 +6,7 @@
   var SAFE = D.safeMin, app = document.getElementById('app'), nav = document.getElementById('nav');
   var CONF = { high: 'Haute confiance', mid: 'Confiance moyenne', low: 'Match ouvert' };
   var WD = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
+  var st = { sport: 'foot', tab: 'home', day: 'all', filter: 'all', status: 'all', closed: {}, q: '', sort: 'time', tn: { day: 'all', tour: 'all', unk: false }, detail: null, dtab: 'pred', pushed: false, scroll: 0,
              an: { div: D.order[0], h: 0, a: 1 } };
   var favs = {};
   try { favs = JSON.parse(localStorage.getItem('pf-fav') || '{}'); } catch (e) { favs = {}; }
@@ -308,10 +308,23 @@
       '<div class="act"><span class="cfp ' + f.conf + '">' + ring(f.fav, f.conf) + pct(f.fav) + '<span class="cl"> · ' + CONF[f.conf] + '</span></span>' +
       '<button class="voir ' + f.conf + '" data-open="' + f.i + '">' + (f.conf === 'low' ? '' : confIcon(f.conf)) + 'Voir' + svg(IC.chev) + '</button></div>' + miniBar(f.p) + '</div>';
   }
+  function fstate(f) {                                      // 'live' (en cours), 'done' (terminé) ou 'soon' (à venir)
+    var LV = f.id && LIVE[f.id];
+    if (LV) return LV.st === 'in' ? 'live' : LV.st === 'post' ? 'done' : 'soon';
+    var ms = kickoff(f) - new Date();
+    return ms < -2 * 3600 * 1000 ? 'done' : ms < 0 ? 'live' : 'soon';
+  }
+  function statusBar() {
+    var n = { soon: 0, live: 0, done: 0 };
+    D.fixtures.forEach(function (f) { n[fstate(f)]++; });
+    return '<div class="seg3">' + [['all', 'Tous', ''], ['soon', 'À venir', n.soon], ['live', '<i class="ld"></i>En direct', n.live], ['done', 'Terminés', n.done]].map(function (x) {
+      return '<button data-status="' + x[0] + '" class="' + (st.status === x[0] ? 'on' : '') + '">' + x[1] + (x[2] !== '' && x[2] > 0 ? '<b>' + (x[2] > 99 ? '99+' : x[2]) + '</b>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
   function filtered() {
     var q = norm(st.q.trim());
     return D.fixtures.filter(function (f) {
-      return (st.day === 'all' || f.date === st.day) &&
+      return (st.day === 'all' || f.date === st.day) && (st.status === 'all' || fstate(f) === st.status) &&
         (st.filter === 'all' || (st.filter === 'high' && f.conf === 'high') || (st.filter === 'fav' && favs[f.id])) &&
         (!q || f.key.indexOf(q) >= 0);
     });
@@ -325,9 +338,10 @@
       if (!sub.length) return;
       if (st.sort === 'conf') sub = sub.slice().sort(function (a, b) { return b.fav - a.fav; });
       var lm = lmeta(div);
-      h += '<div class="lgh"><span class="lb" style="--lc:' + lm[1] + '">' + lgIcon(div, lm[2]) + '</span><div class="ln">' + esc(D.leagues[div].name) +
-        '<small>' + lm[0] + '</small></div><span class="cnt">' + sub.length + '</span></div>';
-      h += sub.map(function (f) { return row(f, st.day === 'all'); }).join('');
+      var shut = !!st.closed[div];
+      h += '<div class="lgh' + (shut ? ' shut' : '') + '" data-lgc="' + esc(div) + '" role="button" aria-expanded="' + !shut + '"><span class="lb" style="--lc:' + lm[1] + '">' + lgIcon(div, lm[2]) + '</span><div class="ln">' + esc(D.leagues[div].name) +
+        '<small>' + lm[0] + '</small></div><span class="cnt">' + sub.length + '</span><span class="chv">' + svg(IC.chev) + '</span></div>';
+      if (!shut) h += sub.map(function (f) { return row(f, st.day === 'all'); }).join('');
     });
     return h;
   }
@@ -1584,12 +1598,12 @@
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
-    h += '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
+    h += statusBar() + '<div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
       '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button>' +
       '<button class="sortb" data-dens aria-label="Affichage compact ou confortable">' + (DENS === 'compact' ? '▤' : '▦') + '</button></div>';
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
       return '<button class="chip pill' + (st.filter === x[0] ? ' on' : '') + '" data-filter="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
-    return h + '<div id="list">' + listHTML() + '</div>' + (st.filter === 'all' && !st.q ? youthHTML() : '');
+    return h + '<div id="list">' + listHTML() + '</div>' + (st.filter === 'all' && st.status === 'all' && !st.q ? youthHTML() : '');
   }
 
   var ALMSG = '';
@@ -2058,7 +2072,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2102,6 +2116,8 @@
       closeDetail();
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
+    else if (t.hasAttribute('data-status')) { st.status = t.getAttribute('data-status'); var ys = window.scrollY; render(); window.scrollTo(0, ys); }
+    else if (t.hasAttribute('data-lgc')) { var kc = t.getAttribute('data-lgc'); st.closed[kc] = !st.closed[kc]; var yc2 = window.scrollY; render(); window.scrollTo(0, yc2); }
     else if (t.hasAttribute('data-sort')) { st.sort = st.sort === 'time' ? 'conf' : 'time'; render(); }
     else if (t.hasAttribute('data-bk')) { Books.toggle(t.getAttribute('data-bk')); var yb = window.scrollY; render(); window.scrollTo(0, yb); }
     else if (t.hasAttribute('data-bkopen')) { st.bkopen = !st.bkopen; var yo = window.scrollY; render(); window.scrollTo(0, yo); }
