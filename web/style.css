@@ -776,3 +776,26 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--blue);outline-offse
 .lgh .chv svg{width:16px;height:16px;transform:rotate(90deg)}
 .lgh.shut .chv{transform:rotate(-90deg)}
 .seg3{grid-template-columns:repeat(4,minmax(0,1fr))}.seg3 button{padding:0 2px;font-size:.76rem}
+
+/* onglet Live : score, prédiction en direct, historique minute par minute */
+.tabs button .tld{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-right:6px;animation:ldp 1.4s ease-in-out infinite}
+.lvs{text-align:center;margin:4px 0 12px}.lvl{color:var(--mute);font-size:.8rem;margin-bottom:6px}
+.lvr{display:flex;align-items:center;justify-content:center;gap:16px}.lvr>b{font-size:2.6rem;line-height:1;font-variant-numeric:tabular-nums}
+.lvb{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:12px;font-size:.78rem;font-weight:800;letter-spacing:.04em;color:var(--red);border:1px solid color-mix(in srgb,var(--red) 55%,var(--line));background:color-mix(in srgb,var(--red) 10%,var(--surface))}
+.lvb i,.lvd i{width:7px;height:7px;border-radius:50%;background:var(--red);display:inline-block;animation:ldp 1.4s ease-in-out infinite}
+.lvcard{padding:16px;border-radius:22px;background:linear-gradient(160deg,color-mix(in srgb,var(--amber) 12%,var(--surface2)),var(--surface));border:1px solid color-mix(in srgb,var(--amber) 38%,var(--line));margin-bottom:14px;box-shadow:0 14px 34px -20px var(--shadow)}
+.lvk{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.lvt{font-weight:800;font-size:1.05rem}
+.lvd{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:800;letter-spacing:.08em;color:var(--red)}
+.lvrow{margin-bottom:12px}.lvrow:last-child{margin-bottom:0}
+.lvn{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:6px}.lvn span{font-weight:600;min-width:0;overflow-wrap:anywhere}.lvn b{font-size:1.25rem;font-variant-numeric:tabular-nums}
+.lvrow.g .lvn b{color:var(--green)}.lvrow.a .lvn b{color:var(--amber)}.lvrow.b .lvn b{color:var(--blue)}
+.lvbar{height:10px;border-radius:99px;background:color-mix(in srgb,var(--mute) 20%,transparent);overflow:hidden}
+.lvbar i{display:block;height:100%;border-radius:inherit;transition:width .6s var(--ease,ease)}
+.lvrow.g .lvbar i{background:var(--green)}.lvrow.a .lvbar i{background:var(--amber)}.lvrow.b .lvbar i{background:var(--blue)}
+.lvrow small{display:block;margin-top:4px;color:var(--mute);font-size:.7rem}.lvrow small .up{color:var(--green)}.lvrow small .dn{color:var(--red)}
+.lvm{padding:4px 14px;border-radius:18px;background:var(--surface);border:1px solid var(--line);margin-bottom:12px}
+.lvbox{padding:14px 10px 10px;border-radius:20px;background:var(--surface);border:1px solid var(--line);margin-bottom:12px}
+.lvlg{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 6px 8px;font-size:.74rem;font-weight:600}
+.lvlg span::before{content:"";display:inline-block;width:14px;height:3px;border-radius:2px;margin-right:6px;vertical-align:3px;background:currentColor}
+.lvlg .g{color:var(--green)}.lvlg .a{color:var(--amber)}.lvlg .b{color:var(--blue)}
+.lvch{width:100%;height:auto;display:block}.lvch .lg{stroke:var(--line);stroke-dasharray:3 4}.lvch .lt{fill:var(--mute);font-size:9px}

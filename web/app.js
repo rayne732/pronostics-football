@@ -1941,6 +1941,74 @@
     return (hh.length ? h2hTotals(d, hh) : '') + formBlock(d.div, d.home) + formBlock(d.div, d.away) +
       '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(h2hRow).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
   }
+  /* prédiction en direct : buts attendus réduits au temps restant, puis combinés au score actuel (loi de Poisson) */
+  var LH = {};                                              // historique des probabilités vues pendant le match : { id: [[minute, p1, pn, p2], …] }
+  try { var rawLH = JSON.parse(localStorage.getItem('pf-lh') || 'null'); if (rawLH && rawLH.d === parisToday()) LH = rawLH.h || {}; } catch (e) { LH = {}; }
+  function lhSave() { try { localStorage.setItem('pf-lh', JSON.stringify({ d: parisToday(), h: LH })); } catch (e) { /* ignoré */ } }
+  function liveMin(clock, f) {
+    var c = String(clock || ''), m;
+    if (/^(HT|Half|Mi-?temps)/i.test(c)) return 45;
+    m = c.match(/(\d+)\s*['’]?\s*\+\s*(\d+)/); if (m) return +m[1] + +m[2];
+    m = c.match(/(\d+)/); if (m) return +m[1];
+    var e = (Date.now() - kickoff(f)) / 60000; return Math.max(1, Math.min(95, e > 50 ? e - 15 : e));       // repli : estimation d'après l'heure du coup d'envoi
+  }
+  function playedShare(m) { m = Math.max(0, Math.min(m, 95)); return m <= 45 ? 0.45 * m / 45 : m <= 90 ? 0.45 + 0.55 * (m - 45) / 45 : 1; }       // la 2de mi-temps compte un peu plus de buts
+  function poisArr(l, n) { var a = [], p = Math.exp(-l); a.push(p); for (var k = 1; k < n; k++) { p = p * l / k; a.push(p); } return a; }
+  function livePred(d, f) {
+    var LV = LIVE[f.id], M = Engine.families(d.div, d.home, d.away, f.ov), m = liveMin(LV.clock, f), rem = Math.max(0.01, 1 - playedShare(m)),
+      lh = M.lh * rem, la = M.la * rem, N = 11, a = poisArr(lh, N), b = poisArr(la, N), hs = LV.hs, as = LV.as, r = [0, 0, 0], tot = [], i, j, T = hs + as;
+    for (i = 0; i < N; i++) for (j = 0; j < N; j++) { var pr = a[i] * b[j], df = hs + i - as - j; r[df > 0 ? 0 : df === 0 ? 1 : 2] += pr; }
+    var sum = r[0] + r[1] + r[2]; r = r.map(function (x) { return x / sum; });
+    for (var k = T; k < T + 4; k++) {
+      var line = k + 0.5, over = 0;
+      for (i = 0; i < N; i++) for (j = 0; j < N; j++) if (T + i + j > line) over += a[i] * b[j];
+      tot.push([line, over / sum]);
+    }
+    var ph = hs > 0 ? 1 : 1 - Math.exp(-lh), pa = as > 0 ? 1 : 1 - Math.exp(-la), l = lh + la, nx = 1 - Math.exp(-l);
+    return { m: m, p: r, tot: tot, btts: ph * pa, next: [lh / l * nx, la / l * nx, Math.exp(-l)], pre: M.p1x2, hs: hs, as: as, clock: LV.clock };
+  }
+  function liveRecord(f, lp) {
+    var h = LH[f.id] || (LH[f.id] = [[0].concat(lp.pre)]), last = h[h.length - 1], mm = Math.round(lp.m);
+    if (last[0] !== mm) { h.push([mm, lp.p[0], lp.p[1], lp.p[2]]); lhSave(); }
+    else if (last[1] !== lp.p[0]) { h[h.length - 1] = [mm, lp.p[0], lp.p[1], lp.p[2]]; lhSave(); }
+    return h;
+  }
+  function liveChart(h) {
+    var W = 340, H = 190, L = 34, R = 14, Tp = 12, B = 26, mx = Math.max(90, h[h.length - 1][0]), cols = ['var(--green)', 'var(--amber)', 'var(--blue)'];
+    function X(m) { return L + (W - L - R) * m / mx; }
+    function Y(p) { return Tp + (H - Tp - B) * (1 - p); }
+    var g = '';
+    [0, 0.2, 0.4, 0.6, 0.8, 1].forEach(function (v) { g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(v) + '" y2="' + Y(v) + '" class="lg"/><text x="' + (L - 6) + '" y="' + (Y(v) + 3) + '" text-anchor="end" class="lt">' + Math.round(v * 100) + '</text>'; });
+    for (var m = 0; m <= mx; m += 15) g += '<text x="' + X(m) + '" y="' + (H - 8) + '" text-anchor="middle" class="lt">' + m + '\'</text>';
+    for (var s0 = 1; s0 <= 3; s0++) {
+      var pts = h.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[s0]).toFixed(1); }).join(' '), e = h[h.length - 1];
+      g += '<polyline points="' + pts + '" fill="none" stroke="' + cols[s0 - 1] + '" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/><circle cx="' + X(e[0]).toFixed(1) + '" cy="' + Y(e[s0]).toFixed(1) + '" r="4.5" fill="var(--surface)" stroke="' + cols[s0 - 1] + '" stroke-width="2.4"/>';
+    }
+    return '<svg class="lvch" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Évolution des probabilités minute par minute">' + g + '</svg>';
+  }
+  function liveHTML(d, f) {
+    var LV = f && LIVE[f.id];
+    if (!LV || LV.st !== 'in') return '<div class="empty">Pas de match en cours : cet onglet s’active pendant le match (score et minute en direct).</div>';
+    var lp = livePred(d, f), h = liveRecord(f, lp), names = [nm(d.home), 'Match nul', nm(d.away)], cols = ['g', 'a', 'b'], mi = Math.round(lp.m),
+      lab = /^(HT|Half)/i.test(String(lp.clock)) ? 'Mi-temps' : mi + '\'';
+    var html = '<div class="lvs"><div class="lvl">' + esc(f ? cpName(f) : '') + '</div><div class="lvr"><b>' + lp.hs + '</b><span class="lvb"><i></i>LIVE · ' + lab + '</span><b>' + lp.as + '</b></div></div>' +
+      '<div class="lvcard"><div class="lvk"><span class="lvt">Prédiction en direct</span><span class="lvd"><i></i>EN DIRECT</span></div>';
+    lp.p.forEach(function (v, i) {
+      var dl = Math.round((v - lp.pre[i]) * 100);
+      html += '<div class="lvrow ' + cols[i] + '"><div class="lvn"><span>' + esc(names[i]) + '</span><b>' + (v * 100).toFixed(1).replace('.', ',') + ' %</b></div><div class="lvbar"><i style="width:' + Math.max(1, v * 100).toFixed(1) + '%"></i></div>' +
+        '<small>Avant le match : ' + pct(lp.pre[i]) + (dl ? ' · <b class="' + (dl > 0 ? 'up' : 'dn') + '">' + (dl > 0 ? '▲ +' : '▼ ') + dl + ' pts</b>' : '') + '</small></div>';
+    });
+    html += '</div><div class="sec"><span class="dot g"></span>Marchés en direct <small>sur le temps restant</small></div><div class="lvm">' +
+      lp.tot.map(function (t) { return line('Plus de ' + String(t[0]).replace('.', ',') + ' buts (total du match)', pct(t[1])); }).join('') +
+      line('Les deux équipes marquent : oui', pct(lp.btts)) +
+      line('Prochain but : ' + nm(d.home), pct(lp.next[0])) + line('Prochain but : ' + nm(d.away), pct(lp.next[1])) + line('Aucun but d’ici la fin', pct(lp.next[2])) +
+      line(nm(d.home) + ' ou nul', pct(lp.p[0] + lp.p[1])) + line(nm(d.away) + ' ou nul', pct(lp.p[2] + lp.p[1])) + '</div>' +
+      '<div class="sec"><span class="dot a"></span>Historique des prédictions <small>' + h.length + ' point' + (h.length > 1 ? 's' : '') + '</small></div><div class="lvbox"><div class="lvlg"><span class="g">' + esc(names[0]) + '</span><span class="a">Nul</span><span class="b">' + esc(names[2]) + '</span></div>' +
+      liveChart(h) + (h.length < 4 ? '<div class="sub">L’historique se construit tant que l’appli reste ouverte : un point est ajouté à chaque mise à jour (environ toutes les 90 secondes).</div>' : '') + '</div>' +
+      '<div class="srcnote">Estimation simple : on réduit les buts attendus avant-match au temps qui reste (la 2de mi-temps compte un peu plus de buts), puis on tient compte du score actuel. ' +
+      'Elle ignore les cartons rouges, les remplacements et l’effet « l’équipe qui perd attaque davantage ». Les cotes des bookmakers en direct réagissent plus vite que cette page : vérifie toujours la cote avant de jouer.</div>';
+    return html;
+  }
   /* classement de la saison en cours, recalculé d'après les résultats connus (la saison commence après la dernière coupure de plus de 45 jours) */
   var TBL_REQ = false;
   function dayN(n) { var t = String(n); return Date.UTC(+t.slice(0, 4), +t.slice(4, 6) - 1, +t.slice(6, 8)) / 864e5; }
@@ -1972,11 +2040,12 @@
     return h + '</div><div class="sub">Classement recalculé d’après les résultats connus de la saison en cours ' + (L.length ? '(' + L[0].j + ' matchs au plus par équipe)' : '') + ' : il ne tient pas compte des points retirés, des phases finales ni des barrages.</div>';
   }
   function detailBody(d, f) {
-    var hasT = !!D.leagues[d.div], dt = st.dtab === 'table' && !hasT ? 'pred' : st.dtab;
+    var hasT = !!D.leagues[d.div], hasL = !!(f && LIVE[f.id] && LIVE[f.id].st === 'in'), dt = (st.dtab === 'table' && !hasT) || (st.dtab === 'live' && !hasL) ? 'pred' : st.dtab;
     return '<div class="tabs"><button data-dtab="pred" class="' + (dt === 'pred' ? 'on' : '') + '">Prédictions</button>' +
+      (hasL ? '<button data-dtab="live" class="' + (dt === 'live' ? 'on' : '') + '"><i class="tld"></i>Live</button>' : '') +
       '<button data-dtab="form" class="' + (dt === 'form' ? 'on' : '') + '">Forme &amp; H2H</button>' +
       (hasT ? '<button data-dtab="table" class="' + (dt === 'table' ? 'on' : '') + '">Classement</button>' : '') + '</div>' +
-      (dt === 'pred' ? predHTML(d, f) : dt === 'table' ? tableHTML(d) : formHTML(d));
+      (dt === 'pred' ? predHTML(d, f) : dt === 'live' ? liveHTML(d, f) : dt === 'table' ? tableHTML(d) : formHTML(d));
   }
   function vsBlock(d) {
     var lm = lmeta(d.div);
@@ -2108,7 +2177,7 @@
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-open')) {
       var f = D.fixtures[+t.getAttribute('data-open')];
-      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = 'pred';
+      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = LIVE[f.id] && LIVE[f.id].st === 'in' ? 'live' : 'pred';
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-back')) {
