@@ -43,7 +43,7 @@
   /* ------------------------------------------------------------ icônes */
   function svg(path, cls) { return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>'; }
   var IC = {
-    today: '<rect x="4" y="5" width="16" height="15" rx="3"/><path d="M4 10h16M9 3v4M15 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor" stroke="none"/>',
+    today: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 9v6" stroke-dasharray="1.5 2"/><path d="M14 11.5l1 1 2-2.4"/>',
     flame: '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.7.8-2.9 1.8-3.9C9.4 10.9 10.7 11 11 9.6 11.3 7.6 10.6 5.3 12 3z"/>',
     bolt: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
     chev: '<path d="M9 6l6 6-6 6"/>',
@@ -298,9 +298,30 @@
     var f = D.form && D.form[team];
     return f ? '<span class="f5" title="Forme récente : ' + f.split('').map(function (c) { return c === 'V' ? 'victoire' : c === 'N' ? 'nul' : 'défaite'; }).join(', ') + '">' + f.split('').map(function (c) { return '<i class="' + c + '"></i>'; }).join('') + '</span>' : '';
   }
+  function fscore(f) {                                      // score connu d'un match (en direct, ou terminé d'après le journal des résultats)
+    var LV = f.id && LIVE[f.id];
+    if (LV) return { h: LV.hs, a: LV.as, live: LV.st === 'in', clock: LV.clock };
+    var sc = isLoaded('res') && D.res && D.res.s && D.res.s[f.id];
+    return sc ? { h: sc[0], a: sc[1], live: false } : null;
+  }
+  function mainHit(f) { return Bets.resolver ? Bets.resolver(f.id, 'Résultat du match', favName(f)) : null; }
+  var RES_REQ = false;
+  function ensureRes() {
+    if (RES_REQ || isLoaded('res')) return;
+    RES_REQ = true;
+    loadLazy('res', function () { if (st.tab === 'home' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } else if (st.detail) render(); });
+  }
+  function tnS(name, n, lv) { return '<span class="tnr">' + tn(name) + '<b class="scn' + (lv ? ' lv' : '') + '">' + n + '</b></span>'; }
   function row(f, multi) {
-    var on = !!favs[f.id];
-    var cs = CMP.indexOf(f.i) >= 0;
+    var on = !!favs[f.id], cs = CMP.indexOf(f.i) >= 0, fs = fstate(f), sc = fs === 'soon' ? null : fscore(f), hit = fs === 'done' && sc && !sc.live ? mainHit(f) : null;
+    if (fs === 'live' || fs === 'done') {
+      var lv = fs === 'live', verdict = lv ? '<span class="cfp livechip"><i></i>EN DIRECT</span>' :
+        hit === true ? '<span class="cfp rv ok">' + svg(IC.check) + 'Pronostic réussi</span>' : hit === false ? '<span class="cfp rv ko">' + svg(IC.x) + 'Raté</span>' : '<span class="cfp rv">Terminé</span>';
+      return '<div class="mrow ' + f.conf + (lv ? ' islive' : hit === true ? ' rok' : hit === false ? ' rko' : ' rdone') + '"><div class="tm' + (lv ? ' lvt' : '') + '">' + (lv ? esc(sc && sc.clock ? sc.clock : 'En cours') : 'FIN') + '<small>' + (f.time || '') + (multi ? ' · ' + dm(f.date) : '') + '</small>' +
+        '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button></div>' +
+        '<div class="tt">' + (sc ? tnS(f.home, sc.h, lv) + tnS(f.away, sc.a, lv) : tn(f.home) + tn(f.away)) + '</div>' +
+        '<div class="act">' + verdict + '<button class="voir ' + (lv ? 'mid' : hit === true ? 'high' : hit === false ? 'low' : f.conf) + '" data-open="' + f.i + '">' + (lv ? 'Live' : sc ? 'Bilan' : 'Voir') + svg(IC.chev) + '</button></div></div>';
+    }
     return '<div class="mrow ' + f.conf + '"><div class="tm">' + (f.time || '–') + (multi ? '<small>' + dm(f.date) + '</small>' : '') +
       '<button class="star' + (on ? ' on' : '') + '" data-fav="' + f.i + '" aria-label="Favori">' + (on ? '★' : '☆') + '</button>' +
       '<button class="cmpb' + (cs ? ' on' : '') + '" data-cmp="' + f.i + '" aria-label="Comparer ce match" title="Comparer">⇄</button></div>' +
@@ -317,7 +338,7 @@
   function statusBar() {
     var n = { soon: 0, live: 0, done: 0 };
     D.fixtures.forEach(function (f) { n[fstate(f)]++; });
-    return '<div class="seg3">' + [['all', 'Tous', ''], ['soon', 'À venir', n.soon], ['live', '<i class="ld"></i>En direct', n.live], ['done', 'Terminés', n.done]].map(function (x) {
+    return '<div class="seg3">' + [['all', 'Tous', ''], ['soon', 'À venir', n.soon], ['live', '<i class="ld"></i>Direct', n.live], ['done', 'Finis', n.done]].map(function (x) {
       return '<button data-status="' + x[0] + '" class="' + (st.status === x[0] ? 'on' : '') + '">' + x[1] + (x[2] !== '' && x[2] > 0 ? '<b>' + (x[2] > 99 ? '99+' : x[2]) + '</b>' : '') + '</button>';
     }).join('') + '</div>';
   }
@@ -332,6 +353,7 @@
   function listHTML() {
     var list = filtered();
     if (!list.length) return '<div class="empty">Aucun match pour ce filtre.</div>';
+    if (list.some(function (f) { return fstate(f) === 'done'; })) ensureRes();
     var h = '';
     D.order.forEach(function (div) {
       var sub = list.filter(function (f) { return f.div === div; });
@@ -1258,6 +1280,52 @@
     var R = todayRows();
     Alerts.sync(favItems().concat(asItems(R, assistantPlan(R))));
   }
+  /* plans de paris : un pari sûr, un combiné de 2 et un combiné de 3, avec la mise adaptée à ta mise de base */
+  var PLAN_DEF = [
+    { key: 'sur', name: 'Pari sûr', tag: 'Prudent', cls: 'a', n: 1, min: 0.82, f: 1, why: 'Un seul pari : le plus probable de la journée.' },
+    { key: 'duo', name: 'Combiné de 2', tag: 'Équilibré', cls: 'b', n: 2, min: 0.78, f: 0.6, why: 'Deux matchs différents : les deux doivent passer.' },
+    { key: 'trio', name: 'Combiné de 3', tag: 'Audacieux', cls: 'c', n: 3, min: 0.74, f: 0.4, why: 'Trois matchs différents : plus de gain possible, moins de chances.' }];
+  function planPool(R, min) {
+    var seen = {}, pool = [];
+    R.picks.forEach(function (r) {
+      if (!r.bid) return;
+      if (r.time && kickoff({ date: R.T, time: r.time }) < Date.now()) return;
+      var pa = r.p - asHair(r) - (r.v ? 0 : 0.02);
+      if (pa < min || r.p > AS_CAP) return;
+      if (!seen[r.match] || pa > seen[r.match].pa) seen[r.match] = { r: r, pa: pa };
+    });
+    Object.keys(seen).forEach(function (k) { pool.push(seen[k]); });
+    return pool.sort(function (a, b) { return b.pa - a.pa; });
+  }
+  function plansHTML(R) {
+    var mi = Bets.monthInfo(), h = '<div class="sec"><span class="dot g"></span>Plans du jour <small>mise de base ' + AS.unit + ' €</small></div>';
+    if (mi.budget > 0 && mi.spent >= mi.budget) return h + '<div class="bt-warn">Ton budget du mois (' + eur2(mi.budget) + ') est atteint : pas de plan aujourd’hui. C’est la bonne décision.</div>';
+    COMBOS = [];
+    PLAN_DEF.forEach(function (pd) {
+      var pool = planPool(R, pd.min), legs = pool.slice(0, pd.n);
+      if (legs.length < pd.n) {
+        h += '<div class="plan p-' + pd.cls + ' none"><div class="plh"><span class="as-tag as-' + pd.cls + '">' + pd.tag + '</span><b>' + pd.name + '</b></div><div class="sub">Pas assez de paris au-dessus de ' + Math.round(pd.min * 100) + ' % aujourd’hui pour ce plan.</div></div>';
+        return;
+      }
+      var P = legs.reduce(function (t, x) { return t * x.pa; }, 1), stake = asStake(AS.unit * pd.f), mn = 1 / P, mnT = mn.toFixed(2).replace('.', ',');
+      var gainMin = stake * (mn - 1), id = 'plan|' + pd.key, actions;
+      if (pd.n === 1) {
+        var r = legs[0].r;
+        actions = '<button class="bt-b pri" data-bet="' + esc(r.match + ' : ' + r.pick) + '" data-bsp="' + (AS_SPORT[r.icon] || 'autre') + '" data-bp="' + legs[0].pa.toFixed(4) + '" data-bm="' + esc(r.bm) + '" data-bs="' + esc(r.bs) + '" data-bref="' + esc(r.bid) + '" data-bcat="Plan" data-bstake="' + stake + '">€ Noter ce pari</button>';
+      } else {
+        COMBOS.push({ name: pd.name, legs: legs.map(function (x) { return x.r; }), P: P });
+        actions = '<button class="bt-b pri" data-bcombo="' + (COMBOS.length - 1) + '" data-bstake="' + stake + '">€ Noter ce combiné</button>';
+      }
+      h += '<div class="plan p-' + pd.cls + '"><div class="plh"><span class="as-tag as-' + pd.cls + '">' + pd.tag + '</span><b>' + pd.name + '</b><span class="stk2">' + eur2(stake) + '</span></div><div class="sub">' + pd.why + '</div>' +
+        legs.map(function (x) {
+          return '<div class="pleg"><span class="pi">' + x.r.icon + '</span><div class="pm"><b>' + esc(x.r.match) + '</b><small>' + (x.r.time ? '⏰ ' + esc(x.r.time) + ' · ' : '') + esc(x.r.pick) + '</small></div><span class="pp">' + pct(x.pa) + '</span></div>';
+        }).join('') +
+        '<div class="t1n"><span>Réussite<b>' + pct(P) + '</b></span><span class="stk">Mise<b>' + eur2(stake) + '</b></span><span>Cote min.<b>' + mnT + '</b></span></div>' +
+        '<div class="plg">À partir de la cote <b>' + mnT + '</b>, le gain est de <b>+' + eur2(gainMin) + '</b> si tout passe. En dessous, ne joue pas.</div>' +
+        asOddsBox(id, P, stake, 0) + '<div class="bt-act">' + actions + '</div></div>';
+    });
+    return h + '<div class="srcnote">Les probabilités sont celles de notre modèle, diminuées d’une marge de prudence. Un combiné ne gagne que si <b>toutes</b> ses sélections passent. La cote affichée chez le bookmaker doit être au moins égale à la cote minimale, sinon le pari n’est pas rentable sur la durée. Aucun plan ne garantit un gain.</div>';
+  }
   function topPickHTML(R) {                                 // une seule chose à jouer aujourd'hui
     var plan = assistantPlan(R), pf = AS_PROF[AS.prof];
     if (plan.stop) return '';
@@ -1331,16 +1399,15 @@
   }
   function todayHTML() {
     todayLoad();
-    var R = todayRows(), h = '<div class="top"><h1>Aujourd’hui</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
+    var R = todayRows(), h = '<div class="top"><h1>Plans du jour</h1></div><div class="sub">' + WD[parseD(R.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     if (R.counts.length) h += '<div class="chips">' + R.counts.map(function (c) { return '<span class="chip">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</span>'; }).join('') + '</div>';
     if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
-    h += topPickHTML(R);
+    h += plansHTML(R);
     h += assistantHTML(R);
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>';
     var seen = {}, shown = R.picks.filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
     h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
-    h += comboHTML(R);
     var seenF = {};
     var fv = R.favs.filter(function (r) { if (seenF[r.match]) return false; seenF[r.match] = 1; return true; }).slice(0, 10);
     if (fv.length) h += '<div class="sec"><span class="dot a"></span>Les favoris les plus nets <small>vainqueur à haute confiance</small></div>' + fv.map(todayRow).join('');
@@ -1667,7 +1734,8 @@
   function betRef(d) { return d.ref || (d.fi != null && D.fixtures[d.fi] ? D.fixtures[d.fi].id : ''); }
   function alt(s, best, d, m, cls) {
     var p = s[1], k = tkKey(d, m, s[0]), on = inTicket(k);
-    return '<div class="alt' + (best ? ' best' : '') + '"><span>' + esc(s[0]) + '</span><span class="p">' + pct(p) + '</span>' +
+    var rr = Bets.resolver ? Bets.resolver(betRef(d), m, s[0]) : null;
+    return '<div class="alt' + (best ? ' best' : '') + (rr === true ? ' won' : rr === false ? ' lost' : '') + '"><span>' + esc(s[0]) + (rr === true ? ' <b class="rm ok">✓</b>' : rr === false ? ' <b class="rm ko">✗</b>' : '') + '</span><span class="p">' + pct(p) + '</span>' +
       '<span class="acts"><button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + p.toFixed(4) + '" data-bm="' + esc(m) + '" data-bs="' + esc(s[0]) + '" data-bref="' + esc(betRef(d)) + '" data-bcat="' + (cls === 'g' ? 'Pronostic sûr' : 'Moins sûr') + '" aria-label="Noter ce pari dans Mes paris">€</button>' +
       '<button class="add' + (on ? ' on' : '') + '" data-add="' + esc(k) + '" data-p="' + p.toFixed(4) + '" data-mt="' + esc(d.home + ' – ' + d.away) +
       '" data-m="' + esc(m) + '" data-s="' + esc(s[0]) + '" data-bref="' + esc(betRef(d)) + '" aria-label="' + (on ? 'Retirer du combiné' : 'Ajouter au combiné') + '">' + svg(on ? IC.check : IC.plus) + '</button></span>' +
@@ -1676,9 +1744,10 @@
   }
   function mkRow(cls, d) {
     return function (x) {
-      return '<details class="mk"><summary><span class="mi ' + cls + '">' + mkIcon(x.m) + '</span><span class="mt">' + esc(x.m) +
+      var rx = Bets.resolver ? Bets.resolver(betRef(d), x.m, x.s) : null;
+      return '<details class="mk' + (rx === true ? ' won' : rx === false ? ' lost' : '') + '"><summary><span class="mi ' + cls + '">' + mkIcon(x.m) + '</span><span class="mt">' + esc(x.m) +
         (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') + Books.tags(x.f) +
-        '</span><span class="pk ' + cls + '">' + esc(x.s) + ' · ' + pct(x.p) + '</span></summary><div class="alts">' +
+        '</span><span class="pk ' + cls + '">' + esc(x.s) + ' · ' + pct(x.p) + (rx === true ? ' ✓' : rx === false ? ' ✗' : '') + '</span></summary><div class="alts">' +
         x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m, cls); }).join('') + '</div></details>';
     };
   }
@@ -1941,6 +2010,31 @@
     return (hh.length ? h2hTotals(d, hh) : '') + formBlock(d.div, d.home) + formBlock(d.div, d.away) +
       '<div class="fm"><h4>Confrontations directes</h4>' + (hh.length ? hh.map(h2hRow).join('') : '<div class="sub">Aucune confrontation dans les données (depuis 2021/22).</div>') + '</div>';
   }
+  function bilanTab(d, f) {
+    var sc = fscore(f), M = Engine.families(d.div, d.home, d.away, f.ov), C = Engine.classify(M.fams), rows = [], seen = {};
+    function pOf(m, sel) { var fam = M.fams.filter(function (x) { return x.name === m; })[0], it = fam && fam.sels.filter(function (x) { return x[0] === sel; })[0]; return it ? it[1] : null; }
+    var ann = (D.res && D.res.m && D.res.m[f.id]) || null;                              // pronostics réellement annoncés avant le match
+    function group(title, list) {
+      var ok = list.filter(function (x) { return x.r === true; }).length, tot = list.filter(function (x) { return x.r !== null; }).length;
+      if (!list.length) return '';
+      return '<div class="sec"><span class="dot ' + (title.indexOf('sûrs') >= 0 && title.indexOf('Moins') < 0 ? 'g' : title.indexOf('Moins') >= 0 ? 'a' : 'b') + '"></span>' + title + ' <small>' + ok + ' / ' + tot + ' justes</small></div><div class="fm">' +
+        list.map(function (x) {
+          return '<div class="pr ' + (x.r === null ? '' : x.r ? 'ok' : 'ko') + '"><span class="mk2">' + (x.r === null ? '·' : svg(x.r ? IC.check : IC.x)) + '</span><span class="pt">' + esc(x.m) + '<small class="sm">' + esc(x.s) + '</small></span><span class="pp">' + (x.p == null ? '' : pct(x.p)) + '</span></div>';
+        }).join('') + '</div>';
+    }
+    function mk(arr) { return arr.map(function (x) { return { m: x.m, s: x.s, p: x.p, r: Bets.resolver(f.id, x.m, x.s) }; }); }
+    var safe, less, extra = [];
+    if (ann) {
+      var all = ann.map(function (a) { return { m: a[0], s: a[1], p: pOf(a[0], a[1]), r: a[2] === 1 }; });
+      safe = all.filter(function (x) { return x.p != null && x.p >= Engine.SAFE; }); less = all.filter(function (x) { return !(x.p != null && x.p >= Engine.SAFE); });
+    } else { safe = mk(C.safe); less = mk(C.less); }
+    M.fams.filter(function (x) { return x.extra; }).forEach(function (x) { var top = x.sels.slice().sort(function (a, b) { return b[1] - a[1]; })[0]; extra.push({ m: x.name, s: top[0], p: top[1], r: Bets.resolver(f.id, x.name, top[0]) }); });
+    var all2 = safe.concat(less).concat(extra), ok = all2.filter(function (x) { return x.r === true; }).length, tot = all2.filter(function (x) { return x.r !== null; }).length;
+    var h = '<div class="bsum"><div class="bk">Terminé</div><div class="bsc">' + esc(nm(d.home)) + ' <b>' + sc.h + ' - ' + sc.a + '</b> ' + esc(nm(d.away)) + '</div>' +
+      (tot ? '<div class="bst"><span class="ok">' + ok + ' justes</span><span class="ko">' + (tot - ok) + ' ratés</span><span>' + Math.round(ok / tot * 100) + ' % de réussite</span></div>' : '') + '</div>';
+    return h + group('Pronostics sûrs', safe) + group('Moins sûrs', less) + group('Autres marchés', extra) +
+      '<div class="sub">✓ = sélection gagnée, ✗ = perdue. Les sélections « sûres » sont celles annoncées à 70 % et plus avant le match.</div>';
+  }
   /* prédiction en direct : buts attendus réduits au temps restant, puis combinés au score actuel (loi de Poisson) */
   var LH = {};                                              // historique des probabilités vues pendant le match : { id: [[minute, p1, pn, p2], …] }
   try { var rawLH = JSON.parse(localStorage.getItem('pf-lh') || 'null'); if (rawLH && rawLH.d === parisToday()) LH = rawLH.h || {}; } catch (e) { LH = {}; }
@@ -2040,17 +2134,24 @@
     return h + '</div><div class="sub">Classement recalculé d’après les résultats connus de la saison en cours ' + (L.length ? '(' + L[0].j + ' matchs au plus par équipe)' : '') + ' : il ne tient pas compte des points retirés, des phases finales ni des barrages.</div>';
   }
   function detailBody(d, f) {
-    var hasT = !!D.leagues[d.div], hasL = !!(f && LIVE[f.id] && LIVE[f.id].st === 'in'), dt = (st.dtab === 'table' && !hasT) || (st.dtab === 'live' && !hasL) ? 'pred' : st.dtab;
+    var hasT = !!D.leagues[d.div], hasL = !!(f && LIVE[f.id] && LIVE[f.id].st === 'in'), fsc = f && fstate(f) === 'done' ? fscore(f) : null, hasB = !!(fsc && !fsc.live && isLoaded('res') && D.res && D.res.a && D.res.a[f.id]);
+    if (f && fstate(f) === 'done') ensureRes();
+    var dt = (st.dtab === 'table' && !hasT) || (st.dtab === 'live' && !hasL) || (st.dtab === 'bilan' && !hasB) ? 'pred' : st.dtab;
     return '<div class="tabs"><button data-dtab="pred" class="' + (dt === 'pred' ? 'on' : '') + '">Prédictions</button>' +
+      (hasB ? '<button data-dtab="bilan" class="' + (dt === 'bilan' ? 'on' : '') + '">Bilan</button>' : '') +
       (hasL ? '<button data-dtab="live" class="' + (dt === 'live' ? 'on' : '') + '"><i class="tld"></i>Live</button>' : '') +
       '<button data-dtab="form" class="' + (dt === 'form' ? 'on' : '') + '">Forme &amp; H2H</button>' +
       (hasT ? '<button data-dtab="table" class="' + (dt === 'table' ? 'on' : '') + '">Classement</button>' : '') + '</div>' +
-      (dt === 'pred' ? predHTML(d, f) : dt === 'live' ? liveHTML(d, f) : dt === 'table' ? tableHTML(d) : formHTML(d));
+      (dt === 'pred' ? predHTML(d, f) : dt === 'bilan' ? bilanTab(d, f) : dt === 'live' ? liveHTML(d, f) : dt === 'table' ? tableHTML(d) : formHTML(d));
+  }
+  function vsMid(d) {
+    var f = d.fi != null ? D.fixtures[d.fi] : null, fs = f ? fstate(f) : 'soon', sc = f && fs !== 'soon' ? fscore(f) : null;
+    return sc ? '<span class="vsp sc' + (sc.live ? ' lv' : '') + '">' + sc.h + ' - ' + sc.a + '</span><small class="vst">' + (sc.live ? esc(sc.clock || 'En cours') : 'Terminé') + '</small>' : '<span class="vsp">VS</span>';
   }
   function vsBlock(d) {
     var lm = lmeta(d.div);
     var l1 = D.logos && D.logos[d.home], l2 = D.logos && D.logos[d.away];
-    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><i class="pitch" aria-hidden="true"></i><div class="side">' + crest(d.home, true) + '<b>' + esc(nm(d.home)) + '</b>' + formDots(d.home) + '</div><div class="mid"><span class="vsp">VS</span></div>' +
+    return '<div class="vs' + (l1 || l2 ? ' wm' : '') + '" style="' + (l1 ? '--l1:url(\'' + esc(logoUrl(l1)) + '\');' : '') + (l2 ? '--l2:url(\'' + esc(logoUrl(l2)) + '\')' : '') + '"><i class="pitch" aria-hidden="true"></i><div class="side">' + crest(d.home, true) + '<b>' + esc(nm(d.home)) + '</b>' + formDots(d.home) + '</div><div class="mid">' + vsMid(d) + '</div>' +
       '<div class="side">' + crest(d.away, true) + '<b>' + esc(nm(d.away)) + '</b>' + formDots(d.away) + '</div></div>' +
       '<div class="betbar"><button class="bt-b sm pri" data-bet="' + esc(d.home + ' – ' + d.away) + '" data-bsp="' + betSport(d) + '">€ Noter un pari</button>' +
       Books.links(d.home + ' – ' + d.away) + '</div>';
@@ -2091,7 +2192,7 @@
     }
   }
   function renderNav() {
-    var items = [['today', 'Aujourd’hui'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
+    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : 0;
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
@@ -2177,7 +2278,7 @@
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-open')) {
       var f = D.fixtures[+t.getAttribute('data-open')];
-      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = LIVE[f.id] && LIVE[f.id].st === 'in' ? 'live' : 'pred';
+      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = LIVE[f.id] && LIVE[f.id].st === 'in' ? 'live' : fstate(f) === 'done' && fscore(f) ? 'bilan' : 'pred';
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-back')) {
@@ -2237,7 +2338,7 @@
     else if (t.hasAttribute('data-bcombo')) {
       var cb = COMBOS[+t.getAttribute('data-bcombo')];
       Bets.prefill({ label: cb.legs.map(function (r) { return r.match + ' : ' + r.pick; }).join(' + '), p: cb.P, kind: 'combine', cat: 'Combiné du jour',
-        legs: cb.legs.map(function (r) { return { id: r.bid, m: r.bm, s: r.bs }; }), nLegs: cb.legs.length, stake: +t.getAttribute('data-bstake') || 0 });
+        legs: cb.legs.map(function (r) { return { id: r.bid, m: r.bm, s: r.bs }; }), nLegs: cb.legs.length, stake: +t.getAttribute('data-bstake') || 0, odds: +t.getAttribute('data-bodds') || 0 });
       st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
     }
     else if (t.hasAttribute('data-gosport')) {
@@ -2268,7 +2369,7 @@
     if (box) box.innerHTML = asVerdict(pa, stake, o);
     var rid = id.indexOf('top|') === 0 ? id.slice(4) : id, rec = ASREC[parisToday()] && ASREC[parisToday()][rid];
     if (rec) { rec.o = o > 1 ? Math.round(o * 100) / 100 : 0; asRecSave(); }
-    var btn = t.closest('.as-row, .top1') && t.closest('.as-row, .top1').querySelector('[data-bet]');
+    var btn = t.closest('.as-row, .top1, .plan') && t.closest('.as-row, .top1, .plan').querySelector('[data-bet], [data-bcombo]');
     if (btn) { if (o > 1) btn.setAttribute('data-bodds', o); else btn.removeAttribute('data-bodds'); }
   });
   app.addEventListener('input', function (e) {

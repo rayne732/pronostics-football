@@ -23,7 +23,7 @@ def _all_selections(today, tr, models, rows_by_div):
     from tracking import result_of
     from winamax import families
     lo = f"{today.date() - timedelta(days=ALL_DAYS):%Y-%m-%d}"
-    out = {}
+    out, scores = {}, {}
     for key, m in tr["matches"].items():
         if not m.get("settled") or m["date"] < lo or m["div"] not in models:
             continue
@@ -31,6 +31,10 @@ def _all_selections(today, tr, models, rows_by_div):
         if row is None:
             continue
         res = result_of(row)
+        try:
+            scores[key] = [int(float(res["fh"])), int(float(res["fa"]))]
+        except (TypeError, ValueError):
+            pass
         try:
             fams, _ = families(models[m["div"]], m["home"], m["away"])
         except Exception:
@@ -46,7 +50,7 @@ def _all_selections(today, tr, models, rows_by_div):
                     sel.append([f["name"], label, int(bool(hit))])
         if sel:
             out[key] = sel
-    return out
+    return out, scores
 
 
 def update(today, sports, track_file="data/tracking.json", models=None, rows_by_div=None):
@@ -70,5 +74,5 @@ def update(today, sports, track_file="data/tracking.json", models=None, rows_by_
         json.dump(dict(m=log), fh, ensure_ascii=False, separators=(",", ":"))
     pub = dict(m={k: v["p"] for k, v in log.items()}, gen=f"{today:%Y-%m-%d %H:%M}")
     if models and rows_by_div:
-        pub["a"] = _all_selections(today, tr, models, rows_by_div)
+        pub["a"], pub["s"] = _all_selections(today, tr, models, rows_by_div)
     return pub
