@@ -377,6 +377,7 @@
   function statusBar() {
     var n = { soon: 0, live: 0, done: 0 };
     D.fixtures.forEach(function (f) { n[fstate(f)]++; });
+    if (!st.group && isLoaded('cal')) { var T0 = parisToday(); (D.cal || []).forEach(function (c) { if (c.date >= T0) n[cstate(c)]++; }); }
     return '<div class="seg3">' + [['all', 'Tous', ''], ['soon', 'À venir', n.soon], ['live', '<i class="ld"></i>Direct', n.live], ['done', 'Finis', n.done]].map(function (x) {
       return '<button data-status="' + x[0] + '" class="' + (st.status === x[0] ? 'on' : '') + '">' + x[1] + (x[2] !== '' && x[2] > 0 ? '<b>' + (x[2] > 99 ? '99+' : x[2]) + '</b>' : '') + '</button>';
     }).join('') + '</div>';
@@ -390,12 +391,12 @@
         (!q || fuzzy(q, f.key, f.kt || (f.kt = toks(f.key))));
     });
   }
-  function otherHTML() {                                    // matchs des championnats hors modèle (calendrier ESPN / TheSportsDB / API-Football) : ceux du jour, ou ceux qui ressemblent à la recherche
+  function otherHTML(onlyExt) {                                    // matchs des championnats hors modèle (calendrier ESPN / TheSportsDB / API-Football) : ceux du jour, ou ceux qui ressemblent à la recherche
     var q = st.q.trim(), T = parisToday(), day = st.day === 'all' || !/^\d{4}-/.test(st.day) ? T : st.day, items;
     if (!isLoaded('cal')) return '';
     var from = isoDate(new Date(parseD(T).getTime() - 864e5));
     if (q) {
-      items = (D.cal || []).filter(function (c) { return c.date >= from && fuzzy(q, c.home + ' ' + c.away + ' ' + c.fr + ' ' + c.cfr); });
+      items = onlyExt ? [] : (D.cal || []).filter(function (c) { return c.date >= from && fuzzy(q, c.home + ' ' + c.away + ' ' + c.fr + ' ' + c.cfr); });
       D.ext.forEach(function (e) {
         if (!fuzzy(q, e.home + ' ' + e.away + ' ' + e.lg + ' ' + e.country)) return;
         if (items.some(function (c) { return c.date === T && sameTeam(c.home, e.home) && sameTeam(c.away, e.away); })) return;
@@ -424,7 +425,32 @@
     });
     return h;
   }
+  function calKick(c) { var p = c.date.split('-'), t = (c.time || '00:00').split(':'); return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]); }
+  function cstate(c) {
+    if (c.st === 'post') return 'done';
+    if (c.st === 'in') return 'live';
+    var ms = calKick(c) - new Date();
+    return ms < -2 * 3600 * 1000 ? 'done' : ms < 0 ? 'live' : 'soon';
+  }
+  function flatHTML(list) {                                 // tous les matchs (modélisés + autres championnats) dans l'ordre d'arrivée, sans regroupement
+    var q = st.q.trim(), T = parisToday(), multi = st.day === 'all', arr = [];
+    if (list.some(function (f) { return fstate(f) === 'done'; })) ensureRes();
+    list.forEach(function (f) { arr.push({ t: +kickoff(f), c: f.fav, h: row(f, multi, true) }); });
+    if (isLoaded('cal') && st.filter === 'all') {
+      (D.cal || []).forEach(function (c) {
+        if (st.day === 'all' ? c.date < T : c.date !== st.day) return;
+        if (st.status !== 'all' && cstate(c) !== st.status) return;
+        if (q && !fuzzy(q, c.home + ' ' + c.away + ' ' + c.fr + ' ' + c.cfr)) return;
+        arr.push({ t: +calKick(c), c: -1, h: calRow(c, true) });
+      });
+    }
+    arr.sort(st.sort === 'conf' ? function (a, b) { return b.c - a.c || a.t - b.t; } : function (a, b) { return a.t - b.t; });
+    var more = q ? otherHTML(true) : '';
+    if (!arr.length) return (more ? '' : '<div class="empty">Aucun match pour ce filtre.</div>') + more;
+    return '<div class="flat">' + arr.slice(0, 400).map(function (x) { return x.h; }).join('') + '</div>' + more;
+  }
   function listHTML() {
+    if (!st.group) return flatHTML(filtered());
     var list = filtered(), more = otherHTML();
     if (!list.length) return (more ? '' : '<div class="empty">Aucun match pour ce filtre.</div>') + more;
     if (list.some(function (f) { return fstate(f) === 'done'; })) ensureRes();
@@ -1655,13 +1681,13 @@
     if (!isLoaded('cal')) h += skel(3);
     return h + '<div id="clist">' + compListHTML() + '</div>';
   }
-  function calRow(c) {
-    var x = extFor(c), p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '', right, left = esc(c.time);
+  function calRow(c, flat) {
+    var x = extFor(c), p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '', right, left = esc(c.time) + (flat ? '<small>' + dm(c.date) + '</small>' : '');
     if (c.st === 'post') { right = '<span class="cfp high">Terminé · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>fini</small>'; }
     else if (c.st === 'in') { right = '<span class="cfp mid">En cours · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>live</small>'; }
     else right = p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low">cotes indisponibles</span>';
     var api = x && c.st === 'pre' ? '<div class="apil">API-Football : ' + esc([x.home, 'Nul', x.away][x.favIdx]) + ' ' + pct(x.fav) + ' <button class="bt-b" data-openext="' + x.i + '">Voir</button></div>' : '';
-    return '<div class="mrow low ext"><div class="tm">' + left + '</div><div class="tt">' + tn(c.home) + tn(c.away) + '</div><div class="act">' + right + '</div>' + (p && c.st === 'pre' ? miniBar(p) : '') + api + '</div>';
+    return '<div class="mrow low ext"><div class="tm">' + left + '</div><div class="tt">' + (flat ? '<span class="rlg"><b>' + esc(c.cfr) + '</b>' + esc(c.fr) + '</span>' : '') + tn(c.home) + tn(c.away) + '</div><div class="act">' + right + '</div>' + (p && c.st === 'pre' ? miniBar(p) : '') + api + '</div>';
   }
   function dayLabel(d) { var T = parisToday(); return d === T ? 'Aujourd’hui · ' + dm(d) : d === isoDate(new Date(parseD(T).getTime() - 864e5)) ? 'Hier · ' + dm(d) : WD[parseD(d).getDay()] + ' ' + dm(d); }
   function compHTML(key) {
@@ -1752,7 +1778,7 @@
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
-    var nOth = isLoaded('cal') && st.q.trim() === '' ? (D.cal || []).filter(function (c) { return c.date === parisToday(); }).length : 0;
+    var nOth = st.group && isLoaded('cal') && st.q.trim() === '' ? (D.cal || []).filter(function (c) { return c.date === parisToday(); }).length : 0;
     h += statusBar() + (nOth ? '<button class="jump" data-jump="oth">↓ Autres championnats du jour<b>' + nOth + '</b></button>' : '') + '<label class="grpsw"><input type="checkbox" data-grp' + (st.group ? ' checked' : '') + '><span class="bx"></span>Classer par championnat<small>' + (st.group ? 'décoche pour voir les matchs dans l’ordre d’arrivée' : 'ordre d’arrivée des matchs') + '</small></label><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
       '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button>' +
       '<button class="sortb" data-dens aria-label="Affichage compact ou confortable">' + (DENS === 'compact' ? '▤' : '▦') + '</button></div>';
