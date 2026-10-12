@@ -375,13 +375,20 @@ def main():
             if hub_lo:                                                   # championnats que ESPN ne couvre pas (CPL…) : TheSportsDB
                 try:
                     import tsdb
-                    cal += tsdb.calendar_items(hub_lo, args.days)
+                    cal = cal + tsdb.calendar_items(hub_lo, args.days)
                 except Exception as exc:
                     print(f"[avertissement] calendrier TheSportsDB indisponible : {exc}", file=sys.stderr)
         except Exception as exc:
             print(f"[avertissement] calendrier mondial indisponible : {exc}", file=sys.stderr)
             cal, xacc = [], []
         fixtures = sorted(get_fixtures(now, args.days, leagues, ext) + xfix, key=lambda r: (r["Div"], r["Date"], r.get("Time", "")))
+        try:                                                             # tous les autres matchs du jour (API-Football, sans prédiction) + retrait des doublons entre sources
+            import apifootball
+            import tsdb
+            modeled = [(f"{r['Date']:%Y-%m-%d}", r["HomeTeam"], r["AwayTeam"]) for r in fixtures]
+            cal = tsdb.dedupe(cal + apifootball.calendar_items(now, skip_ids={e["id"] for e in ext or []}), modeled)
+        except Exception as exc:
+            print(f"[avertissement] calendrier API-Football indisponible : {exc}", file=sys.stderr)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir
         print(f"Suivi : {settled} match(s) vérifié(s), {len(fixtures)} match(s) à venir enregistré(s).", file=sys.stderr)
         rel = tracking.reliability_data()

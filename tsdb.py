@@ -152,3 +152,40 @@ def calendar_items(lo, days, back=1):
             seen.add(k)
             uniq.append(it)
     return uniq
+
+
+def _n(x):
+    import re
+    import unicodedata
+    return re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFD", (x or "").lower()).encode("ascii", "ignore").decode())
+
+
+def _same(a, b):
+    a, b = _n(a), _n(b)
+    return bool(a and b and (a == b or (len(min(a, b, key=len)) >= 4 and (a in b or b in a))))
+
+
+def _rank(it):
+    sid = str(it.get("s", ""))
+    return 2 if sid.startswith("apif.") else 1 if sid.startswith("tsdb.") else 0
+
+
+def dedupe(cal, modeled=()):
+    """Retire les doublons entre sources : ESPN d'abord, puis TheSportsDB, puis API-Football (même jour, mêmes équipes à l'orthographe près),
+    et tout ce qui figure déjà parmi les matchs modélisés (liste de (date, domicile, extérieur))."""
+    by_day = {}
+    for it in cal:
+        by_day.setdefault(it["date"], []).append(it)
+    mod = {}
+    for d, h, a in modeled:
+        mod.setdefault(d, []).append((h, a))
+    out = []
+    for it in cal:
+        r = _rank(it)
+        if r:
+            if any(_same(it["home"], h) and _same(it["away"], a) for h, a in mod.get(it["date"], [])):
+                continue
+            if any(_rank(o) < r and _same(it["home"], o["home"]) and _same(it["away"], o["away"]) for o in by_day.get(it["date"], [])):
+                continue
+        out.append(it)
+    return out

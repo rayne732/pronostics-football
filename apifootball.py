@@ -191,3 +191,67 @@ def external_matches(now, key=None):
     with open(CACHE, "w", encoding="utf-8") as fh:
         json.dump(dict(date=today, fetched=time.time(), items=items), fh, ensure_ascii=False)
     return items
+
+
+# ---------------------------------------------------------------- calendrier complet du jour (une requête, sans prédiction)
+CAL_CACHE = "data/apif_cal.json"
+CAL_TTL = 3 * 3600                 # la liste du jour est redemandée au plus toutes les 3 h (quota : 100 requêtes par jour, dont ~60 pour les prédictions)
+CFR_API = {"England": "Angleterre", "Spain": "Espagne", "Germany": "Allemagne", "Italy": "Italie", "France": "France", "Portugal": "Portugal", "Netherlands": "Pays-Bas",
+           "Belgium": "Belgique", "Switzerland": "Suisse", "Austria": "Autriche", "Scotland": "Écosse", "Wales": "Pays de Galles", "Northern-Ireland": "Irlande du Nord",
+           "Ireland": "Irlande", "Denmark": "Danemark", "Sweden": "Suède", "Norway": "Norvège", "Finland": "Finlande", "Iceland": "Islande", "Poland": "Pologne",
+           "Czech-Republic": "Tchéquie", "Slovakia": "Slovaquie", "Hungary": "Hongrie", "Romania": "Roumanie", "Bulgaria": "Bulgarie", "Serbia": "Serbie",
+           "Croatia": "Croatie", "Slovenia": "Slovénie", "Greece": "Grèce", "Turkey": "Turquie", "Russia": "Russie", "Ukraine": "Ukraine", "Brazil": "Brésil",
+           "Argentina": "Argentine", "Mexico": "Mexique", "USA": "États-Unis", "Canada": "Canada", "Japan": "Japon", "South-Korea": "Corée du Sud", "China": "Chine",
+           "Saudi-Arabia": "Arabie saoudite", "Morocco": "Maroc", "Algeria": "Algérie", "Tunisia": "Tunisie", "Egypt": "Égypte", "South-Africa": "Afrique du Sud",
+           "Australia": "Australie", "Colombia": "Colombie", "Chile": "Chili", "Peru": "Pérou", "Ecuador": "Équateur", "Uruguay": "Uruguay", "Paraguay": "Paraguay",
+           "Bolivia": "Bolivie", "Venezuela": "Venezuela", "Israel": "Israël", "Cyprus": "Chypre", "Georgia": "Géorgie", "Armenia": "Arménie", "Kazakhstan": "Kazakhstan",
+           "Belarus": "Biélorussie", "Estonia": "Estonie", "Latvia": "Lettonie", "Lithuania": "Lituanie", "Luxembourg": "Luxembourg", "Malta": "Malte", "Albania": "Albanie",
+           "Bosnia-and-Herzegovina": "Bosnie-Herzégovine", "North-Macedonia": "Macédoine du Nord", "Montenegro": "Monténégro", "Moldova": "Moldavie", "World": "Monde",
+           "Europe": "Europe", "South-America": "Amérique du Sud", "Africa": "Afrique", "Asia": "Asie", "North-America": "Amérique du Nord"}
+_JUNK = re.compile(r"\b(u-?(1[5-9]|2[0-3])|youth|junior|reserves?|amateur)\b", re.I)
+_WOMEN = re.compile(r"women|feminin|femenin|feminino|frauen", re.I)
+
+
+def calendar_items(now, key=None, skip_ids=(), max_items=450):
+    """Tous les matchs du jour d'API-Football (hors ceux qui ont déjà une prédiction) : lignes compatibles avec espn_hub.calendar_items."""
+    key = key or os.environ.get("API_FOOTBALL_KEY")
+    if not key:
+        return []
+    today = f"{_paris_today(now):%Y-%m-%d}"
+    cache = {}
+    try:
+        with open(CAL_CACHE, encoding="utf-8") as fh:
+            cache = json.load(fh)
+    except (OSError, ValueError):
+        pass
+    items = cache.get("items", []) if cache.get("date") == today else []
+    if not items or time.time() - cache.get("fetched", 0) > CAL_TTL:
+        try:
+            d = _call(key, f"fixtures?date={today}&timezone=Europe/Paris")
+            if d.get("errors"):
+                print(f"[avertissement] API-Football (calendrier) : {d['errors']}", file=sys.stderr)
+            else:
+                fresh = []
+                for f in d.get("response", []):
+                    sh = f["fixture"]["status"]["short"]
+                    st = "pre" if sh in ("NS", "TBD") else "post" if sh in ("FT", "AET", "PEN") else "in" if sh in ("1H", "HT", "2H", "ET", "BT", "P", "LIVE", "INT") else None
+                    if st is None:
+                        continue                                       # reporté, annulé, abandonné…
+                    lg = f["league"]
+                    fresh.append(dict(id=f["fixture"]["id"], lgid=lg.get("id"), lg=lg["name"], country=lg.get("country") or "", date=f["fixture"]["date"][:10], time=f["fixture"]["date"][11:16],
+                                      home=_club(f["teams"]["home"]["name"]), away=_club(f["teams"]["away"]["name"]), st=st, hs=f["goals"]["home"], as_=f["goals"]["away"]))
+                items = fresh
+                os.makedirs("data", exist_ok=True)
+                with open(CAL_CACHE, "w", encoding="utf-8") as fh:
+                    json.dump(dict(date=today, fetched=time.time(), items=items), fh, ensure_ascii=False, separators=(",", ":"))
+        except Exception as exc:
+            print(f"[avertissement] API-Football (calendrier) indisponible : {exc}", file=sys.stderr)
+    out = []
+    for it in items:
+        if it["id"] in skip_ids or it["date"] != today or _JUNK.search(it["lg"] + " " + it["home"] + " " + it["away"]):
+            continue
+        out.append(dict(s=f"apif.{it['lgid']}", lg=it["lg"], fr=it["lg"], country=it["country"] or "World", cfr=CFR_API.get((it["country"] or "").replace(" ", "-"), it["country"] or "Monde"),
+                        date=it["date"], time=it["time"], home=it["home"], away=it["away"], p=None, st=it["st"],
+                        hs=it["hs"] if it["st"] != "pre" else None, as_=it["as_"] if it["st"] != "pre" else None, w=int(bool(_WOMEN.search(it["lg"])))))
+    out.sort(key=lambda c: (-_prio({"league": {"name": c["lg"]}}), c["time"]))
+    return out[:max_items]

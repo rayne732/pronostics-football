@@ -906,3 +906,4 @@ button.chip small{display:block}
 .lgh{padding:10px 12px;border-radius:16px;background:linear-gradient(90deg,color-mix(in srgb,var(--surface2) 80%,transparent),transparent);border-bottom:0}
 
 .rlg2{margin:14px 2px 6px;font-size:.78rem;font-weight:700;color:var(--mute);letter-spacing:.02em}
+.lgh.sm{padding:8px 10px;margin:10px 0 6px}.lgh.sm .lb{width:30px;height:30px;border-radius:10px}.lgh.sm .ln{font-size:.9rem}.lgh[data-ocg]{cursor:pointer;-webkit-user-select:none;user-select:none}
