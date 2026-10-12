@@ -1685,7 +1685,7 @@
     var x = extFor(c), p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, fn = p ? [c.home, 'Nul', c.away][fav] : '', right, left = esc(c.time) + (flat ? '<small>' + dm(c.date) + '</small>' : '');
     if (c.st === 'post') { right = '<span class="cfp high">Terminé · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>fini</small>'; }
     else if (c.st === 'in') { right = '<span class="cfp mid">En cours · ' + c.hs + ' – ' + c.as_ + '</span>'; left += '<small>live</small>'; }
-    else right = p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low">cotes indisponibles</span>';
+    else right = p ? '<span class="cfp low">' + pct(p[fav]) + ' · ' + esc(fn) + '</span>' : '<span class="cfp low nop">Pas de pronostic</span>';
     var api = x && c.st === 'pre' ? '<div class="apil">API-Football : ' + esc([x.home, 'Nul', x.away][x.favIdx]) + ' ' + pct(x.fav) + ' <button class="bt-b" data-openext="' + x.i + '">Voir</button></div>' : '';
     return '<div class="mrow low ext"><div class="tm">' + left + '</div><div class="tt">' + (flat ? '<span class="rlg"><b>' + esc(c.cfr) + '</b>' + esc(c.fr) + '</span>' : '') + tn(c.home) + tn(c.away) + '</div><div class="act">' + right + '</div>' + (p && c.st === 'pre' ? miniBar(p) : '') + api + '</div>';
   }
