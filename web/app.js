@@ -898,6 +898,19 @@
       'Notre modèle reste donc <b>moins bon que les bookmakers</b> : à prendre comme une indication.</div>' +
       '<table class="tbl"><thead><tr><th>Confiance</th><th>Matchs</th><th>Annoncé</th><th>Réel</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
+  /* marchés des autres sports : trois onglets internes (Résumé, Sûrs, Moins sûrs) au lieu d'une liste unique interminable */
+  function sportTabs(d, safe, less) {
+    var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; }, tab = st.ptab === 'safe' || st.ptab === 'less' ? st.ptab : 'sum';
+    var all = safe.concat(less).sort(function (a, b) { return b.p - a.p; });
+    var bar = '<div class="ptabs">' + [['sum', 'Résumé', 0], ['safe', 'Sûrs', safe.length], ['less', 'Moins sûrs', less.length]].map(function (c) {
+      return '<button data-ptab="' + c[0] + '" class="' + (tab === c[0] ? 'on' : '') + '">' + c[1] + (c[2] ? '<b>' + c[2] + '</b>' : '') + '</button>'; }).join('') + '</div>';
+    var h = bar;
+    if (tab === 'safe') h += safe.length ? safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint le seuil de ' + Math.round(SAFE * 100) + ' %.</div>';
+    else if (tab === 'less') h += less.map(wrap).map(mkRow('a', d)).join('');
+    else h += '<div class="sec"><span class="dot g"></span>Les paris les plus probables <small>' + Math.min(6, all.length) + ' sur ' + all.length + '</small></div>' + all.slice(0, 6).map(wrap).map(function (x) { return mkRow(x.p >= SAFE ? 'g' : 'a', d)(x); }).join('') +
+      '<div class="sub">Tous les marchés sont dans les onglets « Sûrs » et « Moins sûrs ». Touche un marché pour voir toutes les sélections et leur cote juste.</div>';
+    return h;
+  }
   function tnPage(i) {
     var m = TM.filter(function (x) { return x.id === st.detail.id; })[0] || TM[i], d = { div: 'TEN', home: m.a, away: m.b, ref: 'tennis|' + m.id }, conf = m.conf, p = [m.p, 1 - m.p];
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' +
@@ -915,10 +928,7 @@
       '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="a" style="width:' + p[1] * 100 + '%"></i></div>' +
       '<div class="l3"><span class="h">' + esc(last(m.a)) + ' · ' + pct(p[0]) + '</span><span class="a">' + esc(last(m.b)) + ' · ' + pct(p[1]) + '</span></div></div>';
     if (!m.known) return h + '<div class="sub warn">Pas assez d’historique sur ce joueur (qualifié, invité ou circuit inférieur) : estimation très peu fiable, aucun pronostic sûr proposé.</div>';
-    var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; };
-    h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
-      (m.safe.length ? m.safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
-    return h + '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + m.less.map(wrap).map(mkRow('a', d)).join('');
+    return h + sportTabs(d, m.safe, m.less);
   }
 
 
@@ -1115,10 +1125,7 @@
       '<span class="a">' + (c.three ? '2 · ' : esc(last(m.away)) + ' · ') + pct(p[2]) + '</span></div></div>';
     if (m.pre) return h + '<div class="sub warn">' + (c.preMsg || 'Match de présaison : estimation peu fiable, aucun pronostic sûr proposé.') + '</div>';
     if (!m.known) return h + '<div class="sub warn">Pas d’historique sur une des équipes : estimation peu fiable.</div>';
-    var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; };
-    h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
-      (m.safe.length ? m.safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
-    return h + '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + m.less.map(wrap).map(mkRow('a', d)).join('');
+    return h + sportTabs(d, m.safe, m.less);
   }
 
 
@@ -1906,7 +1913,7 @@
     var cf = by['Corners (plus)'];
     if (cf) add(cf, nearHalf(cf));
     return '<div class="sec"><span class="dot g"></span>Les marchés principaux <small>touche pour voir toutes les sélections</small></div><div class="ovw">' +
-      rows.map(function (x) { return mkRow(x.p >= 0.62 ? 'g' : 'a', d)(x); }).join('') + '</div>';
+      rows.slice(0, 6).map(function (x) { return mkRow(x.p >= 0.62 ? 'g' : 'a', d)(x); }).join('') + '</div><div class="sub">Les autres marchés sont dans les onglets ci-dessus : Résultat, Buts, Mi-temps, Stats, Combinés.</div>';
   }
   function htftHTML(M, d) {
     var fam = M.fams.filter(function (x) { return x.name === 'Mi-temps / Fin de match'; })[0];
@@ -1939,20 +1946,66 @@
       (f && f.ov ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
     if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
-    h += overviewHTML(M, d) + htftHTML(M, d);
-    h += highConfHTML(M, d);
-    h += compareHTML(M, d) + heatHTML(M, d);
-    h += '<div class="sec"><span class="dot g"></span>Pronostics sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
-      (C.safe.length ? C.safe.map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint ce seuil.</div>');
-    h += '<div class="sec"><span class="dot a"></span>Moins sûrs</div>' + C.less.map(mkRow('a', d)).join('');
-    var ex = M.fams.filter(function (f) { return f.extra; }).map(function (f) {
-      var top = f.sels.slice().sort(function (a, b) { return b[1] - a[1]; })[0];
-      return { m: f.name, s: top[0], p: top[1], v: false, f: f };
-    });
-    if (ex.length) h += '<div class="sec"><span class="dot b"></span>Autres marchés <small>handicaps, écarts, combinaisons, mi-temps, minute du 1er but… · hors décompte des pronostics sûrs</small></div>' + ex.map(mkRow('b', d)).join('');
-    h += '<div class="sub" style="margin-top:14px">Touche un marché pour voir toutes les sélections et leur cote juste. ' +
-      '⚠ = marché non validé par backtest. Voir l’onglet Fiabilité.</div>';
+    h += predTabs(M, C, d);
     return h;
+  }
+  /* fiche match : un onglet interne par famille de marchés (plus de page interminable) */
+  var PCATS = [['sum', 'Résumé'], ['res', 'Résultat'], ['goals', 'Buts'], ['ht', 'Mi-temps'], ['stats', 'Stats'], ['combo', 'Combinés']];
+  function mCat(name) {
+    if (/Résultat et|Combiné|1er but et|multichance|MyMatch/.test(name)) return 'combo';
+    if (/mi-temps|Mi-temps/.test(name)) return 'ht';
+    if (/Corner|Tirs|tirs|Carton/.test(name)) return 'stats';
+    if (/^Résultat du match|^Double chance|Vainqueur|Handicap|Marge|gagne par|Écart|sans (encaisser|concéder)/.test(name)) return 'res';
+    return 'goals';
+  }
+  function pickFor(fam) {                                   // la sélection la plus parlante d'un marché : la plus probable pour 1X2, la plus proche de 50 % pour les lignes de buts
+    var multi = fam.sels.length >= 4 && /plus|moins|corners|tirs|buts/i.test(fam.name);
+    return multi ? nearHalf(fam) : topSel(fam);
+  }
+  function famRow(d) {
+    return function (fam) {
+      var s0 = pickFor(fam), x = { m: fam.name, s: s0[0], p: s0[1], v: fam.validated, f: fam };
+      return mkRow(s0[1] >= SAFE ? 'g' : s0[1] >= 0.5 ? 'a' : 'b', d)(x);
+    };
+  }
+  function hcCards(M, d) {                                  // « haute confiance » : cartes à faire défiler, une par marché
+    var byKind = {};
+    M.fams.forEach(function (f) {
+      if (f.lottery) return;
+      var ok = f.sels.filter(function (x) { return x[1] >= 0.85 && x[1] < 0.97; });
+      if (!ok.length) return;
+      var c = { m: f.name, s: ok.reduce(function (a, b) { return b[1] < a[1] ? b : a; }) };
+      if (!byKind[f.kind] || c.s[1] < byKind[f.kind].s[1]) byKind[f.kind] = c;
+    });
+    var best = Object.keys(byKind).map(function (k) { return byKind[k]; }).sort(function (a, b) { return b.s[1] - a.s[1]; }).slice(0, 10);
+    if (!best.length) return '';
+    return '<div class="sec hc"><span class="dot g"></span>Haute confiance <small>85 à 97 % · fais défiler →</small></div><div class="hcrow">' + best.map(function (x) {
+      var pr = x.s[1];
+      return '<div class="hcc"><small>' + esc(x.m) + '</small><b>' + esc(x.s[0]) + '</b><span class="hp">' + pct(pr) + '</span><em>cote juste ' + (1 / pr).toFixed(2) + '</em>' +
+        '<button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + x.s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + pr.toFixed(4) + '" data-bm="' + esc(x.m) + '" data-bs="' + esc(x.s[0]) + '" data-bref="' + esc(betRef(d)) + '" data-bcat="Pronostic sûr" aria-label="Noter ce pari">€</button></div>';
+    }).join('') + '</div>';
+  }
+  function predTabs(M, C, d) {
+    var tab = st.ptab || 'sum', cats = { res: [], goals: [], ht: [], stats: [], combo: [] };
+    M.fams.forEach(function (fam) { cats[mCat(fam.name)].push(fam); });
+    var n = function (k) { return cats[k] ? cats[k].length : 0; };
+    if (tab !== 'sum' && !n(tab)) tab = 'sum';
+    var bar = '<div class="ptabs">' + PCATS.filter(function (c) { return c[0] === 'sum' || n(c[0]); }).map(function (c) {
+      return '<button data-ptab="' + c[0] + '" class="' + (tab === c[0] ? 'on' : '') + '">' + c[1] + (c[0] !== 'sum' && n(c[0]) ? '<b>' + n(c[0]) + '</b>' : '') + '</button>'; }).join('') + '</div>';
+    var h = bar;
+    if (tab === 'sum') {
+      h += hcCards(M, d) + overviewHTML(M, d);
+    } else if (tab === 'goals') {
+      h += heatHTML(M, d) + '<div class="sec"><span class="dot g"></span>Marchés de buts</div>' + cats.goals.map(famRow(d)).join('');
+    } else if (tab === 'ht') {
+      h += htftHTML(M, d) + '<div class="sec"><span class="dot a"></span>Mi-temps</div>' + cats.ht.map(famRow(d)).join('');
+    } else if (tab === 'res') {
+      h += '<div class="sec"><span class="dot g"></span>Résultat, handicaps et écarts</div>' + cats.res.map(famRow(d)).join('') + compareHTML(M, d);
+    } else {
+      h += '<div class="sec"><span class="dot ' + (tab === 'stats' ? 'b' : 'a') + '"></span>' + (tab === 'stats' ? 'Corners, tirs et cartons' : 'Combinés et scores') + '</div>' +
+        (cats[tab].length ? cats[tab].map(famRow(d)).join('') : '<div class="empty">Aucun marché dans cette catégorie pour ce match.</div>');
+    }
+    return h + '<div class="sub" style="margin-top:12px">Touche un marché pour voir toutes les sélections et leur cote juste. ⚠ = marché non validé par backtest (voir l’onglet Fiabilité).</div>';
   }
   function pts5(div, team) {
     var ms = lastM(div, team, 5), s = 0;
@@ -2367,10 +2420,10 @@
     cb2.innerHTML = '<span>⇄ ' + CMP.length + '/2 matchs</span>' + (CMP.length === 2 ? '<button class="bt-b pri" data-cmpgo>Comparer</button>' : '<small>Choisis un 2ᵉ match avec ⇄</small>') + '<button class="bt-b" data-cmpclr aria-label="Vider">✕</button>';
     if (!st.detail && st.tab === 'home') countUp();
   }
-  function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
+  function closeDetail() { st.ptab = 'sum'; st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-ptab],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2406,7 +2459,7 @@
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-open')) {
       var f = D.fixtures[+t.getAttribute('data-open')];
-      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.dtab = LIVE[f.id] && LIVE[f.id].st === 'in' ? 'live' : fstate(f) === 'done' && fscore(f) ? 'bilan' : 'pred';
+      st.scroll = window.scrollY; st.detail = { div: f.div, home: f.home, away: f.away, fi: f.i }; st.ptab = 'sum'; st.dtab = LIVE[f.id] && LIVE[f.id].st === 'in' ? 'live' : fstate(f) === 'done' && fscore(f) ? 'bilan' : 'pred';
       try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; }
       render(); window.scrollTo(0, 0);
     } else if (t.hasAttribute('data-back')) {
@@ -2418,6 +2471,7 @@
     else if (t.hasAttribute('data-ocg')) { var ko = t.getAttribute('data-ocg'); st.opn = st.opn || {}; var cur0 = t.getAttribute('aria-expanded') === 'true'; st.opn[ko] = !cur0; var yo2 = window.scrollY; render(); window.scrollTo(0, yo2); }
     else if (t.hasAttribute('data-plsp')) { st.plSport = t.getAttribute('data-plsp'); var yp = window.scrollY; render(); window.scrollTo(0, yp); }
     else if (t.hasAttribute('data-plsort')) { st.plSort = t.getAttribute('data-plsort'); var yq2 = window.scrollY; render(); window.scrollTo(0, yq2); }
+    else if (t.hasAttribute('data-ptab')) { st.ptab = t.getAttribute('data-ptab'); var yt = window.scrollY; render(); window.scrollTo(0, yt); }
     else if (t.hasAttribute('data-bf')) { st.bf = t.getAttribute('data-bf'); var yb2 = window.scrollY; render(); window.scrollTo(0, yb2); }
     else if (t.hasAttribute('data-status')) { st.status = t.getAttribute('data-status'); var ys = window.scrollY; render(); window.scrollTo(0, ys); }
     else if (t.hasAttribute('data-lgc')) { var kc = t.getAttribute('data-lgc'); st.closed[kc] = !st.closed[kc]; var yc2 = window.scrollY; render(); window.scrollTo(0, yc2); }
