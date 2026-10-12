@@ -39,7 +39,8 @@
     bruxelles: 'brussels', anvers: 'antwerp', gand: 'gent', bruges: 'brugge', francfort: 'frankfurt', nuremberg: 'nurnberg', hanovre: 'hannover', stockholm: 'stockholm', helsinki: 'helsinki',
     islande: 'iceland', croatie: 'croatia', serbie: 'serbia', coree: 'korea', algerie: 'algeria', maroc: 'morocco', tunisie: 'tunisia', egypte: 'egypt', bresil: 'brazil', allemagne: 'germany',
     espagne: 'spain', italie: 'italy', angleterre: 'england', ecosse: 'scotland', suisse: 'switzerland', autriche: 'austria', pologne: 'poland', turquie: 'turkey', grece: 'greece',
-    belgique: 'belgium', pays: 'netherlands', hollande: 'netherlands', suede: 'sweden', norvege: 'norway', danemark: 'denmark', finlande: 'finland', irlande: 'ireland', mexique: 'mexico' };
+    belgique: 'belgium', pays: 'netherlands', hollande: 'netherlands', suede: 'sweden', norvege: 'norway', danemark: 'denmark', finlande: 'finland', irlande: 'ireland', mexique: 'mexico', kiev: 'kyiv', kyev: 'kyiv', louhansk: 'luhansk', lougansk: 'luhansk', kharkov: 'kharkiv', lvov: 'lviv', odessa: 'odesa', dniepr: 'dnipro',
+    zaporojie: 'zaporizhzhia', chakhtar: 'shakhtar', tchernomorets: 'chornomorets', bereg: 'bereh', moscou: 'moskva', saint: 'st', petersbourg: 'petersburg', tbilissi: 'tbilisi', bakou: 'baku', erevan: 'yerevan', nicosie: 'nicosia', sofia: 'sofia', bucarest: 'bucuresti', budapest: 'budapest', belgrade: 'beograd' };
   function lev(a, b, max) {
     if (Math.abs(a.length - b.length) > max) return max + 1;
     var prev = [], cur, i, j;
@@ -404,7 +405,7 @@
       items = items.slice(0, 60);
     } else items = (D.cal || []).filter(function (c) { return c.date === day; }).sort(function (a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
     if (!items.length) return '';
-    var h = '<div class="sec"><span class="dot b"></span>' + (q ? 'Autres championnats <small>' + items.length + ' match' + (items.length > 1 ? 's' : '') + ' trouvé' + (items.length > 1 ? 's' : '') + '</small>' : 'Autres championnats <small>' + dayLabel(day) + ' · sans pronostic détaillé</small>') + '</div>', cur = '', last = '';
+    var h = '<div class="sec" id="oth"><span class="dot b"></span>' + (q ? 'Autres championnats <small>' + items.length + ' match' + (items.length > 1 ? 's' : '') + ' trouvé' + (items.length > 1 ? 's' : '') + '</small>' : 'Autres championnats <small>' + dayLabel(day) + ' · sans pronostic détaillé</small>') + '</div>', cur = '', last = '';
     if (q) {
       items.forEach(function (c) {
         if (c.date !== cur) { cur = c.date; h += '<div class="cdl">' + dayLabel(c.date) + '</div>'; }
@@ -1751,7 +1752,8 @@
     if (ext) h += '<div class="sub">Pas de match dans les 7 prochains jours (trêve ?). Voici les prochaines rencontres.</div>';
     var top = fx.slice().sort(function (a, b) { return b.fav - a.fav; }).slice(0, 6);
     h += '<div class="stitle">Les sélections les plus fortes</div><div class="car">' + top.map(fcard).join('') + '</div>';
-    h += statusBar() + '<label class="grpsw"><input type="checkbox" data-grp' + (st.group ? ' checked' : '') + '><span class="bx"></span>Classer par championnat<small>' + (st.group ? 'décoche pour voir les matchs dans l’ordre d’arrivée' : 'ordre d’arrivée des matchs') + '</small></label><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
+    var nOth = isLoaded('cal') && st.q.trim() === '' ? (D.cal || []).filter(function (c) { return c.date === parisToday(); }).length : 0;
+    h += statusBar() + (nOth ? '<button class="jump" data-jump="oth">↓ Autres championnats du jour<b>' + nOth + '</b></button>' : '') + '<label class="grpsw"><input type="checkbox" data-grp' + (st.group ? ' checked' : '') + '><span class="bx"></span>Classer par championnat<small>' + (st.group ? 'décoche pour voir les matchs dans l’ordre d’arrivée' : 'ordre d’arrivée des matchs') + '</small></label><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label>' +
       '<button class="sortb" data-sort>' + svg(IC.sort) + (st.sort === 'conf' ? 'Confiance' : 'Heure') + '</button>' +
       '<button class="sortb" data-dens aria-label="Affichage compact ou confortable">' + (DENS === 'compact' ? '▤' : '▦') + '</button></div>';
     h += '<div class="chips">' + [['all', 'Tous'], ['high', 'Haute confiance'], ['fav', '★ Favoris']].map(function (x) {
@@ -2341,7 +2343,7 @@
   function closeDetail() { st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2385,6 +2387,7 @@
       closeDetail();
     } else if (t.hasAttribute('data-day')) { st.day = t.getAttribute('data-day'); render(); }
     else if (t.hasAttribute('data-filter')) { st.filter = t.getAttribute('data-filter'); render(); }
+    else if (t.hasAttribute('data-jump')) { var jt = document.getElementById(t.getAttribute('data-jump')); if (jt) jt.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (t.hasAttribute('data-ocg')) { var ko = t.getAttribute('data-ocg'); st.opn = st.opn || {}; var cur0 = t.getAttribute('aria-expanded') === 'true'; st.opn[ko] = !cur0; var yo2 = window.scrollY; render(); window.scrollTo(0, yo2); }
     else if (t.hasAttribute('data-plsp')) { st.plSport = t.getAttribute('data-plsp'); var yp = window.scrollY; render(); window.scrollTo(0, yp); }
     else if (t.hasAttribute('data-plsort')) { st.plSort = t.getAttribute('data-plsort'); var yq2 = window.scrollY; render(); window.scrollTo(0, yq2); }
