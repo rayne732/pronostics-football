@@ -98,6 +98,11 @@ def upcoming(today, days):
                     continue
                 d = datetime.strptime(r["Date"], "%d/%m/%Y")
                 if start <= d <= end:
+                    try:                                       # fixtures.csv donne l'heure du Royaume-Uni : on la convertit en heure de Paris (+1 h, minuit compris)
+                        t = datetime.strptime(r["Date"] + " " + r["Time"], "%d/%m/%Y %H:%M") + timedelta(hours=1)
+                        d, r["Time"] = datetime(t.year, t.month, t.day), f"{t:%H:%M}"
+                    except (KeyError, ValueError, TypeError):
+                        pass
                     r["Date"] = d
                     out.append(r)
     except FileNotFoundError:

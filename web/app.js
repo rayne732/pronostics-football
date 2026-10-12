@@ -33,6 +33,39 @@
   function dm(s) { return s.slice(8) + '/' + s.slice(5, 7); }
   function dmNum(n) { var s = String(n); return s.slice(6) + '/' + s.slice(4, 6) + '/' + s.slice(2, 4); }
   function confOf(mx) { return mx >= 0.6 ? 'high' : mx >= 0.45 ? 'mid' : 'low'; }
+  /* recherche tolérante : sans accents ni majuscules, par morceaux de mot, avec fautes de frappe et noms français courants (Grenade -> Granada) */
+  var ALIAS = { grenade: 'granada', seville: 'sevilla', cologne: 'koln', munich: 'munchen', naples: 'napoli', turin: 'torino', rome: 'roma', lisbonne: 'lisboa', majorque: 'mallorca',
+    vienne: 'wien', moscou: 'moskva', prague: 'praha', varsovie: 'warszawa', copenhague: 'kobenhavn', bale: 'basel', berne: 'bern', geneve: 'geneva', belgrade: 'beograd', athenes: 'athens',
+    bruxelles: 'brussels', anvers: 'antwerp', gand: 'gent', bruges: 'brugge', francfort: 'frankfurt', nuremberg: 'nurnberg', hanovre: 'hannover', stockholm: 'stockholm', helsinki: 'helsinki',
+    islande: 'iceland', croatie: 'croatia', serbie: 'serbia', coree: 'korea', algerie: 'algeria', maroc: 'morocco', tunisie: 'tunisia', egypte: 'egypt', bresil: 'brazil', allemagne: 'germany',
+    espagne: 'spain', italie: 'italy', angleterre: 'england', ecosse: 'scotland', suisse: 'switzerland', autriche: 'austria', pologne: 'poland', turquie: 'turkey', grece: 'greece',
+    belgique: 'belgium', pays: 'netherlands', hollande: 'netherlands', suede: 'sweden', norvege: 'norway', danemark: 'denmark', finlande: 'finland', irlande: 'ireland', mexique: 'mexico' };
+  function lev(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var prev = [], cur, i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  function toks(t) { return norm(t).split(/[^a-z0-9]+/).filter(Boolean); }
+  function fuzzy(q, text, tt) {                              // chaque mot cherché doit ressembler à un mot du texte
+    var qs = toks(q);
+    if (!qs.length) return true;
+    var ts = tt || toks(text);
+    return qs.every(function (w) {
+      var alt = ALIAS[w];
+      return ts.some(function (t) {
+        if (t.indexOf(w) === 0 || (w.length >= 3 && t.indexOf(w) >= 0) || (alt && t.indexOf(alt) >= 0)) return true;
+        if (w.length < 4) return false;
+        var mx = w.length >= 7 ? 2 : 1;
+        return lev(w, t, mx) <= mx || lev(w, t.slice(0, w.length), mx) <= mx;
+      });
+    });
+  }
   function norm(s) { return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
   function curTheme() {
     var t = document.documentElement.getAttribute('data-theme');
@@ -349,21 +382,50 @@
   }
   try { if (localStorage.getItem('pf-grp') === '0') st.group = false; } catch (e) { /* ignoré */ }
   function filtered() {
-    var q = norm(st.q.trim());
+    var q = st.q.trim();
     return D.fixtures.filter(function (f) {
       return (st.day === 'all' || f.date === st.day) && (st.status === 'all' || fstate(f) === st.status) &&
         (st.filter === 'all' || (st.filter === 'high' && f.conf === 'high') || (st.filter === 'fav' && favs[f.id])) &&
-        (!q || f.key.indexOf(q) >= 0);
+        (!q || fuzzy(q, f.key, f.kt || (f.kt = toks(f.key))));
     });
   }
+  function otherHTML() {                                    // matchs des championnats hors modèle (calendrier ESPN / TheSportsDB / API-Football) : ceux du jour, ou ceux qui ressemblent à la recherche
+    var q = st.q.trim(), T = parisToday(), day = st.day === 'all' || !/^\d{4}-/.test(st.day) ? T : st.day, items;
+    if (!isLoaded('cal')) return '';
+    var from = isoDate(new Date(parseD(T).getTime() - 864e5));
+    if (q) {
+      items = (D.cal || []).filter(function (c) { return c.date >= from && fuzzy(q, c.home + ' ' + c.away + ' ' + c.fr + ' ' + c.cfr); });
+      D.ext.forEach(function (e) {
+        if (!fuzzy(q, e.home + ' ' + e.away + ' ' + e.lg + ' ' + e.country)) return;
+        if (items.some(function (c) { return c.date === T && sameTeam(c.home, e.home) && sameTeam(c.away, e.away); })) return;
+        items.push({ ext: e, s: 'ext|' + e.lg, fr: e.lg, cfr: e.country, date: T, time: e.time, home: e.home, away: e.away });
+      });
+      items.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+      items = items.slice(0, 60);
+    } else items = (D.cal || []).filter(function (c) { return c.date === day; }).sort(function (a, b) { return a.time < b.time ? -1 : a.time > b.time ? 1 : 0; });
+    if (!items.length) return '';
+    var h = '<div class="sec"><span class="dot b"></span>' + (q ? 'Autres championnats <small>' + items.length + ' match' + (items.length > 1 ? 's' : '') + ' trouvé' + (items.length > 1 ? 's' : '') + '</small>' : 'Autres championnats <small>' + dayLabel(day) + ' · sans pronostic détaillé</small>') + '</div>', cur = '', last = '';
+    if (q) {
+      items.forEach(function (c) {
+        if (c.date !== cur) { cur = c.date; h += '<div class="cdl">' + dayLabel(c.date) + '</div>'; }
+        h += '<div class="rlg2">' + esc(c.fr) + ' · ' + esc(c.cfr) + '</div>' + (c.ext ? extRow(c.ext) : calRow(c));
+      });
+      return h;
+    }
+    items.forEach(function (c) {
+      if (c.s !== last) { last = c.s; h += '<div class="rlg2">' + esc(c.fr) + ' · ' + esc(c.cfr) + '</div>'; }
+      h += calRow(c);
+    });
+    return h;
+  }
   function listHTML() {
-    var list = filtered();
-    if (!list.length) return '<div class="empty">Aucun match pour ce filtre.</div>';
+    var list = filtered(), more = otherHTML();
+    if (!list.length) return (more ? '' : '<div class="empty">Aucun match pour ce filtre.</div>') + more;
     if (list.some(function (f) { return fstate(f) === 'done'; })) ensureRes();
     var h = '';
     if (!st.group) {                                         // liste à plat, dans l'ordre d'arrivée des matchs (ou de confiance)
       var flat = list.slice().sort(st.sort === 'conf' ? function (a, b) { return b.fav - a.fav; } : function (a, b) { return kickoff(a) - kickoff(b); });
-      return '<div class="flat">' + flat.map(function (f) { return row(f, st.day === 'all', true); }).join('') + '</div>';
+      return '<div class="flat">' + flat.map(function (f) { return row(f, st.day === 'all', true); }).join('') + '</div>' + more;
     }
     D.order.forEach(function (div) {
       var sub = list.filter(function (f) { return f.div === div; });
@@ -375,7 +437,7 @@
         '<small>' + lm[0] + '</small></div><span class="cnt">' + sub.length + '</span><span class="chv">' + svg(IC.chev) + '</span></div>';
       if (!shut) h += sub.map(function (f) { return row(f, st.day === 'all'); }).join('');
     });
-    return h;
+    return h + more;
   }
   var SPORTS = [['foot', '⚽', 'Football'], ['tennis', '🎾', 'Tennis'], ['basket', '🏀', 'Basketball'], ['baseball', '⚾', 'Baseball'], ['nfl', '🏈', 'Football américain'],
     ['f1', '🏁', 'Formule 1'], ['golf', '⛳', 'Golf'], ['handball', '🤾', 'Handball'], ['hockey', '🏒', 'Hockey sur glace'], ['mma', '🥋', 'MMA'],

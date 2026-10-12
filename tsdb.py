@@ -11,8 +11,8 @@ from datetime import datetime, timedelta, timezone
 
 URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={d}&l={l}"
 CACHE = os.path.join("data", "tsdb_cache.json")
-MAX_REQ = 60                      # requêtes réseau par passage (≈ 2 minutes)
-TTL_NEAR = 5 * 3600               # aujourd'hui et demain : rafraîchis toutes les ~5 h
+MAX_REQ = 80                      # requêtes réseau par passage (≈ 2 minutes)
+TTL_NEAR = 8 * 3600               # aujourd'hui et demain : rafraîchis toutes les ~5 h
 TTL_FAR = 30 * 3600               # plus loin : une fois par jour
 # id TheSportsDB : (nom français, pays en anglais, féminin)
 LEAGUES = {4820: ("Premier League canadienne", "Canada", 0), 5602: ("Northern Super League (F)", "Canada", 1), 5922: ("Championnat canadien", "Canada", 0),
@@ -33,6 +33,18 @@ LEAGUES = {4820: ("Premier League canadienne", "Canada", 0), 5602: ("Northern Su
            4828: ("Ligue 1 (Tunisie)", "Tunisia", 0), 4974: ("Premier League (Ghana)", "Ghana", 0), 4827: ("NPFL (Nigeria)", "Nigeria", 0),
            4745: ("Premier League (Kenya)", "Kenya", 0), 4676: ("TFF 1. Lig (Turquie)", "Turkey", 0), 4824: ("J2 League", "Japan", 0),
            4628: ("China League One", "China", 0), 4457: ("OBOS-ligaen (Norvège)", "Norway", 0), 4683: ("1re division (Danemark)", "Denmark", 0),
+           4899: ("Primera B (Chili)", "Chile", 0), 5073: ("Segunda División (Pérou)", "Peru", 0), 5072: ("Segunda División (Uruguay)", "Uruguay", 0),
+           4900: ("División Intermedia (Paraguay)", "Paraguay", 0), 4910: ("Nacional B (Bolivie)", "Bolivia", 0), 4957: ("Serie B (Équateur)", "Ecuador", 0),
+           5659: ("Segunda División (Venezuela)", "Venezuela", 0), 5627: ("Première division saoudienne", "Saudi Arabia", 0), 5055: ("Pro League (Jordanie)", "Jordan", 0),
+           5056: ("Première ligue d’Irak", "Iraq", 0), 5256: ("Première ligue de Syrie", "Syria", 0), 5243: ("Première ligue du Liban", "Lebanon", 0),
+           4794: ("Super League (Ouzbékistan)", "Uzbekistan", 0), 4826: ("Première ligue de Bahreïn", "Bahrain", 0), 4823: ("Première ligue du Koweït", "Kuwait", 0),
+           5250: ("Pro League (Oman)", "Oman", 0), 4754: ("Ligue 1 (Sénégal)", "Senegal", 0), 5241: ("Ligue 1 (Côte d’Ivoire)", "Ivory Coast", 0),
+           5211: ("Super League (Zambie)", "Zambia", 0), 5259: ("Première ligue d’Ouganda", "Uganda", 0), 4959: ("Première ligue d’Éthiopie", "Ethiopia", 0),
+           4815: ("Liga FPD (Costa Rica)", "Costa Rica", 0), 4818: ("Liga Nacional (Honduras)", "Honduras", 0), 4817: ("Liga Nacional (Guatemala)", "Guatemala", 0),
+           4816: ("Primera División (Salvador)", "El Salvador", 0), 4819: ("Liga Panameña", "Panama", 0), 5075: ("Première ligue de Jamaïque", "Jamaica", 0),
+           4677: ("Première ligue d’Ukraine (D2)", "Ukraine", 0), 5314: ("2. Liga (Slovaquie)", "Slovakia", 0), 4966: ("Liga Leumit (Israël)", "Israel", 0),
+           5504: ("National League (Nouvelle-Zélande)", "New Zealand", 0), 4673: ("Primera RFEF - Groupe 1", "Spain", 0), 4750: ("Primera RFEF - Groupe 2", "Spain", 0),
+           5206: ("Liga MX Femenil (F)", "Mexico", 1), 5201: ("Brasileirão (F)", "Brazil", 1),
            5209: ("Damallsvenskan (F)", "Sweden", 1), 5208: ("Toppserien (F)", "Norway", 1), 5202: ("A-Liga (F, Danemark)", "Denmark", 1)}
 CFR = {"Canada": "Canada", "Iceland": "Islande", "Croatia": "Croatie", "Serbia": "Serbie", "Ukraine": "Ukraine", "Bulgaria": "Bulgarie", "Hungary": "Hongrie",
        "Slovakia": "Slovaquie", "Slovenia": "Slovénie", "South Korea": "Corée du Sud", "United Arab Emirates": "Émirats arabes unis", "Egypt": "Égypte",
@@ -41,7 +53,12 @@ CFR = {"Canada": "Canada", "Iceland": "Islande", "Croatia": "Croatie", "Serbia":
        "Latvia": "Lettonie", "Lithuania": "Lituanie", "Estonia": "Estonie", "Armenia": "Arménie", "Azerbaijan": "Azerbaïdjan", "Moldova": "Moldavie",
        "Montenegro": "Monténégro", "Belarus": "Biélorussie", "Iran": "Iran", "Thailand": "Thaïlande", "Vietnam": "Vietnam", "Indonesia": "Indonésie",
        "Malaysia": "Malaisie", "Morocco": "Maroc", "Algeria": "Algérie", "Tunisia": "Tunisie", "Ghana": "Ghana", "Nigeria": "Nigeria", "Kenya": "Kenya",
-       "Turkey": "Turquie", "Japan": "Japon", "China": "Chine", "Norway": "Norvège", "Denmark": "Danemark", "Sweden": "Suède"}
+       "Turkey": "Turquie", "Japan": "Japon", "China": "Chine", "Norway": "Norvège", "Denmark": "Danemark", "Sweden": "Suède",
+       "Chile": "Chili", "Peru": "Pérou", "Uruguay": "Uruguay", "Paraguay": "Paraguay", "Bolivia": "Bolivie", "Ecuador": "Équateur", "Venezuela": "Venezuela",
+       "Saudi Arabia": "Arabie saoudite", "Jordan": "Jordanie", "Iraq": "Irak", "Syria": "Syrie", "Lebanon": "Liban", "Uzbekistan": "Ouzbékistan", "Bahrain": "Bahreïn",
+       "Kuwait": "Koweït", "Oman": "Oman", "Senegal": "Sénégal", "Ivory Coast": "Côte d’Ivoire", "Zambia": "Zambie", "Uganda": "Ouganda", "Ethiopia": "Éthiopie",
+       "Costa Rica": "Costa Rica", "Honduras": "Honduras", "Guatemala": "Guatemala", "El Salvador": "Salvador", "Panama": "Panama", "Jamaica": "Jamaïque",
+       "Israel": "Israël", "New Zealand": "Nouvelle-Zélande", "Spain": "Espagne", "Mexico": "Mexique", "Brazil": "Brésil"}
 
 
 def _get(url):
@@ -76,7 +93,7 @@ def calendar_items(lo, days, back=1):
     # (priorité, clé de cache, id de championnat, date) : les jours jamais vus ou périmés d'abord, les plus proches avant les plus lointains
     todo = []
     for lid in LEAGUES:
-        for k in range(-back, days + 2):
+        for k in range(-back, min(days, 4) + 2):                                          # au-delà de 4 jours : seulement ce qui est déjà en cache
             d = lo + timedelta(days=k)
             key = f"{lid}|{d:%Y-%m-%d}"
             c = cache.get(key)
