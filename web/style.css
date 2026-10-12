@@ -892,3 +892,15 @@ button.chip small{display:block}
 .rlg img,.rlg svg{width:16px!important;height:16px!important;max-width:16px!important;object-fit:contain;display:block;margin:0!important;padding:0!important;filter:none!important}
 .rlg{white-space:nowrap}.rlg span,.rlg{overflow:hidden;text-overflow:ellipsis}
 .rlg b{font-size:.62rem;padding:1px 5px;border-radius:5px;background:var(--surface2);border:1px solid var(--line);color:var(--ink);flex:none}
+
+/* finitions : bandeau de statut, barre de filtres collante, navigation en pastille */
+.banner{display:flex;align-items:center;gap:10px;padding:11px 14px;margin:0 0 12px;border-radius:16px;font-size:.86rem;background:linear-gradient(90deg,color-mix(in srgb,var(--green) 16%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--green) 35%,var(--line))}
+.banner .bdot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px color-mix(in srgb,var(--green) 25%,transparent);flex:none}
+.banner span{flex:1;min-width:0;color:var(--green);font-weight:600}.banner span b{color:var(--ink);font-size:1.02rem}
+.banner small{color:var(--mute);font-size:.68rem;white-space:nowrap}
+.bpill{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;font-size:.7rem;font-weight:800;letter-spacing:.06em;color:var(--green);border:1px solid color-mix(in srgb,var(--green) 55%,var(--line));background:color-mix(in srgb,var(--green) 10%,var(--surface))}
+.bpill i{width:7px;height:7px;border-radius:50%;background:var(--red);animation:ldp 1.4s ease-in-out infinite}
+.seg3:not(.bseg){position:sticky;top:env(safe-area-inset-top,0px);z-index:8;box-shadow:0 8px 18px -12px var(--shadow)}
+#nav button.on{background:linear-gradient(180deg,color-mix(in srgb,var(--amber) 14%,transparent),transparent)}
+#nav button.on span{font-weight:700}
+.lgh{padding:10px 12px;border-radius:16px;background:linear-gradient(90deg,color-mix(in srgb,var(--surface2) 80%,transparent),transparent);border-bottom:0}

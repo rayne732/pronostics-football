@@ -1659,6 +1659,8 @@
     if (fx.length && !inPast) {
       var nHigh = fx.filter(function (f) { return f.conf === 'high'; }).length;
       var avg = fx.reduce(function (s, f) { return s + f.fav; }, 0) / fx.length;
+      var nLive = D.fixtures.filter(function (f) { return fstate(f) === 'live'; }).length;
+      h += '<div class="banner"><i class="bdot"></i><span>Pronostics prêts · <b>' + D.fixtures.length + '</b> matchs</span>' + (nLive ? '<button class="bpill" data-status="live"><i></i>EN DIRECT ' + nLive + '</button>' : '') + '</div>';
       h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>' + 'matchs à venir' + '</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
         '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
     }
