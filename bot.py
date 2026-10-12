@@ -387,6 +387,9 @@ def main():
             import tsdb
             modeled = [(f"{r['Date']:%Y-%m-%d}", r["HomeTeam"], r["AwayTeam"]) for r in fixtures]
             cal = tsdb.dedupe(cal + apifootball.calendar_items(now, skip_ids={e["id"] for e in ext or []}), modeled)
+            import strength                                              # force des équipes des championnats sans modèle : pronostic approximatif
+            strength.update(cal, tsdb.results(), now)
+            print(f"Force des équipes : {strength.apply(cal, now)} match(s) avec estimation approximative.", file=sys.stderr)
         except Exception as exc:
             print(f"[avertissement] calendrier API-Football indisponible : {exc}", file=sys.stderr)
         tracking.record(fixtures, models, now)                           # enregistre ceux des matchs à venir

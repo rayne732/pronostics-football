@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 URL = "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d={d}&l={l}"
 CACHE = os.path.join("data", "tsdb_cache.json")
+BACKFILL = 40                     # jours passés rattrapés petit à petit avec les requêtes restantes (résultats pour le classement de force)
 MAX_REQ = 80                      # requêtes réseau par passage (≈ 2 minutes)
 TTL_NEAR = 8 * 3600               # aujourd'hui et demain : rafraîchis toutes les ~5 h
 TTL_FAR = 30 * 3600               # plus loin : une fois par jour
@@ -103,6 +104,12 @@ def calendar_items(lo, days, back=1):
                 continue                                                                  # jour passé déjà terminé : inutile de le redemander
             if c is None or age > ttl:
                 todo.append((0 if c is None else 1, abs(k), key, lid, d))
+    for k in range(-back - 1, -BACKFILL - 1, -1):                                          # historique : seulement ce qui manque, après tout le reste
+        d = lo + timedelta(days=k)
+        for lid in LEAGUES:
+            key = f"{lid}|{d:%Y-%m-%d}"
+            if key not in cache:
+                todo.append((2, abs(k), key, lid, d))
     todo.sort()
     nreq = 0
     for _, _, key, lid, d in todo:
@@ -123,7 +130,7 @@ def calendar_items(lo, days, back=1):
             if isinstance(exc, urllib.error.HTTPError) and exc.code == 429:
                 break                                                                    # toujours limité : on s'arrête, le cache servira
         time.sleep(2.2)                                                                  # l'offre gratuite limite le débit
-    _save(cache, f"{lo - timedelta(days=back + 2):%Y-%m-%d}")
+    _save(cache, f"{lo - timedelta(days=BACKFILL + 2):%Y-%m-%d}")
     out = []
     for lid, (fr, ctry, w) in LEAGUES.items():
         for k in range(-back, days + 2):
@@ -188,4 +195,21 @@ def dedupe(cal, modeled=()):
             if any(_rank(o) < r and _same(it["home"], o["home"]) and _same(it["away"], o["away"]) for o in by_day.get(it["date"], [])):
                 continue
         out.append(it)
+    return out
+
+
+def results():
+    """Tous les matchs terminés du cache (jours passés compris) : [(ligue, date de Paris, domicile, extérieur, buts dom., buts ext.)]."""
+    from tennis import paris
+    out = []
+    for key, v in _load().items():
+        lid = key.split("|")[0]
+        for e in v.get("e", []):
+            if (e.get("strStatus") or "").upper() not in ("FT", "AET", "PEN", "MATCH FINISHED"):
+                continue
+            try:
+                ts = datetime.strptime(e["strTimestamp"][:19], "%Y-%m-%dT%H:%M:%S")
+                out.append((f"tsdb.{lid}", f"{paris(ts):%Y-%m-%d}", e["strHomeTeam"], e["strAwayTeam"], int(e["intHomeScore"]), int(e["intAwayScore"])))
+            except (KeyError, TypeError, ValueError):
+                continue
     return out

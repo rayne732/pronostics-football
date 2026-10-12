@@ -910,3 +910,4 @@ button.chip small{display:block}
 .jump{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin:0 0 10px;padding:11px 14px;border-radius:15px;background:linear-gradient(90deg,color-mix(in srgb,var(--blue) 14%,var(--surface)),var(--surface));border:1px solid color-mix(in srgb,var(--blue) 40%,var(--line));font-weight:600;font-size:.86rem;color:var(--ink)}
 .jump b{padding:2px 10px;border-radius:99px;background:color-mix(in srgb,var(--blue) 20%,var(--surface2));color:var(--blue);font-size:.76rem;font-variant-numeric:tabular-nums}
 .cfp.nop{color:var(--mute);background:var(--surface2);border-color:var(--line)}
+.cfp.apx{color:var(--mute);border-style:dashed}.apil.apx{grid-column:1/-1;font-size:.7rem;color:var(--mute);line-height:1.35;margin-top:2px}
