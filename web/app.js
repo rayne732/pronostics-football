@@ -77,6 +77,7 @@
   /* ------------------------------------------------------------ icônes */
   function svg(path, cls) { return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>'; }
   var IC = {
+    ticket: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4v2.5h6V4M9 13l2 2 4-4.2M9 18h6"/>',
     today: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 9v6" stroke-dasharray="1.5 2"/><path d="M14 11.5l1 1 2-2.4"/>',
     flame: '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.7.8-2.9 1.8-3.9C9.4 10.9 10.7 11 11 9.6 11.3 7.6 10.6 5.3 12 3z"/>',
     bolt: '<path d="M13 3L5 13.5h6L10 21l8-10.5h-6z"/>',
@@ -1820,33 +1821,145 @@
     return h + '<div class="sub">' + list.length + ' match' + (list.length > 1 ? 's' : '') + ' suivi' + (list.length > 1 ? 's' : '') + ', dans l’ordre des coups d’envoi.</div>' +
       list.map(function (f) { return '<div class="cdl">' + esc(cpName(f)) + ' · ' + countdown(f) + '</div>' + row(f, true); }).join('') + alertsPanel();
   }
-  function ticketProb() { return ticket.reduce(function (p, t) { return p * t.p; }, 1); }
-  function ticketHTML() {
-    var h = '<div class="top"><h1>Mon combiné</h1></div>';
-    if (!ticket.length) {
-      return h + '<div class="empty">Ton combiné est vide. Dans une fiche match, ouvre un marché et touche le <b>+</b> d’une sélection pour l’ajouter. ' +
-        'Tu verras la probabilité réelle que <b>toutes</b> tes sélections passent.</div>';
+  /* ------------------------------------------------------------ ticket : tu notes tes paris, l'appli calcule les chances et te dit quoi garder ou enlever */
+  function tkNum(v) { var x = parseFloat(String(v == null ? '' : v).replace(',', '.')); return x > 1 ? x : 0; }
+  function tkSplit(k) { var a = k.split('|'); return { div: a[0], home: a[1], away: a[2], m: a[3], s: a.slice(4).join('|') }; }
+  function tkFix(div, home, away) { return D.fixtures.filter(function (f) { return f.div === div && f.home === home && f.away === away; })[0] || null; }
+  function tkEvent(M, d, m, sel) {                          // événement « sur la grille de scores » d'une sélection, pour calculer exactement les paris d'un même match
+    var x, mm;
+    if (m === 'Résultat du match') return sel === d.home ? function (i, j) { return i > j; } : sel === 'Match nul' ? function (i, j) { return i === j; } : sel === d.away ? function (i, j) { return i < j; } : null;
+    if (m === 'Double chance') return sel === d.home + ' ou nul' ? function (i, j) { return i >= j; } : sel === d.away + ' ou nul' ? function (i, j) { return i <= j; } : sel === d.home + ' ou ' + d.away ? function (i, j) { return i !== j; } : null;
+    if (m === 'Les deux équipes marquent') return sel === 'Oui' ? function (i, j) { return i > 0 && j > 0; } : sel === 'Non' ? function (i, j) { return !(i > 0 && j > 0); } : null;
+    if (m === 'Total buts (plus)' && (mm = /^Plus de ([\d,]+) buts$/.exec(sel))) { x = +mm[1].replace(',', '.'); return function (i, j) { return i + j > x; }; }
+    if (m === 'Total buts (moins)' && (mm = /^Moins de ([\d,]+) buts$/.exec(sel))) { x = +mm[1].replace(',', '.'); return function (i, j) { return i + j < x; }; }
+    [[d.home, 0], [d.away, 1]].forEach(function (t) {
+      var pl = new RegExp('^' + t[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' (plus|moins) de ([\\d,]+)$'), r = pl.exec(sel);
+      if (r && m === 'Buts de ' + t[0] + ' (' + r[1] + ')') { var y = +r[2].replace(',', '.'), more = r[1] === 'plus', k = t[1]; x = function (i, j) { var g = k ? j : i; return more ? g > y : g < y; }; }
+    });
+    return typeof x === 'function' ? x : null;
+  }
+  function tkJoint(list) {                                  // probabilité que toutes les sélections passent ; exacte pour plusieurs paris d'un même match quand on sait les écrire sur la grille
+    var groups = {}, order = [], P = 1;
+    list.forEach(function (t) { var g = t.k.split('|').slice(0, 3).join('|'); if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(t); });
+    order.forEach(function (g) {
+      var L = groups[g], pg;
+      if (L.length === 1) { P *= L[0].p; return; }
+      var d0 = tkSplit(L[0].k), f = tkFix(d0.div, d0.home, d0.away), evs = null;
+      try {
+        var M = Engine.families(d0.div, d0.home, d0.away, f && f.ov);
+        evs = L.map(function (t) { var q = tkSplit(t.k); return tkEvent(M, { home: q.home, away: q.away }, q.m, q.s); });
+        if (evs.every(function (e) { return e; })) {
+          pg = 0; for (var a = 0; a < M.grid.length; a++) for (var b = 0; b < M.grid[a].length; b++) if (evs.every(function (e) { return e(a, b); })) pg += M.grid[a][b];
+          P *= pg; return;
+        }
+      } catch (e) { /* repli : produit */ }
+      pg = L.reduce(function (t, x) { return t * x.p; }, 1); P *= Math.min(pg, Math.min.apply(null, L.map(function (x) { return x.p; })));
+    });
+    return P;
+  }
+  function ticketProb() { return tkJoint(ticket); }
+  function tkLab(t) { return t.s === 'Oui' || t.s === 'Non' ? t.m.replace('Les deux équipes marquent', 'Les 2 marquent') + ' : ' + t.s : t.s; }
+  function tkGrade(p) { return p >= 0.8 ? ['Solide', 'high'] : p >= 0.65 ? ['Correct', 'mid'] : p >= 0.5 ? ['Risqué', 'low'] : ['Très risqué', 'bad']; }
+  function tkMatches(q) {
+    var out = D.fixtures.filter(function (f) { return fstate(f) !== 'done' && (!q.trim() || fuzzy(q, f.key, f.kt || (f.kt = toks(f.key)))); });
+    return out.sort(function (a, b) { return kickoff(a) - kickoff(b); }).slice(0, 8);
+  }
+  function tkQuick(M, d) {                                  // choix rapides d'un match : [étiquette, marché, sélection, probabilité]
+    var by = {}, out = [];
+    M.fams.forEach(function (f) { by[f.name] = f; });
+    function pick(fam, sel, label) { var f = by[fam], it = f && f.sels.filter(function (x) { return x[0] === sel; })[0]; if (it) out.push([label, fam, sel, it[1]]); }
+    pick('Résultat du match', d.home, 'Victoire ' + nm(d.home)); pick('Résultat du match', 'Match nul', 'Match nul'); pick('Résultat du match', d.away, 'Victoire ' + nm(d.away));
+    pick('Double chance', d.home + ' ou nul', nm(d.home) + ' ou nul'); pick('Double chance', d.away + ' ou nul', nm(d.away) + ' ou nul');
+    [0.5, 1.5, 2.5, 3.5].forEach(function (x) { pick('Total buts (plus)', 'Plus de ' + String(x).replace('.', ',') + ' buts', '+' + String(x).replace('.', ',') + ' buts'); });
+    [1.5, 2.5, 3.5, 4.5].forEach(function (x) { pick('Total buts (moins)', 'Moins de ' + String(x).replace('.', ',') + ' buts', '−' + String(x).replace('.', ',') + ' buts'); });
+    pick('Les deux équipes marquent', 'Oui', 'Les 2 marquent'); pick('Les deux équipes marquent', 'Non', 'Les 2 ne marquent pas');
+    [d.home, d.away].forEach(function (t) { pick('Buts de ' + t + ' (plus)', t + ' plus de 0,5', nm(t) + ' marque'); pick('Buts de ' + t + ' (plus)', t + ' plus de 1,5', nm(t) + ' +1,5 buts'); });
+    return out;
+  }
+  function tkPicker() {
+    var h = '<div class="tkpick"><label class="search">' + svg(IC.search) + '<input id="tkq" type="search" autocomplete="off" placeholder="Ajouter un pari : équipe ou match (ex. Portugal)" value="' + esc(st.tkq || '') + '"></label><div id="tkres">' + tkResults() + '</div></div>';
+    return h;
+  }
+  function tkResults() {
+    var f = st.tkf != null ? D.fixtures[st.tkf] : null, q = st.tkq || '', h = '';
+    if (!f || (q.trim() && !fuzzy(q, f.key, f.kt || (f.kt = toks(f.key))))) f = null;
+    if (!f) {
+      var ms = tkMatches(q);
+      if (!ms.length) return '<div class="sub">Aucun match à venir ne ressemble à « ' + esc(q) + ' ».</div>';
+      return '<div class="tkms">' + ms.map(function (m) { return '<button data-tkm="' + m.i + '"><b>' + esc(nm(m.home)) + ' – ' + esc(nm(m.away)) + '</b><small>' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + esc(D.leagues[m.div].name) + '</small></button>'; }).join('') + '</div>';
     }
-    var cum = 1, groups = {}, dup = 0;
-    var rows = ticket.map(function (t, i) {
-      cum *= t.p;
-      var g = t.k.split('|').slice(0, 3).join('|');
-      if (groups[g]) dup++; groups[g] = 1;
-      return '<div class="tkrow"><div class="tkn">' + (i + 1) + '</div><div class="tkb"><div class="tkm">' + esc(t.mt) + '</div><div class="tks">' + esc(t.s) +
-        ' <span class="tkp">' + pct(t.p) + '</span></div><div class="tkc"><i style="width:' + Math.max(2, Math.round(cum * 100)) + '%"></i></div>' +
-        '<div class="tkd">Probabilité cumulée : ' + pct(cum) + '</div></div><button class="rm" data-rm="' + i + '" aria-label="Retirer">' + svg(IC.x) + '</button></div>';
+    var d = { div: f.div, home: f.home, away: f.away }, M = Engine.families(d.div, d.home, d.away, f.ov), qk = tkQuick(M, d);
+    h += '<div class="tkmh"><b>' + esc(nm(f.home)) + ' – ' + esc(nm(f.away)) + '</b><button data-tkm="-1" class="lnk">changer de match</button></div><div class="tkq">' +
+      qk.map(function (x) {
+        var on = inTicket(tkKey(d, x[1], x[2]));
+        return '<button class="tkc2' + (on ? ' on' : '') + '" data-tkadd="' + esc(x[1] + '||' + x[2]) + '"><span>' + esc(x[0]) + '</span><small>' + pct(x[3]) + '</small></button>';
+      }).join('') + '</div><details class="tkall"><summary>Tous les marchés de ce match (' + M.fams.length + ')</summary>' +
+      M.fams.map(function (fam) {
+        return '<div class="tkfam"><b>' + esc(fam.name) + '</b><div class="tkq">' + fam.sels.map(function (x) {
+          var on = inTicket(tkKey(d, fam.name, x[0]));
+          return '<button class="tkc2' + (on ? ' on' : '') + '" data-tkadd="' + esc(fam.name + '||' + x[0]) + '"><span>' + esc(x[0]) + '</span><small>' + pct(x[1]) + '</small></button>';
+        }).join('') + '</div></div>';
+      }).join('') + '</details>';
+    return h;
+  }
+  function tkAnalysis() {
+    var n = ticket.length, P = tkJoint(ticket), odds = ticket.map(function (t) { return tkNum(t.o); }), allOdds = odds.every(function (o) { return o > 1; }), prodOdds = allOdds ? odds.reduce(function (a, b) { return a * b; }, 1) : 0;
+    var total = tkNum(st.tkTotal) || prodOdds, stake = tkNum(st.tkStake) > 0 ? +String(st.tkStake).replace(',', '.') : AS.unit, g = tkGrade(P);
+    var h = '<div class="tkan ' + g[1] + '"><div class="tkv"><div class="tkvr">' + gaugeBig(P) + '</div><div><small>Chances que tout passe</small><b>' + pct(P) + '</b><span class="tkg ' + g[1] + '">' + g[0] + '</span></div></div>' +
+      '<div class="tkmeta"><span>Cote juste<b>' + (P > 0.0005 ? (1 / P).toFixed(2).replace('.', ',') : '—') + '</b></span><span>' + n + ' sélection' + (n > 1 ? 's' : '') + '<b>' + pct(Math.pow(P, 1 / n)) + ' en moy.</b></span></div>';
+    // cote et mise
+    h += '<div class="tkbet"><label>Cote du combiné<input data-tktotal inputmode="decimal" placeholder="' + (prodOdds ? prodOdds.toFixed(2).replace('.', ',') : 'ex. 3,40') + '" value="' + esc(st.tkTotal || '') + '"></label>' +
+      '<label>Mise (€)<input data-tkstake inputmode="decimal" placeholder="' + AS.unit + '" value="' + esc(st.tkStake || '') + '"></label></div>';
+    if (total > 1) {
+      var ev = P * total - 1;
+      h += '<div class="as-verdict">' + asVerdict(P, stake, total) + '</div>';
+    } else h += '<div class="sub">Saisis la cote du combiné (ou la cote de chaque sélection) pour savoir si elle est à la hauteur du risque.</div>';
+    h += '</div>';
+    if (n < 2) return h + '<div class="sub">Ajoute au moins une deuxième sélection pour que je te dise laquelle enlever.</div>';
+    // sélection par sélection : que se passe-t-il si on l'enlève ?
+    var legs = ticket.map(function (t, i) {
+      var rest = ticket.filter(function (x, k) { return k !== i; }), pw = tkJoint(rest), cond = pw > 0 ? Math.min(1, P / pw) : t.p, o = tkNum(t.o);
+      return { i: i, t: t, pw: pw, cond: cond, gain: pw - P, o: o };
+    });
+    legs.sort(function (a, b) { return a.cond - b.cond; });
+    h += '<div class="sec"><span class="dot a"></span>Sélection par sélection <small>de la plus fragile à la plus solide</small></div><div class="tkadv">' + legs.map(function (l) {
+      var gr = l.cond >= 0.8 ? ['À garder', 'ok'] : l.cond >= 0.6 ? ['À surveiller', 'mid'] : ['À enlever', 'ko'];
+      return '<div class="tka ' + gr[1] + '"><div class="tkah"><span class="tkt">' + esc(tkLab(l.t)) + '</span><span class="tkb2">' + gr[0] + '</span></div><div class="tkam">' + esc(l.t.mt) + ' · ' + esc(l.t.m) + '</div>' +
+        '<div class="tkan2">Chance de passer : <b>' + pct(l.cond) + '</b> · sans elle, le ticket passe de <b>' + pct(P) + '</b> à <b>' + pct(l.pw) + '</b> (' + (l.gain >= 0 ? '+' : '') + Math.round(l.gain * 100) + ' pts) · cote juste ' + (l.pw > 0.0005 ? (1 / l.pw).toFixed(2).replace('.', ',') : '—') + '</div></div>';
+    }).join('') + '</div>';
+    // version conseillée
+    var keep = legs.filter(function (l) { return l.cond >= 0.6; }).map(function (l) { return l.t; });
+    if (!keep.length) keep = [legs[legs.length - 1].t];
+    if (keep.length < n) {
+      var Pk = tkJoint(keep);
+      h += '<div class="tkrec"><b>Version conseillée</b><div>' + keep.map(function (t) { return esc(tkLab(t)); }).join(' + ') + '</div><div class="tkn3">' + pct(Pk) + ' de chances (au lieu de ' + pct(P) + ') · cote juste ' + (Pk > 0.0005 ? (1 / Pk).toFixed(2).replace('.', ',') : '—') +
+        '. Tu enlèves : ' + ticket.filter(function (t) { return keep.indexOf(t) < 0; }).map(function (t) { return esc(tkLab(t)); }).join(', ') + '.</div></div>';
+    } else h += '<div class="tkrec ok"><b>Ticket cohérent</b><div class="tkn3">Aucune sélection n’est vraiment fragile par rapport aux autres.</div></div>';
+    // meilleur sous-ensemble selon la valeur, si toutes les cotes sont connues
+    if (allOdds && n <= 10) {
+      var best = null;
+      for (var mask = 1; mask < (1 << n); mask++) {
+        var sub = ticket.filter(function (t, k) { return mask & (1 << k); }), ps = tkJoint(sub), os = sub.reduce(function (a, t) { return a * tkNum(t.o); }, 1), e2 = ps * os - 1;
+        if (!best || e2 > best.e) best = { e: e2, sub: sub, p: ps, o: os };
+      }
+      h += '<div class="tkrec"><b>Meilleure valeur avec tes cotes</b><div>' + best.sub.map(function (t) { return esc(tkLab(t)); }).join(' + ') + '</div><div class="tkn3">' + pct(best.p) + ' de chances · cote ' + best.o.toFixed(2).replace('.', ',') + ' · espérance ' + (best.e >= 0 ? '+' : '−') + Math.abs(Math.round(best.e * 100)) + ' % de la mise (marge du bookmaker incluse).</div></div>';
+    }
+    return h;
+  }
+  function gaugeBig(P) {
+    var r = 30, c = 2 * Math.PI * r;
+    return '<svg class="tkring" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="' + r + '" class="bt0"/><circle cx="36" cy="36" r="' + r + '" class="bt1" stroke-dasharray="' + (c * Math.min(1, P)).toFixed(1) + ' ' + c.toFixed(1) + '" transform="rotate(-90 36 36)"/></svg>';
+  }
+  function ticketHTML() {
+    var h = '<div class="top"><h1>Mon ticket</h1></div><div class="sub">Note tes paris : je calcule tes chances et je te dis quoi garder ou enlever.</div>' + tkPicker();
+    if (!ticket.length) return h + '<div class="empty">Ton ticket est vide. Cherche une équipe ci-dessus, choisis un match, puis touche les paris que tu veux jouer (victoire, +1,5 buts, les deux marquent…).</div>';
+    h += '<div class="sec"><span class="dot g"></span>Mes sélections <small>' + ticket.length + '</small></div>' + ticket.map(function (t, i) {
+      var gr = tkGrade(t.p);
+      return '<div class="tkrow2"><div class="tkr1"><div class="tkr2"><b>' + esc(tkLab(t)) + '</b><small>' + esc(t.mt) + ' · ' + esc(t.m) + '</small></div><span class="tkg ' + gr[1] + '">' + pct(t.p) + '</span>' +
+        '<button class="rm" data-rm="' + i + '" aria-label="Retirer">' + svg(IC.x) + '</button></div><label class="tko">Cote<input data-tkodds="' + i + '" inputmode="decimal" placeholder="1,50" value="' + (t.o ? String(t.o).replace('.', ',') : '') + '"></label></div>';
     }).join('');
-    var P = ticketProb(), avg = Math.pow(P, 1 / ticket.length);
-    h += '<div class="main ' + (P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '"><div class="k"><small>Probabilité que tout passe</small></div>' +
-      '<div class="hero"><div><div class="hl">' + ticket.length + ' sélection' + (ticket.length > 1 ? 's' : '') + '</div><div class="hn">' + pct(P) + '</div></div>' +
-      gauge(Math.min(P, 1), P >= 0.5 ? 'high' : P >= 0.25 ? 'mid' : 'low') + '</div>' +
-      line('Cote juste du combiné', P > 0.0005 ? (1 / P).toFixed(2) : '—') + line('Probabilité moyenne par sélection', pct(avg)) + '</div>';
-    h += '<div class="sub">Même avec des sélections à ' + pct(avg) + ', la probabilité fond vite : à ' + (ticket.length + 1) + ' sélections il ne resterait que ' +
-      pct(P * avg) + '. Un bookmaker applique sa marge à chaque sélection, donc la cote d’un combiné est encore moins favorable que la cote juste.</div>';
-    if (dup) h += '<div class="sub warn">' + (dup + 1) + ' sélections viennent d’un même match : elles sont liées entre elles, donc le produit des probabilités n’est qu’une approximation.</div>';
-    return h + '<div class="sec"><span class="dot g"></span>Sélections</div>' + rows +
-      '<button class="voir mid wide" data-bcomb style="margin-top:12px">€ Noter ce combiné dans Mes paris</button>' +
-      '<button class="voir low wide" data-clear style="margin-top:12px">Vider le combiné</button>';
+    h += tkAnalysis();
+    return h + '<div class="tkbtns"><button class="voir mid wide" data-bcomb>€ Noter ce ticket dans Mes paris</button><button class="voir low wide" data-clear>Vider le ticket</button></div>';
   }
 
   /* ------------------------------------------------------------ fiche match */
@@ -2373,9 +2486,9 @@
     }
   }
   function renderNav() {
-    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
+    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['ticket', 'Ticket'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
-      var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : 0;
+      var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : x[0] === 'ticket' ? ticket.length : 0;
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
     }).join('') + '</div>';
   }
@@ -2423,7 +2536,7 @@
   function closeDetail() { st.ptab = 'sum'; st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-ptab],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-ptab],[data-tkm],[data-tkadd],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -2492,6 +2605,20 @@
       else ticket.push({ k: key, p: +t.getAttribute('data-p'), mt: t.getAttribute('data-mt'), m: t.getAttribute('data-m'), s: t.getAttribute('data-s'), r: t.getAttribute('data-bref') || '' });
       saveTicket();
       var y = window.scrollY; render(); window.scrollTo(0, y);
+    }
+    else if (t.hasAttribute('data-tkm')) { var ti = +t.getAttribute('data-tkm'); st.tkf = ti >= 0 ? ti : null; var yk = window.scrollY; if (ti >= 0) st.tkq = ''; render(); window.scrollTo(0, yk); }
+    else if (t.hasAttribute('data-tkadd')) {
+      var pr = t.getAttribute('data-tkadd').split('||'), ff = st.tkf != null ? D.fixtures[st.tkf] : null;
+      if (ff) {
+        var dd = { div: ff.div, home: ff.home, away: ff.away }, kk = tkKey(dd, pr[0], pr[1]), at2 = -1;
+        ticket.forEach(function (x, i2) { if (x.k === kk) at2 = i2; });
+        if (at2 >= 0) ticket.splice(at2, 1);
+        else {
+          var MM = Engine.families(dd.div, dd.home, dd.away, ff.ov), fam = MM.fams.filter(function (x) { return x.name === pr[0]; })[0], it = fam && fam.sels.filter(function (x) { return x[0] === pr[1]; })[0];
+          if (it) ticket.push({ k: kk, p: it[1], mt: nm(ff.home) + ' – ' + nm(ff.away), m: pr[0], s: pr[1], r: ff.id, o: 0 });
+        }
+        saveTicket(); var yk2 = window.scrollY; render(); window.scrollTo(0, yk2);
+      }
     }
     else if (t.hasAttribute('data-rm')) { ticket.splice(+t.getAttribute('data-rm'), 1); saveTicket(); render(); }
     else if (t.hasAttribute('data-alsave')) {
@@ -2564,6 +2691,21 @@
     st.group = e.target.checked;
     try { localStorage.setItem('pf-grp', st.group ? '1' : '0'); } catch (err) { /* ignoré */ }
     var yg = window.scrollY; render(); window.scrollTo(0, yg);
+  });
+  app.addEventListener('input', function (e) {
+    if (e.target.id !== 'tkq') return;
+    st.tkq = e.target.value; st.tkf = null;
+    var box = document.getElementById('tkres');
+    if (box) box.innerHTML = tkResults();
+  });
+  app.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t.hasAttribute) return;
+    if (t.hasAttribute('data-tkodds')) { var o = tkNum(t.value); ticket[+t.getAttribute('data-tkodds')].o = o; saveTicket(); }
+    else if (t.hasAttribute('data-tktotal')) st.tkTotal = t.value;
+    else if (t.hasAttribute('data-tkstake')) st.tkStake = t.value;
+    else return;
+    var yy = window.scrollY; render(); window.scrollTo(0, yy);
   });
   app.addEventListener('input', function (e) {
     if (e.target.id !== 'q') return;
