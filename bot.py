@@ -461,9 +461,10 @@ def main():
             n_now = datetime.strptime(args.digest_date, "%Y-%m-%d").replace(hour=6) if args.digest_date else now   # --digest-date : simulation
             sports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
             sports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
-            run_notify(models, fixtures, n_now, leagues, dry=args.notify_dry, sports=sports)
-            if morning_due and not args.notify_dry and os.environ.get("NTFY_TOPIC"):
-                state["date"] = f"{now:%Y-%m-%d}"
+            run_notify(models, fixtures, n_now, leagues, dry=args.notify_dry, sports=sports, state=state)
+            if not args.notify_dry and os.environ.get("NTFY_TOPIC"):
+                if morning_due:
+                    state["date"] = f"{now:%Y-%m-%d}"
                 with open(state_path, "w", encoding="utf-8") as fh:
                     json.dump(state, fh)
         changed = record_days(state, esports, now)                      # résultats du jour et d'hier : base du résumé hebdomadaire

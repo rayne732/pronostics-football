@@ -290,12 +290,21 @@ def run_evening(now, sports, dry=False, state=None):
         if weekly:
             msgs += weekly
             state["weekly"] = _paris_date(now).isoformat()
-    send(msgs, topic, dry)
+    send(msgs, topic, dry, state)
     return bool(msgs)
 
 
-def send(msgs, topic, dry=False):
+def send(msgs, topic, dry=False, state=None):
+    """Envoie les messages ; `state["sent"]` mémorise ce qui est déjà parti (clé = contenu), pour ne jamais renvoyer deux fois la même notification."""
+    sent = state.setdefault("sent", {}) if state is not None else None
+    if sent is not None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=3)).timestamp()
+        for k in [k for k, t in sent.items() if t < cutoff]:
+            del sent[k]
     for m in msgs:
+        key = json.dumps([m.get("title"), m.get("message"), m.get("delay")], ensure_ascii=False)
+        if sent is not None and key in sent:
+            continue
         when = f" (programmée {datetime.fromtimestamp(int(m['delay']), timezone.utc):%d/%m %H:%M} UTC)" if "delay" in m else ""
         print(f"[notif] {m['title']}{when}")
         if dry:
@@ -305,14 +314,16 @@ def send(msgs, topic, dry=False):
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 resp.read()
+            if sent is not None:
+                sent[key] = datetime.now(timezone.utc).timestamp()
         except Exception as exc:
             print(f"[avertissement] envoi ntfy impossible : {exc}", file=sys.stderr)
 
 
-def run(models, fixtures, now, leagues, dry=False, sports=None):
+def run(models, fixtures, now, leagues, dry=False, sports=None, state=None):
     topic = os.environ.get("NTFY_TOPIC", "")
     if not topic and not dry:
         print("[notif] NTFY_TOPIC absent : aucune notification envoyée.", file=sys.stderr)
         return
     site = os.environ.get("SITE_URL", "")
-    send(build(models, fixtures, now, leagues, site) + build_extra(sports, now, site), topic, dry)
+    send(build(models, fixtures, now, leagues, site) + build_extra(sports, now, site), topic, dry, state)

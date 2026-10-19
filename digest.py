@@ -51,6 +51,8 @@ def _rows(models, fixtures, today, leagues):
         res = by["Résultat du match"]
         fav, pf = max(res.items(), key=lambda kv: kv[1])
         safe, _ = classify(fams)
+        if not safe:                      # pas de pronostic sûr : le match n'entre ni dans le mail ni dans la notification du matin
+            continue
         rows.append(dict(time=r.get("Time", ""), league=leagues[div]["name"], home=home, away=away, fav=fav, pf=pf,
                          p3=list(res.values()), over=by["Total buts (plus)"]["Plus de 2,5 buts"],
                          btts=by["Les deux équipes marquent"]["Oui"], safe=safe[:3]))
@@ -160,7 +162,7 @@ def _html(rows, now, high, y, bt):
 
 
 def build_digest(models, fixtures, now, leagues, reliability=None):
-    """-> (sujet, texte, html) ou None s'il n'y a aucun match aujourd'hui."""
+    """-> (sujet, texte, html) ou None s'il n'y a aucun match avec pronostic sûr aujourd'hui."""
     today = now.date()
     rows = _rows(models, fixtures, today, leagues)
     if not rows:
