@@ -1763,7 +1763,7 @@
       var nHigh = fx.filter(function (f) { return f.conf === 'high'; }).length;
       var avg = fx.reduce(function (s, f) { return s + f.fav; }, 0) / fx.length;
       var nLive = D.fixtures.filter(function (f) { return fstate(f) === 'live'; }).length;
-      h += '<div class="banner"><i class="bdot"></i><span>Pronostics prêts · <b>' + D.fixtures.length + '</b> matchs</span>' + (nLive ? '<button class="bpill" data-status="live"><i></i>EN DIRECT ' + nLive + '</button>' : '') + '</div>';
+      h += '<div class="banner"><i class="bdot"></i><span>Pronostics prêts · <b data-n="' + D.fixtures.length + '">' + D.fixtures.length + '</b> matchs</span>' + (nLive ? '<button class="bpill" data-status="live"><i></i>EN DIRECT ' + nLive + '</button>' : '') + '</div>';
       h += '<div class="pulse"><div><b data-n="' + fx.length + '">' + fx.length + '</b><span>' + 'matchs à venir' + '</span></div><div class="hi"><b data-n="' + nHigh + '">' + nHigh +
         '</b><span>haute confiance</span></div><div><b data-n="' + Math.round(avg * 100) + '" data-s="%">' + pct(avg) + '</b><span>favori en moyenne</span></div></div>';
     }
@@ -1885,7 +1885,7 @@
     if (!f || (q.trim() && !fuzzy(q, f.key, f.kt || (f.kt = toks(f.key))))) f = null;
     if (!f) {
       var ms = tkMatches(q);
-      if (!ms.length) return '<div class="sub">Aucun match à venir ne ressemble à « ' + esc(q) + ' ».</div>';
+      if (!ms.length) return '<div class="sub">' + (q.trim() ? 'Aucun match à venir ne ressemble à « ' + esc(q) + ' ».' : 'Aucun match à venir pour le moment.') + '</div>';
       return '<div class="tkms">' + ms.map(function (m) { return '<button data-tkm="' + m.i + '"><b>' + esc(nm(m.home)) + ' – ' + esc(nm(m.away)) + '</b><small>' + dm(m.date) + ' · ' + esc(m.time) + ' · ' + esc(D.leagues[m.div].name) + '</small></button>'; }).join('') + '</div>';
     }
     var d = { div: f.div, home: f.home, away: f.away }, M = Engine.families(d.div, d.home, d.away, f.ov), qk = tkQuick(M, d);
@@ -1905,7 +1905,7 @@
   function tkAnalysis() {
     var n = ticket.length, P = tkJoint(ticket), odds = ticket.map(function (t) { return tkNum(t.o); }), allOdds = odds.every(function (o) { return o > 1; }), prodOdds = allOdds ? odds.reduce(function (a, b) { return a * b; }, 1) : 0;
     var total = tkNum(st.tkTotal) || prodOdds, stake = tkNum(st.tkStake) > 0 ? +String(st.tkStake).replace(',', '.') : AS.unit, g = tkGrade(P);
-    var h = '<div class="tkan ' + g[1] + '"><div class="tkv"><div class="tkvr">' + gaugeBig(P) + '</div><div><small>Chances que tout passe</small><b>' + pct(P) + '</b><span class="tkg ' + g[1] + '">' + g[0] + '</span></div></div>' +
+    var h = '<div class="tkan ' + g[1] + '"><div class="tkv"><div class="tkvr">' + gaugeBig(P) + '</div><div><small>Chances que tout passe</small><b data-n="' + Math.round(P * 100) + '" data-s="%">' + pct(P) + '</b><span class="tkg ' + g[1] + '">' + g[0] + '</span></div></div>' +
       '<div class="tkmeta"><span>Cote juste<b>' + (P > 0.0005 ? (1 / P).toFixed(2).replace('.', ',') : '—') + '</b></span><span>' + n + ' sélection' + (n > 1 ? 's' : '') + '<b>' + pct(Math.pow(P, 1 / n)) + ' en moy.</b></span></div>';
     // cote et mise
     h += '<div class="tkbet"><label>Cote du combiné<input data-tktotal inputmode="decimal" placeholder="' + (prodOdds ? prodOdds.toFixed(2).replace('.', ',') : 'ex. 3,40') + '" value="' + esc(st.tkTotal || '') + '"></label>' +
@@ -2239,7 +2239,7 @@
   }
   function countUp() {
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    [].forEach.call(document.querySelectorAll('.pulse b[data-n]'), function (el) {
+    [].forEach.call(app.querySelectorAll('b[data-n]'), function (el) {
       var end = +el.getAttribute('data-n'), suf = el.getAttribute('data-s') || '', t0 = performance.now();
       function step(t) {
         var k = Math.min(1, (t - t0) / 700);
@@ -2490,7 +2490,13 @@
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : x[0] === 'ticket' ? ticket.length : 0;
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
-    }).join('') + '</div>';
+    }).join('') + '<i class="ind"></i></div>';
+    var inn = nav.querySelector('.in'), on = nav.querySelector('button.on'), ind = nav.querySelector('.ind');
+    if (!inn || !ind) return;
+    var x = on ? on.offsetLeft + on.offsetWidth * 0.3 : -999, w = on ? on.offsetWidth * 0.4 : 0;
+    if (NAVPOS && on) { ind.style.setProperty('--x', NAVPOS.x + 'px'); ind.style.setProperty('--w', NAVPOS.w + 'px'); void ind.offsetWidth; }
+    ind.style.setProperty('--x', x + 'px'); ind.style.setProperty('--w', w + 'px');
+    if (on) NAVPOS = { x: x, w: w };
   }
   function sportHTML() {
     var sp = st.sport, S = spOf(sp), key = S ? S.cfg.key : sp;
@@ -2500,7 +2506,9 @@
     if (S) { spInit(S); return spHome(S); }
     return sp === 'tennis' ? tennisHTML() : sp === 'golf' ? golfHTML() : f1HTML();
   }
+  var LASTSIG = '', ANIMT = 0, NAVPOS = null;
   function render() {
+    var sig = [st.tab, st.sport, st.detail ? JSON.stringify(st.detail).slice(0, 90) : '', st.dtab, st.ptab, st.day, st.status, st.group, st.filter, st.plSport].join('|');
     if (st.detail) app.innerHTML = st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = sportHTML();
     else if (st.tab === 'today') app.innerHTML = todayHTML();
@@ -2513,6 +2521,7 @@
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     app.classList.toggle('dens-compact', DENS === 'compact');
+    if (sig !== LASTSIG) { LASTSIG = sig; app.classList.remove('anim'); void app.offsetWidth; app.classList.add('anim'); clearTimeout(ANIMT); ANIMT = setTimeout(function () { app.classList.remove('anim'); }, 1600); }
     renderNav();
     decorate();
     var fab = document.getElementById('fab');
@@ -2531,7 +2540,7 @@
     }
     cb2.className = CMP.length && !st.detail ? '' : 'hide';
     cb2.innerHTML = '<span>⇄ ' + CMP.length + '/2 matchs</span>' + (CMP.length === 2 ? '<button class="bt-b pri" data-cmpgo>Comparer</button>' : '<small>Choisis un 2ᵉ match avec ⇄</small>') + '<button class="bt-b" data-cmpclr aria-label="Vider">✕</button>';
-    if (!st.detail && st.tab === 'home') countUp();
+    countUp();
   }
   function closeDetail() { st.ptab = 'sum'; st.detail = null; render(); window.scrollTo(0, st.scroll); }
 

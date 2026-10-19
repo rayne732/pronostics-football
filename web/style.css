@@ -968,3 +968,42 @@ button.chip small{display:block}
 .tkrec b{display:block;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--green);margin-bottom:4px}.tkrec>div:nth-child(2){font-weight:700}.tkn3{font-size:.78rem;color:var(--mute);margin-top:4px;line-height:1.4}
 .tkbtns{display:flex;flex-direction:column;gap:10px;margin-top:6px}
 #nav button{font-size:.62rem;padding-left:0;padding-right:0}
+
+/* ===== animations : entrée des pages, anneaux qui se dessinent, barres qui poussent, navigation qui glisse, reflets ===== */
+.mrow,.fcard{animation:none}
+@keyframes drawring{from{stroke-dasharray:0 999}}
+@keyframes growx{from{transform:scaleX(0)}}
+@keyframes popin{0%{transform:scale(.6);opacity:0}60%{transform:scale(1.12);opacity:1}100%{transform:scale(1)}}
+@keyframes shine{0%,62%{transform:translateX(-130%) skewX(-18deg)}100%{transform:translateX(330%) skewX(-18deg)}}
+@keyframes floaty{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(4vw,3vh,0) scale(1.12)}}
+@keyframes livepulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes starpop{0%{transform:scale(1)}40%{transform:scale(1.5) rotate(-12deg)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:no-preference){
+  .anim .plan,.anim .asc,.anim .sec,.anim .tkrow2,.anim .tka,.anim .tkan,.anim .tkrec,.anim .bhero,.anim .bmain,.anim .bscore,.anim .br,.anim .hcc,.anim .lvcard,.anim .banner,.anim .seg3,.anim .ptabs,.anim details.mk,.anim .htft,.anim .h2t,.anim .tbl,.anim .asum,.anim .fm,.anim .top1,.anim .tkms button,.anim .alt{animation:rise .55s cubic-bezier(.2,.7,.2,1) both}
+  .anim > :nth-child(2){animation-delay:.04s}.anim > :nth-child(3){animation-delay:.08s}.anim > :nth-child(4){animation-delay:.12s}.anim > :nth-child(5){animation-delay:.16s}.anim > :nth-child(6){animation-delay:.2s}.anim > :nth-child(n+7){animation-delay:.24s}
+  .anim .plan:nth-of-type(2),.anim .br:nth-child(2n),.anim .tka:nth-child(2n),.anim .hcc:nth-child(2n){animation-delay:.1s}
+  .anim .plan:nth-of-type(3),.anim .br:nth-child(3n),.anim .tka:nth-child(3n),.anim .hcc:nth-child(3n){animation-delay:.2s}
+  .anim .mrow:nth-child(4n){animation-delay:.18s}.anim .mrow:nth-child(5n){animation-delay:.24s}.anim .mrow:nth-child(n+6){animation-delay:.3s}
+  .anim .gv,.anim .rgv,.anim .bt1{animation:drawring 1.2s cubic-bezier(.3,.8,.2,1) both .15s}
+  .anim .mb i,.anim .b3 i,.anim .bar i,.anim .meter i,.anim .lvbar i,.anim .tkc i,.anim .bp i,.anim .f1b i,.anim .wb i{transform-origin:left center;animation:growx .9s cubic-bezier(.2,.7,.2,1) both .2s}
+  .anim .cfp.rv,.anim .bmi,.anim .bi,.anim .bsr span,.anim .stk2,.anim .tkg{animation:popin .55s cubic-bezier(.3,1.4,.4,1) both .25s}
+  .anim .t1n span{animation:rise .5s cubic-bezier(.2,.7,.2,1) both .15s}
+  /* reflet qui passe de temps en temps sur les gros boutons */
+  .voir.high,.bt-b.pri{position:relative;overflow:hidden}
+  .voir.high::after,.bt-b.pri::after{content:"";position:absolute;top:0;bottom:0;left:0;width:38%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.38),transparent);transform:translateX(-130%) skewX(-18deg);animation:shine 4.5s ease-in-out infinite;pointer-events:none}
+  .mrow.islive::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:4px;border-radius:0 4px 4px 0;background:var(--red);animation:livepulse 1.4s ease-in-out infinite}
+  .star.on{animation:starpop .45s ease-out}
+  /* fond qui respire : deux halos lents derrière le contenu */
+  body::before,body::after{content:"";position:fixed;z-index:-1;width:70vw;height:70vw;max-width:520px;max-height:520px;border-radius:50%;filter:blur(70px);opacity:.5;pointer-events:none;will-change:transform}
+  body::before{top:-18vw;left:-14vw;background:radial-gradient(circle,var(--glow1,rgba(255,170,60,.25)),transparent 68%);animation:floaty 22s ease-in-out infinite}
+  body::after{bottom:-20vw;right:-16vw;background:radial-gradient(circle,var(--glow2,rgba(90,147,255,.25)),transparent 68%);animation:floaty 28s ease-in-out infinite reverse}
+  .chip,.voir,.bt-b,.tkc2,.ptabs button,.seg3 button{transition:transform .15s ease,box-shadow .2s ease,background .2s ease}
+  .chip:active,.voir:active,.bt-b:active,.tkc2:active,.ptabs button:active,.seg3 button:active{transform:scale(.94)}
+  .tkc2.on{animation:popin .4s cubic-bezier(.3,1.4,.4,1)}
+  #nav .ic{transition:transform .25s cubic-bezier(.3,1.5,.4,1)}#nav button:active .ic{transform:scale(.8)}
+}
+/* indicateur de navigation qui glisse */
+#nav .in{position:relative}
+#nav button.on::before{display:none}
+#nav .ind{position:absolute;top:0;left:0;height:3px;width:var(--w,0px);border-radius:0 0 4px 4px;background:var(--amber);transform:translateX(var(--x,-999px));transition:transform .38s cubic-bezier(.3,.9,.3,1),width .38s cubic-bezier(.3,.9,.3,1);pointer-events:none}
+@media (prefers-reduced-motion:reduce){#nav .ind{transition:none}}
