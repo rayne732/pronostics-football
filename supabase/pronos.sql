@@ -43,5 +43,11 @@ create policy "pf_state_insert_own" on public.pf_state for insert to authenticat
 create policy "pf_state_update_own" on public.pf_state for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "pf_state_delete_own" on public.pf_state for delete to authenticated using (auth.uid() = user_id);
 
+-- 4) Droits d'accès : seuls les comptes connectés (role « authenticated ») touchent à ces tables, et seulement à leurs propres lignes (RLS ci-dessus).
+revoke all on public.pf_state, public.pf_profiles from anon;
+grant select, insert, update, delete on public.pf_state to authenticated;
+grant select on public.pf_profiles to authenticated;
+grant all on public.pf_state, public.pf_profiles to service_role;
+
 -- Pour donner un accès Premium ou Admin à quelqu'un (à faire dans le SQL Editor) :
 --   update public.pf_profiles set role = 'premium' where user_id = (select id from auth.users where email = 'adresse@exemple.fr');
