@@ -1028,3 +1028,7 @@ button.chip small{display:block}
 .plrow>summary::-webkit-details-marker{display:none}.plrow .plc{margin:0;border:0;border-top:1px solid var(--line);border-radius:0 0 16px 16px}
 .plrt{flex:1;min-width:0}.plrt b{display:block;font-size:.88rem;overflow-wrap:anywhere}.plrt small{display:block;color:var(--mute);font-size:.7rem;margin-top:2px}
 .plwx{padding:2px 8px;border-radius:99px;font-size:.66rem;font-weight:800;background:var(--surface2);color:var(--mute);white-space:nowrap}.plwx.ok{color:var(--green)}.plwx.ko{color:var(--red)}
+.plc{position:relative}.plmenu{margin-left:auto;position:relative}.plmenu>summary{list-style:none;cursor:pointer;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;font-weight:800;color:var(--mute);line-height:1}
+.plmenu>summary::-webkit-details-marker{display:none}.plmenu[open]>summary{background:var(--surface2);color:var(--ink)}
+.plmenuin{position:absolute;right:0;top:34px;z-index:5;min-width:210px;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:14px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 14px 32px -12px var(--shadow)}
+.plmenuin button{text-align:left;padding:9px 10px;border-radius:10px;font-size:.8rem;font-weight:600}.plmenuin button:hover{background:var(--surface)}

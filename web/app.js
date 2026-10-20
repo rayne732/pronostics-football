@@ -2080,14 +2080,15 @@
       return '<div class="plleg"><small class="plsp">' + l.icon + ' ' + esc(PLSPN[l.icon] || '') + (l.lg ? ' · ' + esc(l.lg) : '') + ' · aujourd’hui ' + esc(l.time || '') + '</small><span>' + esc(l.match) + '</span><small>Pari : <b>' + esc(l.pick) + '</b></small></div>';
     }).join('');
     return '<div class="plc' + (hero ? ' plhero' : '') + '">' + (hero ? '<div class="plmise">' + esc(stakeInfo.lead || 'Mets') + ' <b>' + eur2(stake) + '</b> sur ça</div>' : '') +
-      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '</div>' + legs +
+      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '<details class="plmenu"><summary aria-label="Plus d’options">⋯</summary><div class="plmenuin">' +
+      (c.legs[0].lg ? '<button data-plex="lg|' + esc(c.legs[0].lg) + '">Ne plus proposer ' + esc(c.legs[0].lg) + '</button>' : '') +
+      '<button data-plex="sp|' + esc(c.legs[0].icon) + '">Ne plus proposer le ' + esc((PLSPN[c.legs[0].icon] || 'sport').toLowerCase()) + '</button></div></details></div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
       '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
-      (c.legs[0].lg ? '<button class="voir low" data-plex="lg|' + esc(c.legs[0].lg) + '">Plus jamais ' + esc(c.legs[0].lg) + '</button>' : '') +
-      '<button class="voir low" data-plex="sp|' + esc(c.legs[0].icon) + '">Plus de ' + esc((PLSPN[c.legs[0].icon] || 'ce sport').toLowerCase()) + '</button>' +
+
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
   }
   function plRow(c, i, info) {                                     // un choix de la liste : une ligne, qui s'ouvre sur la carte complète
