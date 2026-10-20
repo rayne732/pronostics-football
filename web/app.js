@@ -2086,17 +2086,19 @@
       }
       c.sort(function (x, y) { return y.pa - x.pa; });
       c.forEach(function (x) { x.key = plKey(x); });
-      groups.push({ match: g.match, lg: g.lg, time: g.time, icon: g.icon || '⚽', ref: g.ref, cands: c, none: !c.length });
+      groups.push({ match: g.match, lg: g.lg, time: g.time, icon: g.icon || '⚽', ref: g.ref, cands: c, none: !c.length, live: !!g.live });
     }
     D.fixtures.forEach(function (f) {
-      if (f.date !== T || fstate(f) === 'done' || (f.time && kickoff({ date: T, time: f.time }) < Date.now() + 5 * 60000)) return;
+      var lv = f.time ? Date.now() - kickoff({ date: T, time: f.time }) : -1;
+      if (f.date !== T || fstate(f) === 'done' || lv > 3.5 * 3600000) return;
       var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (e) { return; }
-      var g = { home: f.home, away: f.away, bid: f.id, match: nm(f.home) + ' – ' + nm(f.away), lg: (D.leagues[f.div] || {}).name || '', time: f.time, ref: 'data-open="' + f.i + '"' };
+      var g = { home: f.home, away: f.away, bid: f.id, match: nm(f.home) + ' – ' + nm(f.away), lg: (D.leagues[f.div] || {}).name || '', time: f.time, ref: 'data-open="' + f.i + '"', live: lv > -5 * 60000 };
       seen[g.match] = 1; add(g, M.grid, M.fams, 0, asHair({ div: f.div }));
     });
     if (isLoaded('cal')) (D.cal || []).forEach(function (c) {
-      if (c.date !== T || c.st !== 'pre' || (c.time && kickoff({ date: T, time: c.time }) < Date.now() + 5 * 60000)) return;
-      var g = { home: c.home, away: c.away, bid: 'cal|' + c.date + '|' + c.home + '|' + c.away, match: nm(c.home) + ' – ' + nm(c.away), lg: c.fr || '', time: c.time, ref: '' };
+      var lc = c.time ? Date.now() - kickoff({ date: T, time: c.time }) : -1;
+      if (c.date !== T || c.st === 'post' || lc > 3.5 * 3600000) return;
+      var g = { home: c.home, away: c.away, bid: 'cal|' + c.date + '|' + c.home + '|' + c.away, match: nm(c.home) + ' – ' + nm(c.away), lg: c.fr || '', time: c.time, ref: '', live: lc > -5 * 60000 };
       if (seen[g.match]) return;
       seen[g.match] = 1;
       if (c.p && c.p.length === 3) { var fit = Plan.fitLambdas(c.p[0], c.p[1], c.p[2]); add(g, Plan.poissonGrid(fit.lh, fit.la), null, 0.02, AS_HAIR); }
@@ -2112,7 +2114,7 @@
   function plSafeCombos(G, prof, used, skip) {                    // paris très sûrs (+0,5 buts...) : seuls, puis combinés de 2, 3 ou 4 matchs pour relever la cote
     var best = [], out = [];
     G.forEach(function (g) {
-      if (used[g.match]) return;
+      if (used[g.match] || g.live) return;                       // pas de nouveau pari sur un match déjà commencé
       var c = g.cands.filter(function (x) { return !skip[x.legs[0].id + '|' + x.legs[0].m + '|' + x.legs[0].s]; })[0];
       if (c && c.pa >= 0.8) best.push(c);
     });
@@ -2178,7 +2180,7 @@
       cy.steps.forEach(function (s, i) {
         var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
         h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
-          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>' + (s.res === null ? plLiveHTML(l) : ''); }).join('') +
+          s.legs.map(function (l, li, arr) { var first = arr.findIndex(function (x) { return x.match === l.match; }) === li; return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick.replace(/^[^:]*: /, '')) + '</div>' + (s.res === null && first ? plLiveHTML(l) : ''); }).join('') +
           '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Il se règle tout seul à la fin du match, ou avec Gagné / Perdu dans la liste ci-dessous.' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
           '' + '</div>';
       });
@@ -2340,20 +2342,42 @@
     return '<div class="plsel' + (on ? ' on' : '') + '"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(c.pm || c.pa) + '</span><span class="plrt"><b>' + esc(l.s) + '</b><small>' + esc(l.m) + '</small></span>' + plWinamax(c) +
       '<button class="voir ' + (on ? 'mid' : 'low') + '" data-pladd="' + c.ix + '">' + (on ? '✓ Ajouté' : '+ Ajouter') + '</button></div>';
   }
+  function plGridFor(id) {                                         // grille des scores d'un match (modèle du site, ou ajustée sur les cotes pour le calendrier mondial)
+    var f = (D.fixtures || []).filter(function (x) { return x.id === id; })[0];
+    if (f) { try { var M = Engine.families(f.div, f.home, f.away, f.ov); return { grid: M.grid, home: f.home, away: f.away, hair: asHair({ div: f.div }), extra: 0 }; } catch (e) { return null; } }
+    if (id.indexOf('cal|') === 0) {
+      var q = id.split('|'), c = (D.cal || []).filter(function (x) { return x.date === q[1] && x.home === q[2] && x.away === q[3]; })[0];
+      if (c && c.p && c.p.length === 3) { var fit = Plan.fitLambdas(c.p[0], c.p[1], c.p[2]); return { grid: Plan.poissonGrid(fit.lh, fit.la), home: c.home, away: c.away, hair: AS_HAIR, extra: 0.02 }; }
+    }
+    return null;
+  }
+  function plTkPa(L) {                                             // chances que tout passe : produit entre matchs, calcul exact quand plusieurs paris portent sur le même match
+    var by = {}, order = [];
+    L.forEach(function (x) { if (!by[x.id]) { by[x.id] = []; order.push(x.id); } by[x.id].push(x); });
+    return order.reduce(function (t, id) {
+      var g = by[id], prod = g.reduce(function (a, x) { return a * x.pa; }, 1);
+      if (g.length === 1) return t * g[0].pa;
+      var G = plGridFor(id); if (!G) return t * prod;
+      var evs = g.map(function (x) { return tkEvent(null, { home: G.home, away: G.away }, x.m, x.s); });
+      if (evs.some(function (e) { return !e; })) return t * prod;
+      return t * Math.max(0.01, plJoint(G.grid, evs) - G.hair - G.extra - 0.01 * (g.length - 1));
+    }, 1);
+  }
   function plTkCand() {                                            // le combiné en construction, sous la forme d'un pari du plan
-    var L = PL.tk || [], pa = L.reduce(function (t, x) { return t * x.pa; }, 1);
+    var L = PL.tk || [], pa = plTkPa(L);
     return { legs: L.map(function (x) { return { id: x.id, m: x.m, s: x.s, match: x.match, pick: x.pick, icon: x.icon, lg: x.lg, time: x.time }; }), pa: pa, key: 'tk', duo: L.length > 1, acc: L.length > 1 };
   }
   function plTicketHTML(info) {                                    // « Mon combiné » : les paris choisis, la cote du combiné à saisir, la mise
     var L = PL.tk || [];
     if (!L.length) return '';
-    var c = plTkCand(), pa = c.pa, oe = L.reduce(function (t, x) { return t * plLegOdds(x.pa); }, 1), o = plNum(PLODDS.tk), valid = o >= 1 / pa, stake = info.fn(o > 1 ? o : oe, c);
+    var c = plTkCand(), pa = c.pa, oe = L.reduce(function (t, x) { return t * plLegOdds(x.pa); }, 1), o = plNum(PLODDS.tk), valid = o >= 1 / pa, mine = plNum(PLODDS.tkstake), stake = mine > 0 ? mine : info.fn(o > 1 ? o : oe, c);
     return '<div class="tkan pltk"><div class="plch"><b>Mon combiné · ' + L.length + ' pari' + (L.length > 1 ? 's' : '') + '</b><button class="lnk" data-pltkclr style="margin-left:auto">Vider</button></div>' +
       L.map(function (x, i) { return '<div class="pltkl"><span class="plrt"><b>' + esc(x.match) + '</b><small>' + esc(x.s) + ' · ' + esc(x.m) + ' · ' + pct(x.pa) + '</small></span><button class="rm" data-pltkrm="' + i + '" aria-label="Retirer">✕</button></div>'; }).join('') +
-      '<div class="plmeta"><span>Chances que tout passe<b>' + pct(pa) + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
+      '<div class="plmeta"><span>Chances que tout passe<b>' + pct(pa) + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span></div>' +
+      '<div class="as-odds"><label>Ma mise (€)<input data-pltkstake inputmode="decimal" autocomplete="off" placeholder="' + String(info.fn(oe, c)).replace('.', ',') + '" value="' + (mine > 0 ? String(mine).replace('.', ',') : '') + '"></label></div>' +
       '<div class="as-odds"><label>Cote du combiné chez ton bookmaker<input data-plodds="tk" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Ajoute d’autres matchs, puis saisis la cote du combiné.</div>') + '</div>' +
-      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="tk"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button></div></div>';
+      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="tk"' + (o > 1 && stake >= 1 ? '' : ' disabled') + '>' + (valid || !(o > 1) ? 'Je mise' : 'Noter quand même (pari déjà joué)') + '</button></div></div>';
   }
   var PLM = null;                                                  // match ouvert pour voir tous ses paris : { id }
   function plMatchView(info, prof, T) {
@@ -2464,7 +2488,7 @@
     if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary><div class="sub">Tous les matchs de l’onglet Découvrir, chacun avec ses paris les plus probables (même les très sûrs). Prends ceux que ton bookmaker propose.</div>' +
       G.map(function (g) {
         if (g.none) return '<div class="plm none"><span>' + esc(g.time || '') + ' · ' + esc(g.match) + '</span><small>' + esc(g.lg) + ' · pas de pronostic disponible</small></div>';
-        if (g.icon === '⚽' && g.cands[0]) return '<button class="plm plmbtn" data-plmatch="' + esc(g.cands[0].legs[0].id) + '"><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + (g.lg ? esc(g.lg) + ' · ' : '') + 'jusqu’à ' + pct(g.cands[0].pa) + '</small></span><span class="plgo">›</span></button>';
+        if (g.icon === '⚽' && g.cands[0]) return '<button class="plm plmbtn" data-plmatch="' + esc(g.cands[0].legs[0].id) + '"><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + (g.live ? '● en cours · ' : '') + (g.lg ? esc(g.lg) + ' · ' : '') + 'jusqu’à ' + pct(g.cands[0].pa) + '</small></span><span class="plgo">›</span></button>';
         return '<details class="plm"><summary><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + g.icon + ' ' + esc(PLSPN[g.icon] || '') + (g.lg ? ' · ' + esc(g.lg) : '') + ' · jusqu’à ' + pct(g.cands[0].pa) + '</small></span></summary>' +
           g.cands.map(function (c) { return plSelRow(c); }).join('') + '</details>';
       }).join('') + '</details>';
@@ -2520,7 +2544,7 @@
         PL.tk = PL.tk || []; var la = ca.legs[0], at = -1;
         PL.tk.forEach(function (x, i2) { if (x.id === la.id && x.m === la.m && x.s === la.s) at = i2; });
         if (at >= 0) PL.tk.splice(at, 1);
-        else { PL.tk = PL.tk.filter(function (x) { return x.id !== la.id; }); PL.tk.push({ id: la.id, m: la.m, s: la.s, match: la.match, pick: la.pick, icon: la.icon, lg: la.lg, time: la.time, pa: ca.pa }); }
+        else { PL.tk = PL.tk.filter(function (x) { return x.id !== la.id || x.m !== la.m; }); PL.tk.push({ id: la.id, m: la.m, s: la.s, match: la.match, pick: la.pick, icon: la.icon, lg: la.lg, time: la.time, pa: ca.pa }); }
         PLODDS.tk = ''; plSave();
       }
     }
@@ -2544,17 +2568,17 @@
       var isTk = t.getAttribute('data-plgo') === 'tk';
       c = isTk ? plTkCand() : PLC[+t.getAttribute('data-plgo')];
       var o = c && (isTk ? plNum(PLODDS.tk) : plOddsOf(c));
-      if (!c || !(o >= 1 / c.pa) || t.disabled) return;
+      if (!c || (!isTk && !(o >= 1 / c.pa)) || (isTk && !(o > 1)) || t.disabled) return;
       var prof = plProf();
       if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
       cy = PL.cyc;
-      var stake = cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof, c.pa);
+      var stake = (isTk && plNum(PLODDS.tkstake) > 0) ? plNum(PLODDS.tkstake) : cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof, c.pa);
       if (stake < 1) return;
       if (!cy.steps.length) cy.g = Plan.target(stake, o);
       var bid = 'pl' + Date.now().toString(36), spk = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
       cy.steps.push({ legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s, match: l.match, pick: l.pick, icon: l.icon, lg: l.lg }; }), pa: c.pa, o: o, stake: stake, res: null, t: Date.now(), bid: bid });
       if (window.Bets && Bets.add) Bets.add({ id: bid, t: Date.now(), d: T, label: c.legs.map(function (l) { return l.match + ' : ' + l.pick.replace(/^[^:]*: /, ''); }).join(' + '), sport: spk[c.legs[0].icon] || 'autre', kind: c.legs.length > 1 ? 'combine' : 'simple', cat: 'Plan', book: '', stake: stake, odds: o, st: 'p', p: Plan.r2(c.pa), legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s }; }), nLegs: c.legs.length });
-      if (isTk) { PL.tk = []; PLODDS.tk = ''; }
+      if (isTk) { PL.tk = []; PLODDS.tk = ''; PLODDS.tkstake = ''; }
       plSave();
     }
     else if (t.hasAttribute('data-plskip')) {
@@ -2575,6 +2599,7 @@
     var t = e.target;
     if (!t.hasAttribute) return;
     if (t.hasAttribute('data-plodds')) PLODDS[t.getAttribute('data-plodds')] = t.value;
+    else if (t.hasAttribute('data-pltkstake')) PLODDS.tkstake = t.value;
     else if (t.hasAttribute('data-plcap')) PLD.start = plNum(t.value);
     else if (t.hasAttribute('data-plgoal')) PLD.goal = plNum(t.value);
     else if (t.hasAttribute('data-plset') && PL) {
