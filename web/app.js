@@ -2101,6 +2101,19 @@
     Object.keys(ex.lg || {}).forEach(function (k) { b.push('<button class="chip pill on" data-plexrm="lg|' + esc(k) + '">' + esc(k) + ' ✕</button>'); });
     return b.length ? '<div class="sub">Exclus de mes propositions (touche pour remettre) :</div><div class="chips">' + b.join('') + '</div>' : '';
   }
+  function plCycleHTML() {                                         // le cycle en cours (étapes, score en direct, résultat) : affiché dans Mes paris
+    var cy = PL && PL.cyc, h = '';
+    if (!cy) return '';
+    h += '<div class="sec"><span class="dot a"></span>Cycle en cours <small>capital au départ du cycle : ' + eur2(cy.cb) + '</small></div>';
+      cy.steps.forEach(function (s, i) {
+        var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
+        h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
+          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>' + (s.res === null ? plLiveHTML(l) : ''); }).join('') +
+          '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Il se règle tout seul à la fin du match, ou avec Gagné / Perdu dans la liste ci-dessous.' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
+          '' + '</div>';
+      });
+    return h;
+  }
   function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
     if (!PL || !PL.on) return '';
     plSync();
@@ -2113,7 +2126,7 @@
       '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div>' +
       '<div class="plgrid"><span>' + (net >= 0 ? 'Gain net' : 'Perte nette') + '<b class="' + (net >= 0 ? '' : 'ko') + '">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + '</b>' + (wd ? '<small>dont retiré : ' + eur2(wd) + '</small>' : '') + '</span>' +
       '<span>Paris gagnés<b>' + w + ' / ' + L.length + '</b>' + (pend ? '<small>' + pend + ' en cours</small>' : '') + '</span><span>Misé au total<b>' + eur2(staked) + '</b><small>encaissé ' + eur2(ret) + '</small></span></div>' +
-      '<div class="sub">Cycles gagnés : <b>' + cw + ' sur ' + H.length + '</b>. Chaque pari misé depuis l’onglet Plans est ajouté ci-dessous avec la catégorie « Plan » et se règle tout seul.</div></div>';
+      '<div class="sub">Cycles gagnés : <b>' + cw + ' sur ' + H.length + '</b>. Chaque pari misé depuis l’onglet Plans est ajouté ci-dessous avec la catégorie « Plan » et se règle tout seul.</div></div>' + plCycleHTML() + plFoot();
   }
   function plSettle(won) {                                         // règle l'étape en attente, met à jour le capital, clôt le cycle si c'est fini
     var cy = PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
@@ -2251,7 +2264,7 @@
       '<details class="tkall"><summary>Modifier mon capital ou mon objectif</summary><div class="tkbet"><label>Capital actuel (€)<input data-plset="bank" inputmode="decimal" value="' + PL.bank + '"></label>' +
       '<label>Capital de départ (€)<input data-plset="start" inputmode="decimal" value="' + PL.start + '"></label><label>Objectif (€)<input data-plset="goal" inputmode="decimal" value="' + PL.goal + '"></label></div>' +
       '<div class="sub">Tu as rechargé, retiré ou corrigé ton solde : mets-le à jour ici. Le capital de départ sert à la limite des −50 %.</div>' + plExHTML() + '</details></div>';
-    if (PL.bank < 1) return h + '<div class="bt-warn"><b>Capital épuisé.</b> Le plan est terminé. C’est une perte que le plan avait annoncée dans ses chances ci-dessous.</div>' + plSimHTML(PL.start, PL.goal, PL.prof, 0.78) + plFoot();
+    if (PL.bank < 1) return h + '<div class="bt-warn"><b>Capital épuisé.</b> Le plan est terminé. C’est une perte que le plan avait annoncée dans ses chances ci-dessous. Pour recommencer, va dans Mes paris : bouton « Recommencer un plan ».</div>' + plSimHTML(PL.start, PL.goal, PL.prof, 0.78);
     if (PL.bank >= PL.goal) {
       var wd = Math.min(PL.start, PL.bank - 1);
       h += '<div class="tkrec"><b>Objectif atteint</b><div>Retire ton capital de départ (' + eur2(wd) + ') et joue avec le reste.</div><div class="tkn3">Ainsi, même si la suite tourne mal, tu ne perds plus que des gains. Je passe en mode sécurisé : mises de 10 %, paris très sûrs, aucune récupération.</div>' +
@@ -2259,23 +2272,14 @@
     }
     if (PL.bank < PL.start * 0.5 && !PL.ack) {
       return h + '<div class="bt-warn"><b>Arrête-toi ici.</b> Tu as perdu plus de la moitié de ton capital de départ : c’est la limite que ce plan s’était fixée. Continuer à jouer pour « se refaire » est exactement ce qui fait perdre le plus.</div>' +
-        '<div class="tkbtns"><button class="voir low wide" data-plack>Je continue quand même (déconseillé)</button></div>' + plFoot();
+        '<div class="tkbtns"><button class="voir low wide" data-plack>Je continue quand même (déconseillé)</button></div>';
     }
-    // étape en cours
     if (cy) {
-      h += '<div class="sec"><span class="dot a"></span>Cycle en cours <small>capital au départ du cycle : ' + eur2(cy.cb) + '</small></div>';
-      cy.steps.forEach(function (s, i) {
-        var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
-        h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
-          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>' + (s.res === null ? plLiveHTML(l) : ''); }).join('') +
-          '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Ce pari est dans Mes paris : il se règle tout seul quand le match est fini, ou tu le règles là-bas avec Gagné / Perdu.' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
-          (s.res === null && last ? '<div class="plbtns"><button class="voir mid" data-plgobets>Régler dans Mes paris</button></div>' : '') + '</div>';
-      });
-      if (cy.steps[cy.steps.length - 1].res === null) return h + plFoot();
+      if (cy.steps[cy.steps.length - 1].res === null) return h + '<div class="tkrec"><b>Pari en cours</b><div class="tkn3">Suis-le (score en direct, résultat) dans Mes paris. Le prochain pari du plan apparaîtra ici dès qu’il sera réglé.</div><div class="tkbtns"><button class="voir mid wide" data-plgobets>Voir mon pari en cours</button></div></div>';
     } else if (PL.pause === T) {
-      return h + '<div class="tkrec"><b>Pause jusqu’à demain</b><div class="tkn3">Le dernier cycle a échoué. Le plan s’arrête là pour aujourd’hui : c’est précisément le moment où l’on a envie de tout rejouer pour se refaire. Reviens demain.</div></div>' + plFoot();
+      return h + '<div class="tkrec"><b>Pause jusqu’à demain</b><div class="tkn3">Le dernier cycle a échoué. Le plan s’arrête là pour aujourd’hui : c’est précisément le moment où l’on a envie de tout rejouer pour se refaire. Reviens demain.</div></div>';
     } else if (((PL.days || {})[T] || 0) >= 2) {
-      return h + '<div class="tkrec"><b>Assez pour aujourd’hui</b><div class="tkn3">Deux cycles par jour au maximum. Reviens demain.</div></div>' + plFoot();
+      return h + '<div class="tkrec"><b>Assez pour aujourd’hui</b><div class="tkn3">Deux cycles par jour au maximum. Reviens demain.</div></div>';
     }
     // proposition de la prochaine étape
     var k = cy ? cy.steps.length : 0, cb = cy ? cy.cb : PL.bank, L = cy ? Plan.r2(cy.cb - PL.bank) : 0, info;
@@ -2305,7 +2309,7 @@
     }
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
-    return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0))) + plFoot();
+    return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0)));
   }
   function plTreeHTML(hero, k, cy, T) {                            // « Et ensuite ? » : le pari suivant si ça passe, et si ça perd, avec la mise recalculée
     var prof = plProf(), o1 = (plAutoOdds(hero) || {}).o || (1 - Plan.MARGIN) / hero.pa, stake, L, g;
