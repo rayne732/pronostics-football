@@ -1207,7 +1207,7 @@
     });
   }
   function todayRows() {
-    var T = parisToday(), picks = [], favs2 = [], counts = [];
+    var T = parisToday(), picks = [], favs2 = [], counts = [], more = [];
     // football : marchés calculés par le moteur du navigateur
     var nf = 0;
     D.fixtures.forEach(function (f) {
@@ -1226,6 +1226,7 @@
         if (!m.known) return;
         nk++;
         var home = m.home || m.a, away = m.away || m.b, ref = refOf(m);
+        (m.safe || []).slice(2).concat(m.less || []).forEach(function (r) { if (r.p >= 0.3) more.push({ icon: icon, lg: m.tn ? m.tn + (m.tour ? ' (' + m.tour + ')' : '') : (m.lg || ''), match: (m.home || m.a) + ' – ' + (m.away || m.b), time: m.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, ref: refOf(m), bid: keyOf + '|' + m.id, bm: r.m, bs: r.s }); });
         (m.safe || []).slice(0, 2).forEach(function (r) { picks.push({ icon: icon, lg: m.tn ? m.tn + (m.tour ? ' (' + m.tour + ')' : '') : (m.lg || ''), match: home + ' – ' + away, time: m.time, pick: r.m + ' : ' + r.s, p: r.p, v: r.v, ref: ref, bid: keyOf + '|' + m.id, bm: r.m, bs: r.s }); });
         if (m.conf === 'high') favs2.push({ icon: icon, match: home + ' – ' + away, time: m.time, pick: m.favName, p: m.fav, ref: ref });
       });
@@ -1252,7 +1253,7 @@
       ge.forEach(function (ev) { gPicks(ev).safe.slice(0, 1).forEach(function (r) { picks.push({ icon: '⛳', match: ev.name, time: '', pick: r.s + ' : ' + r.m, p: r.p, ref: 'data-gosport="golf"' }); }); });
     }
     var by = function (a, b) { return b.p - a.p; };
-    return { picks: picks.sort(by), favs: favs2.sort(by), counts: counts, T: T };
+    return { picks: picks.sort(by), favs: favs2.sort(by), counts: counts, T: T, more: more };
   }
   function todayRow(r) {
     return '<div class="mrow high" style="grid-template-columns:44px 1fr auto"><div class="tm">' + esc(r.time || '–') + '</div><div class="tt"><b style="font-weight:600">' + r.icon + ' ' + esc(r.match) + '</b>' +
@@ -2105,7 +2106,7 @@
       else groups.push({ match: g.match, lg: g.lg, time: g.time, icon: '⚽', ref: '', cands: [], none: true });
     });
     var other = {};
-    R.picks.forEach(function (r) { if (r.icon === '⚽' || !r.bid) return; (other[r.match] = other[r.match] || { match: r.match, lg: r.lg || '', time: r.time, icon: r.icon, ref: r.ref, cands: [] }).cands.push({ legs: [{ id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg, time: r.time, ref: r.ref }], pa: plPa(r), icon: r.icon, low: plPa(r) < prof.minPa, duo: false }); });
+    R.picks.concat(R.more || []).forEach(function (r) { if (r.icon === '⚽' || !r.bid) return; (other[r.match] = other[r.match] || { match: r.match, lg: r.lg || '', time: r.time, icon: r.icon, ref: r.ref, cands: [] }).cands.push({ legs: [{ id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg, time: r.time, ref: r.ref }], pa: plPa(r), icon: r.icon, low: plPa(r) < prof.minPa, duo: false }); });
     Object.keys(other).forEach(function (k) { var g = other[k]; g.cands.forEach(function (x) { x.key = plKey(x); }); g.cands.sort(function (x, y) { return y.pa - x.pa; }); groups.push(g); });
     groups = groups.filter(function (g) { return !(PL.ex && ((g.lg && PL.ex.lg && PL.ex.lg[g.lg]) || (PL.ex.sp && PL.ex.sp[g.icon]))); });
     return groups.sort(function (x, y) { return (x.time || '99:99') < (y.time || '99:99') ? -1 : (x.time || '99:99') > (y.time || '99:99') ? 1 : 0; });
