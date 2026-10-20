@@ -1980,9 +1980,50 @@
       if (!c || c.st !== 'post' || c.hs == null || c.as_ == null) return null;
       if (l.m === 'Résultat du match') return l.s === c.home ? c.hs > c.as_ : l.s === c.away ? c.hs < c.as_ : null;
       if (l.m === 'Double chance') return l.s === c.home + ' ou nul' ? c.hs >= c.as_ : l.s === c.away + ' ou nul' ? c.hs <= c.as_ : null;
+      var tm = /^(Plus|Moins) de ([\d,]+) buts$/.exec(l.s), tx = tm ? +tm[2].replace(',', '.') : 0;
+      if (tm && /^Total buts/.test(l.m)) return tm[1] === 'Plus' ? c.hs + c.as_ > tx : c.hs + c.as_ < tx;
       return null;
     }
     return Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null;
+  }
+  var PLSG = {};                                                   // combinés « même match » du jour, par nom de match : sert aussi à relever une cote trop basse
+  function plJoint(grid, evs) { var p = 0, a, b; for (a = 0; a < grid.length; a++) for (b = 0; b < grid[a].length; b++) if (evs.every(function (e) { return e(a, b); })) p += grid[a][b]; return p; }
+  function plSameGame(T, prof) {
+    var out = [], ms = [];
+    D.fixtures.forEach(function (f) {
+      if (f.date !== T || fstate(f) === 'done') return;
+      var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (e) { return; }
+      ms.push({ home: f.home, away: f.away, grid: M.grid, bid: f.id, lg: (D.leagues[f.div] || {}).name || '', time: f.time, ref: 'data-open="' + f.i + '"', extra: 0 });
+    });
+    if (isLoaded('cal')) (D.cal || []).forEach(function (c) {
+      if (c.date !== T || c.st !== 'pre' || !c.p || c.p.length !== 3) return;
+      var fit = Plan.fitLambdas(c.p[0], c.p[1], c.p[2]);
+      ms.push({ home: c.home, away: c.away, grid: Plan.poissonGrid(fit.lh, fit.la), bid: 'cal|' + c.date + '|' + c.home + '|' + c.away, lg: c.fr || '', time: c.time, ref: '', extra: 0.02 });
+    });
+    PLSG = {};
+    ms.forEach(function (m) {
+      if (m.time && kickoff({ date: T, time: m.time }) < Date.now() + 5 * 60000) return;
+      var d = { home: m.home, away: m.away }, g = m.grid, ph = 0, pa2 = 0, a, b;
+      for (a = 0; a < g.length; a++) for (b = 0; b < g[a].length; b++) { if (a > b) ph += g[a][b]; else if (a < b) pa2 += g[a][b]; }
+      var fav = ph >= pa2 ? m.home : m.away, L = [];
+      function leg(grp, mk, sel, lab) { var ev = tkEvent(null, d, mk, sel); if (ev) L.push({ grp: grp, m: mk, s: sel, lab: lab, ev: ev }); }
+      leg('res', 'Résultat du match', fav, 'Victoire ' + nm(fav)); leg('res', 'Double chance', fav + ' ou nul', nm(fav) + ' ou nul');
+      ['0,5', '1,5', '2,5'].forEach(function (x) { leg('over', 'Total buts (plus)', 'Plus de ' + x + ' buts', '+' + x + ' buts'); });
+      ['3,5', '4,5'].forEach(function (x) { leg('under', 'Total buts (moins)', 'Moins de ' + x + ' buts', '−' + x + ' buts'); });
+      var list = [], i, j;
+      for (i = 0; i < L.length; i++) for (j = i + 1; j < L.length; j++) {
+        if (L[i].grp === L[j].grp) continue;
+        var p = plJoint(g, [L[i].ev, L[j].ev]), pa = p - 0.04 - m.extra, oe = (1 - Plan.MARGIN) / p;
+        if (oe >= 1.15 && pa >= prof.minPa - 0.10 && p <= 0.93) list.push({ p: p, pa: pa, oe: oe, a: L[i], b: L[j] });
+      }
+      list.sort(function (x, y) { return y.pa - x.pa; });
+      PLSG[nm(m.home) + ' – ' + nm(m.away)] = list.slice(0, 3).map(function (x) { return x; });
+      if (list[0]) {
+        var x0 = list[0], mt = nm(m.home) + ' – ' + nm(m.away);
+        out.push({ legs: [x0.a, x0.b].map(function (l) { return { id: m.bid, m: l.m, s: l.s, match: mt, pick: l.m + ' : ' + l.s, icon: '⚽', lg: m.lg, time: m.time, ref: m.ref }; }), pa: x0.pa, icon: '⚽', sg: true, low: x0.pa < prof.minPa, oe: x0.oe });
+      }
+    });
+    return out.sort(function (x, y) { return y.pa - x.pa; }).slice(0, 12);
   }
   function plCands(R, prof, T) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
     var skip = (PL.skip && PL.skip[T]) || {}, used = {}, seen = {}, pool = [], out = [];
@@ -2008,9 +2049,10 @@
       if (!best || pp > best.pa) best = { legs: [leg(top[i]), leg(top[j])], pa: pp, icon: top[i].r.icon + top[j].r.icon };
       if (top[i].r.icon !== top[j].r.icon && (!bestX || pp > bestX.pa)) bestX = { legs: [leg(top[i]), leg(top[j])], pa: pp, icon: top[i].r.icon + top[j].r.icon };
     }
+    plSameGame(T, prof).forEach(function (x) { out.push(x); });
     if (best && prof.steps > 0) out.push(best);
     if (bestX && (!best || plKey(bestX) !== plKey(best))) out.push(bestX);
-    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1; if (c.duo) c.low = c.pa < prof.minDuo; });
+    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1 && !c.sg; if (c.duo) c.low = c.pa < prof.minDuo; });
     return out;
   }
   function plExHTML() {                                            // sports et compétitions exclus (introuvables chez ton bookmaker), avec un bouton pour les remettre
@@ -2071,6 +2113,7 @@
   var PLFX = null;
   function plAutoOdds(c) {                                         // cote lue automatiquement (The Odds API, marché 1N2) ; Winamax, Betclic, Unibet ou PMU d'abord, sinon la moyenne. Double chance et « remboursé si nul » sont déduits du 1N2 : estimation un peu optimiste
     if (!PLFX) { PLFX = {}; D.fixtures.forEach(function (f) { PLFX[f.id] = f; }); }
+    if (c.sg) return null;
     var tot = 1, best = 1, names = {}, est = false, i, l, f, bk, p3, b3;
     function conv(r, m, s) {                                        // r = [1, N, 2] -> cote du pari, ou 0
       var h = r[0], d = r[1], a = r[2];
@@ -2099,25 +2142,34 @@
   }
   function plOddsOf(c) { var t = plNum(PLODDS[c.key]), a = plAutoOdds(c); return t || (a ? a.o : 0); }
   var PLSPN = { '⚽': 'Football', '🎾': 'Tennis', '🏀': 'Basket', '🏉': 'Rugby', '🤾': 'Handball', '🏒': 'Hockey', '⚾': 'Baseball', '🏈': 'Football US', '🥊': 'MMA', '🏐': 'Volley', '🏁': 'Formule 1', '⛳': 'Golf' };
+  function plRaiseHTML(c) {                                        // cote trop basse : combinés sur le même match pour la relever
+    var sg = PLSG[c.legs[0].match] || [];
+    if (!sg.length) return '';
+    return '<div class="plraise"><b>Cote trop basse ? Relève-la avec un 2e pari sur ce match :</b>' + sg.map(function (x) {
+      return '<div>' + esc(x.a.lab) + ' <b>+</b> ' + esc(x.b.lab) + ' · <b>' + pct(x.pa) + '</b> de chances · cote minimale ' + (1 / x.pa).toFixed(2).replace('.', ',') + ' (habituelle ≈ ' + x.oe.toFixed(2).replace('.', ',') + ')</div>';
+    }).join('') + '<div class="sub">Plus la cote monte, plus la probabilité baisse : compare avec la cote réelle de ton bookmaker avant de jouer.</div></div>';
+  }
   function plCandHTML(c, i, stakeInfo, hero) {
     var pa = c.pa, oe = (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
     var legs = c.legs.map(function (l) {
       return '<div class="plleg"><small class="plsp">' + l.icon + ' ' + esc(PLSPN[l.icon] || '') + (l.lg ? ' · ' + esc(l.lg) : '') + ' · aujourd’hui ' + esc(l.time || '') + '</small><span>' + esc(l.match) + '</span><small>Pari : <b>' + esc(l.pick) + '</b></small></div>';
     }).join('');
     return '<div class="plc' + (hero ? ' plhero' : '') + '">' + (hero ? '<div class="plmise">' + esc(stakeInfo.lead || 'Mets') + ' <b>' + eur2(stake) + '</b> sur ça</div>' : '') +
-      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '<details class="plmenu"><summary aria-label="Plus d’options">⋯</summary><div class="plmenuin">' +
+      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.sg ? 'Combiné sur le même match' : c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '<details class="plmenu"><summary aria-label="Plus d’options">⋯</summary><div class="plmenuin">' +
       (c.legs[0].lg ? '<button data-plex="lg|' + esc(c.legs[0].lg) + '">Ne plus proposer ' + esc(c.legs[0].lg) + '</button>' : '') +
       '<button data-plex="sp|' + esc(c.legs[0].icon) + '">Ne plus proposer le ' + esc((PLSPN[c.legs[0].icon] || 'sport').toLowerCase()) + '</button></div></details></div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
+      (c.sg ? '<div class="sub">Deux paris sur le même match, pour relever la cote tout en restant très probable. Cote habituelle visée : ≈ ' + c.oe.toFixed(2).replace('.', ',') + '. Cherche chez ton bookmaker « combiné même match » (ou joue les deux paris dans un même ticket) et saisis la cote exacte.</div>' : '') +
       '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
+      (o > 1 && !valid && !c.sg && !c.duo ? plRaiseHTML(c) : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
 
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
   }
   function plRow(c, i, info) {                                     // un choix de la liste : une ligne, qui s'ouvre sur la carte complète
-    var l = c.legs.map(function (x) { return esc(x.match); }).join(' + '), pk = c.legs.map(function (x) { return esc(x.pick.replace(/^[^:]*: /, '')); }).join(' + ');
+    var l = c.legs.map(function (x) { return esc(x.match); }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + '), pk = c.legs.map(function (x) { return esc(x.pick.replace(/^[^:]*: /, '')); }).join(' + ');
     return '<details class="plrow"><summary><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(c.pa) + '</span><span class="plrt"><b>' + l + '</b><small>' + c.legs[0].icon + ' ' + esc(PLSPN[c.legs[0].icon] || '') + (c.legs[0].lg ? ' · ' + esc(c.legs[0].lg) : '') +
       ' · ' + esc(c.legs[0].time || '') + ' · ' + pk + '</small></span>' + plWinamax(c) + '</summary>' + plCandHTML(c, i, info) + '</details>';
   }

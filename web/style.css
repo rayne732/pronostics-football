@@ -1032,3 +1032,4 @@ button.chip small{display:block}
 .plmenu>summary::-webkit-details-marker{display:none}.plmenu[open]>summary{background:var(--surface2);color:var(--ink)}
 .plmenuin{position:absolute;right:0;top:34px;z-index:5;min-width:210px;display:flex;flex-direction:column;gap:2px;padding:6px;border-radius:14px;background:var(--surface2);border:1px solid var(--line);box-shadow:0 14px 32px -12px var(--shadow)}
 .plmenuin button{text-align:left;padding:9px 10px;border-radius:10px;font-size:.8rem;font-weight:600}.plmenuin button:hover{background:var(--surface)}
+.plraise{margin:8px 0;padding:10px 12px;border-radius:14px;background:color-mix(in srgb,var(--amber) 14%,var(--surface));border:1px solid var(--amber);font-size:.8rem;line-height:1.4}.plraise b:first-child{display:block;margin-bottom:4px}.plraise>div{padding:3px 0}

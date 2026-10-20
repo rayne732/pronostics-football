@@ -40,6 +40,23 @@ var Plan = (function () {
     }
     return { reach: reach / runs, ruin: ruin / runs, avg: sum / runs, odds: odd, runs: runs, maxCycles: maxC };
   }
-  return { PROF: PROF, MARGIN: MARGIN, floor05: floor05, r2: r2, profile: profile, stake1: stake1, target: target, recStake: recStake, sim: sim };
+  function poissonGrid(lh, la, n) {                                // grille des scores [domicile][extérieur] pour deux espérances de buts
+    n = n || 11;
+    function pm(l) { var a = [Math.exp(-l)], k; for (k = 1; k < n; k++) a.push(a[k - 1] * l / k); return a; }
+    var a = pm(lh), b = pm(la), g = [], i, j;
+    for (i = 0; i < n; i++) { g.push([]); for (j = 0; j < n; j++) g[i].push(a[i] * b[j]); }
+    return g;
+  }
+  function fitLambdas(pH, pD, pA) {                                // espérances de buts qui redonnent les probabilités 1N2 du marché (recherche sur une grille)
+    var best = null, e, lh, la, g, h, d, a, i, j;
+    for (lh = 0.2; lh <= 4.6; lh += 0.1) for (la = 0.2; la <= 4.6; la += 0.1) {
+      g = poissonGrid(lh, la, 11); h = d = a = 0;
+      for (i = 0; i < 11; i++) for (j = 0; j < 11; j++) { if (i > j) h += g[i][j]; else if (i === j) d += g[i][j]; else a += g[i][j]; }
+      e = (h - pH) * (h - pH) + (d - pD) * (d - pD) + (a - pA) * (a - pA);
+      if (!best || e < best.e) best = { e: e, lh: lh, la: la };
+    }
+    return best;
+  }
+  return { poissonGrid: poissonGrid, fitLambdas: fitLambdas, PROF: PROF, MARGIN: MARGIN, floor05: floor05, r2: r2, profile: profile, stake1: stake1, target: target, recStake: recStake, sim: sim };
 })();
 if (typeof module !== 'undefined') module.exports = Plan;
