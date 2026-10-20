@@ -1007,3 +1007,15 @@ button.chip small{display:block}
 #nav button.on::before{display:none}
 #nav .ind{position:absolute;top:0;left:0;height:3px;width:var(--w,0px);border-radius:0 0 4px 4px;background:var(--amber);transform:translateX(var(--x,-999px));transition:transform .38s cubic-bezier(.3,.9,.3,1),width .38s cubic-bezier(.3,.9,.3,1);pointer-events:none}
 @media (prefers-reduced-motion:reduce){#nav .ind{transition:none}}
+
+/* stratégie : plan de mise */
+.pltxt{font-size:.8rem;line-height:1.45;color:var(--mute);margin:10px 0}.pltxt b{color:var(--ink)}
+.plsim{margin:14px 0;padding:14px;border-radius:20px;background:var(--surface);border:1px solid var(--line)}.plsim>b{display:block;font-size:.76rem;text-transform:uppercase;letter-spacing:.06em;color:var(--amber)}
+.plgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.plgrid span{display:flex;flex-direction:column;gap:2px;padding:9px 8px;border-radius:13px;background:var(--surface2);font-size:.7rem;color:var(--mute)}
+.plgrid b{font-size:1.1rem;color:var(--ink);font-variant-numeric:tabular-nums}.plgrid b.ko{color:var(--red)}.plgrid small{font-size:.64rem}
+.plc{padding:13px;margin:10px 0;border-radius:18px;background:var(--surface);border:1px solid var(--line)}
+.plch{display:flex;align-items:center;gap:10px;margin-bottom:6px}.plch b{font-size:.9rem}
+.plleg{display:flex;flex-direction:column;padding:6px 0;border-top:1px solid var(--line)}.plleg:first-of-type{border-top:0}.plleg span{font-weight:600;font-size:.9rem}.plleg small{color:var(--mute);font-size:.74rem}
+.plmeta{display:flex;gap:8px;margin:10px 0}.plmeta span{flex:1;display:flex;flex-direction:column;gap:2px;padding:8px;border-radius:12px;background:var(--surface2);font-size:.68rem;color:var(--mute)}.plmeta b{font-size:.95rem;color:var(--ink)}
+.plbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.plbtns button[disabled]{opacity:.4;cursor:not-allowed}

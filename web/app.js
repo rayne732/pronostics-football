@@ -77,6 +77,7 @@
   /* ------------------------------------------------------------ icônes */
   function svg(path, cls) { return '<svg class="ic ' + (cls || '') + '" viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg>'; }
   var IC = {
+    plan: '<path d="M4 17l5-6 4 3 7-8"/><path d="M15 6h5v5"/>',
     ticket: '<rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4v2.5h6V4M9 13l2 2 4-4.2M9 18h6"/>',
     today: '<path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/><path d="M10 9v6" stroke-dasharray="1.5 2"/><path d="M14 11.5l1 1 2-2.4"/>',
     flame: '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.7.8-2.9 1.8-3.9C9.4 10.9 10.7 11 11 9.6 11.3 7.6 10.6 5.3 12 3z"/>',
@@ -1191,8 +1192,8 @@
     var left = jobs.length;
     var finish = function () {
       TODAY.step++; left--;
-      if (st.tab === 'today' && !st.detail) render();
-      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+      if ((st.tab === 'today' || st.tab === 'plan') && !st.detail) render();
+      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if ((st.tab === 'today' || st.tab === 'plan') && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
     };
     jobs.forEach(function (j) {
       loadLazy(j[0], function (err) {
@@ -1962,6 +1963,213 @@
     return h + '<div class="tkbtns"><button class="voir mid wide" data-bcomb>€ Noter ce ticket dans Mes paris</button><button class="voir low wide" data-clear>Vider le ticket</button></div>';
   }
 
+  /* ------------------------------------------------------------ stratégie : plan de mise avec récupération limitée, arrêt automatique et simulation honnête */
+  var PL = null;
+  try { PL = JSON.parse(localStorage.getItem('pf-plan') || 'null'); } catch (e) { PL = null; }
+  var PLD = { start: 20, goal: 100, prof: 'pr' };                  // brouillon de l'écran de départ
+  var PLODDS = {}, PLC = [];                                       // cotes saisies (par clé de pari) ; liste des paris proposés affichés (pour les boutons)
+  function plSave() { try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } }
+  function plNum(v) { var x = parseFloat(String(v == null ? '' : v).replace(',', '.')); return x > 0 ? x : 0; }
+  function plKey(c) { return c.legs.map(function (l) { return l.id + '|' + l.m + '|' + l.s; }).join('+'); }
+  function plProf() { return PL ? Plan.profile(PL.prof, PL.bank, PL.goal) : Plan.PROF.pr; }
+  function plPa(r) { return r.p - asHair(r) - (r.v ? 0 : 0.02); }
+  function plCands(R, prof, T) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
+    var skip = (PL.skip && PL.skip[T]) || {}, used = {}, seen = {}, pool = [], out = [];
+    if (PL.cyc) PL.cyc.steps.forEach(function (s) { s.legs.forEach(function (l) { used[l.match] = 1; }); });
+    R.picks.forEach(function (r) {
+      if (!r.bid || used[r.match] || r.p > AS_CAP) return;
+      if (r.time && kickoff({ date: T, time: r.time }) < Date.now() + 5 * 60000) return;
+      var pa = plPa(r);
+      if (pa < prof.minDuo - 0.04) return;
+      var k = r.bid + '|' + r.bm + '|' + r.bs;
+      if (skip[k]) return;
+      if (!seen[r.match] || pa > seen[r.match].pa) seen[r.match] = { r: r, pa: pa, k: k };
+    });
+    Object.keys(seen).forEach(function (m) { pool.push(seen[m]); });
+    pool.sort(function (a, b) { return b.pa - a.pa; });
+    function leg(x) { return { id: x.r.bid, m: x.r.bm, s: x.r.bs, match: x.r.match, pick: x.r.pick, icon: x.r.icon, time: x.r.time, ref: x.r.ref }; }
+    pool.filter(function (x) { return x.pa >= prof.minPa; }).slice(0, 5).forEach(function (x) { out.push({ legs: [leg(x)], pa: x.pa, icon: x.r.icon }); });
+    var top = pool.slice(0, 8), best = null, bestX = null;
+    for (var i = 0; i < top.length; i++) for (var j = i + 1; j < top.length; j++) {
+      var pp = top[i].pa * top[j].pa;
+      if (pp < prof.minDuo) continue;
+      if (!best || pp > best.pa) best = { legs: [leg(top[i]), leg(top[j])], pa: pp, icon: top[i].r.icon + top[j].r.icon };
+      if (top[i].r.icon !== top[j].r.icon && (!bestX || pp > bestX.pa)) bestX = { legs: [leg(top[i]), leg(top[j])], pa: pp, icon: top[i].r.icon + top[j].r.icon };
+    }
+    if (best && prof.steps > 0) out.push(best);
+    if (bestX && (!best || plKey(bestX) !== plKey(best))) out.push(bestX);
+    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1; });
+    return out;
+  }
+  function plSettle(won) {                                         // règle l'étape en attente, met à jour le capital, clôt le cycle si c'est fini
+    var cy = PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
+    if (!s || s.res !== null) return;
+    s.res = won;
+    PL.bank = Plan.r2(PL.bank + (won ? s.stake * (s.o - 1) : -s.stake));
+    var T = parisToday();
+    if (won || cy.steps.length >= cy.max || PL.bank < 1) {
+      PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: !!won });
+      if (PL.hist.length > 40) PL.hist.length = 40;
+      if (!won) PL.pause = T;
+      PL.cyc = null;
+    }
+    plSave();
+  }
+  function plAuto() {                                              // règle tout seul l'étape en attente quand les résultats des matchs sont connus
+    var cy = PL && PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
+    if (!s || s.res !== null) return;
+    if (!Bets.resolver) return;
+    var rs = s.legs.map(function (l) { return Bets.resolver(l.id, l.m, l.s); });
+    if (rs.some(function (x) { return x === false; })) plSettle(false);
+    else if (rs.every(function (x) { return x === true; })) plSettle(true);
+    else if (!isLoaded('res')) loadLazy('res', function () { if (st.tab === 'plan' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+  }
+  function plSimHTML(start, goal, profKey, pa) {
+    var a = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: Plan.MARGIN }), b = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: 0 });
+    function n(x) { return String(Math.round(x * 1000) / 10).replace('.', ',') + ' %'; }
+    return '<div class="plsim"><b>Ce que dit le calcul</b><div class="pltxt">' + a.runs + ' parcours simulés, ' + a.maxCycles + ' cycles maximum, paris à <b>' + pct(pa) + '</b> de chances réelles (cote ≈ ' + a.odds.toFixed(2).replace('.', ',') + ' avec la marge habituelle d’un bookmaker de 7 %).</div>' +
+      '<div class="plgrid"><span>Atteindre ' + goal + ' €<b>' + n(a.reach) + '</b><small>sans marge : ' + n(b.reach) + '</small></span><span>Tout perdre<b class="ko">' + n(a.ruin) + '</b><small>sans marge : ' + n(b.ruin) + '</small></span>' +
+      '<span>Capital moyen à la fin<b>' + eur2(a.avg) + '</b><small>sans marge : ' + eur2(b.avg) + '</small></span></div>' +
+      '<div class="pltxt">Même avec des cotes sans aucune marge, les chances d’atteindre l’objectif plafonnent autour de <b>' + pct(Math.min(1, start / goal)) + '</b> (capital ÷ objectif) : on ne peut pas faire mieux avec des paris équitables, quelle que soit la façon de miser. ' +
+      'Récupérer ses pertes en doublant la mise ne rend pas un pari plus rentable : ça transforme beaucoup de petits gains en une grosse perte rare.</div></div>';
+  }
+  function plAvgPa(R, prof, T) {
+    var c = plCands(R, prof, T).filter(function (x) { return !x.duo; });
+    return c.length ? Math.max(0.7, Math.min(0.9, c.reduce(function (t, x) { return t + x.pa; }, 0) / c.length)) : 0.78;
+  }
+  function plSetup(R) {
+    var T = parisToday(), pa = 0.78, prof = Plan.PROF[PLD.prof];
+    if (R) { PL = { skip: {} }; pa = plAvgPa(R, prof, T); PL = null; }
+    var h = '<div class="sec"><span class="dot g"></span>Mon plan</div><div class="tkan"><div class="tkbet">' +
+      '<label>Capital de départ (€)<input data-plcap inputmode="decimal" value="' + PLD.start + '"></label><label>Objectif (€)<input data-plgoal inputmode="decimal" value="' + PLD.goal + '"></label></div>' +
+      '<div class="chips">' + ['pr', 'eq', 'au'].map(function (k) { return '<button class="chip pill' + (PLD.prof === k ? ' on' : '') + '" data-plprof="' + k + '">' + Plan.PROF[k].name + '</button>'; }).join('') + '</div>' +
+      '<div class="sub">' + esc(prof.txt) + '</div>' +
+      '<div class="pltxt">Le principe : une série (un « cycle ») démarre par un pari sûr. S’il passe, le cycle est gagné. S’il perd, je te propose un 2e pari, avec la mise qui permet de récupérer la perte, dans la limite de ton capital. ' +
+      'Si le cycle rate, on s’arrête pour la journée. Dès que l’objectif est atteint, je passe en mode sécurisé et je te conseille de retirer ton capital de départ. Si tu perds la moitié de ton capital, je te dis de t’arrêter.</div></div>' +
+      (PLD.start >= 5 && PLD.goal > PLD.start ? plSimHTML(PLD.start, PLD.goal, PLD.prof, pa) : '<div class="bt-warn">Le capital doit être d’au moins 5 € et l’objectif supérieur au capital.</div>') +
+      '<div class="tkbtns"><button class="voir mid wide" data-plstart>Démarrer ce plan</button></div>';
+    return h;
+  }
+  function plCandHTML(c, i, stakeInfo) {
+    var pa = c.pa, oe = (1 - Plan.MARGIN) / pa, o = plNum(PLODDS[c.key]), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
+    var legs = c.legs.map(function (l) { return '<div class="plleg"><span>' + l.icon + ' ' + esc(l.match) + '</span><small>' + esc(l.time || '') + ' · ' + esc(l.pick) + '</small></div>'; }).join('');
+    return '<div class="plc"><div class="plch"><span class="tkg high">' + pct(pa) + '</span><b>' + (c.duo ? 'Combiné de 2' : 'Pari simple') + '</b></div>' + legs +
+      '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
+      '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
+      (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
+      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
+      c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
+  }
+  function planTabHTML() {
+    todayLoad();
+    var T = parisToday(), R = todayRows(), h = '<div class="top"><h1>Stratégie</h1></div><div class="sub">Un plan de mise pour avancer par petits paliers, tous sports confondus' + (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
+    h += '<div class="bt-warn">Aucune stratégie ne bat les cotes sur la durée : la marge du bookmaker fait perdre en moyenne ~7 % de chaque euro misé. Ce plan cadre le risque, il ne le supprime pas. Ne mise que de l’argent que tu peux perdre. Joueurs Info Service : 09 74 75 13 13.</div>';
+    if (!PL) return h + plSetup(R);
+    PL.skip = PL.skip || {}; PL.hist = PL.hist || [];
+    plAuto();
+    var prof = plProf(), cy = PL.cyc, sec = prof.key === 'se', prog = Math.max(0, Math.min(1, (PL.bank - PL.start) / Math.max(1, PL.goal - PL.start))), net = Plan.r2(PL.bank - PL.start);
+    h += '<div class="tkan"><div class="tkmeta"><span>Capital<b>' + eur2(PL.bank) + '</b></span><span>Départ<b>' + eur2(PL.start) + '</b></span><span>Objectif<b>' + eur2(PL.goal) + '</b></span></div>' +
+      '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div><div class="sub">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + ' depuis le début · profil <b>' + esc(prof.name) + '</b></div></div>';
+    if (PL.bank < 1) return h + '<div class="bt-warn"><b>Capital épuisé.</b> Le plan est terminé. C’est une perte que le plan avait annoncée dans ses chances ci-dessous.</div>' + plSimHTML(PL.start, PL.goal, PL.prof, 0.78) + plFoot();
+    if (PL.bank >= PL.goal) {
+      var wd = Math.min(PL.start, PL.bank - 1);
+      h += '<div class="tkrec"><b>Objectif atteint</b><div>Retire ton capital de départ (' + eur2(wd) + ') et joue avec le reste.</div><div class="tkn3">Ainsi, même si la suite tourne mal, tu ne perds plus que des gains. Je passe en mode sécurisé : mises de 10 %, paris très sûrs, aucune récupération.</div>' +
+        '<div class="tkbtns"><button class="voir mid wide" data-plwd="' + wd + '">J’ai retiré ' + eur2(wd) + '</button></div></div>';
+    }
+    if (PL.bank < PL.start * 0.5 && !PL.ack) {
+      return h + '<div class="bt-warn"><b>Arrête-toi ici.</b> Tu as perdu plus de la moitié de ton capital de départ : c’est la limite que ce plan s’était fixée. Continuer à jouer pour « se refaire » est exactement ce qui fait perdre le plus.</div>' +
+        '<div class="tkbtns"><button class="voir low wide" data-plack>Je continue quand même (déconseillé)</button></div>' + plFoot();
+    }
+    // étape en cours
+    if (cy) {
+      h += '<div class="sec"><span class="dot a"></span>Cycle en cours <small>capital au départ du cycle : ' + eur2(cy.cb) + '</small></div>';
+      cy.steps.forEach(function (s, i) {
+        var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
+        h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
+          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>'; }).join('') +
+          '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Le résultat se règle tout seul quand le match est fini ; sinon, tu peux le saisir :' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
+          (s.res === null && last ? '<div class="plbtns"><button class="voir mid" data-plres="1">Gagné</button><button class="voir low" data-plres="0">Perdu</button></div>' : '') + '</div>';
+      });
+      if (cy.steps[cy.steps.length - 1].res === null) return h + plFoot();
+    } else if (PL.pause === T) {
+      return h + '<div class="tkrec"><b>Pause jusqu’à demain</b><div class="tkn3">Le dernier cycle a échoué. Le plan s’arrête là pour aujourd’hui : c’est précisément le moment où l’on a envie de tout rejouer pour se refaire. Reviens demain.</div></div>' + plFoot();
+    } else if (((PL.days || {})[T] || 0) >= 2) {
+      return h + '<div class="tkrec"><b>Assez pour aujourd’hui</b><div class="tkn3">Deux cycles par jour au maximum. Reviens demain.</div></div>' + plFoot();
+    }
+    // proposition de la prochaine étape
+    var k = cy ? cy.steps.length : 0, cb = cy ? cy.cb : PL.bank, L = cy ? Plan.r2(cy.cb - PL.bank) : 0, info;
+    if (k === 0) {
+      var s1 = Plan.stake1(cb, prof);
+      info = { fixed: s1 };
+      h += '<div class="sec"><span class="dot g"></span>Étape 1 <small>mise ' + eur2(s1) + ' (' + Math.round(prof.f1 * 100) + ' % du capital)</small></div>';
+    } else {
+      var g = cy.g, bank = PL.bank;
+      info = { fn: function (o) { return Plan.recStake(L, g, o, bank, plProf()).stake; } };
+      var rs0 = Plan.recStake(L, g, 1.3, bank, plProf());
+      h += '<div class="sec"><span class="dot a"></span>Étape ' + (k + 1) + ' : récupérer <small>perte à rattraper ' + eur2(L) + ' · gain visé +' + eur2(g) + '</small></div>' +
+        '<div class="sub">La mise dépend de la cote : plus elle est basse, plus il faut miser pour récupérer. Elle est plafonnée à ' + Math.round(plProf().recCap * 100) + ' % de ton capital restant (' + eur2(bank) + '). ' +
+        (rs0.full ? '' : 'Avec une cote de 1,30 tu ne récupérerais pas tout : il faudrait une cote d’au moins <b>' + rs0.minOdds.toFixed(2).replace('.', ',') + '</b> pour tout rattraper avec ce que tu as.') + '</div>';
+    }
+    PLC = plCands(R, prof, T);
+    if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
+    else h += PLC.map(function (c, i) { return plCandHTML(c, i, info); }).join('');
+    if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
+    var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
+    return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0))) + plFoot();
+  }
+  function plFoot() {
+    var H = PL.hist || [], w = H.filter(function (x) { return x.ok; }).length;
+    var h = H.length ? '<div class="sec"><span class="dot b"></span>Mes cycles <small>' + w + ' gagnés sur ' + H.length + '</small></div>' + H.slice(0, 8).map(function (x) {
+      return '<div class="pr ' + (x.ok ? 'ok' : 'ko') + '"><span class="pt">' + dm(x.day) + ' · ' + x.n + ' étape' + (x.n > 1 ? 's' : '') + '</span><span class="pp">' + (x.net >= 0 ? '+' : '−') + eur2(Math.abs(x.net)) + '</span></div>';
+    }).join('') : '';
+    return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
+  }
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    if (!t) return;
+    var T = parisToday(), y = window.scrollY, c, cy;
+    if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
+    else if (t.hasAttribute('data-plstart')) {
+      if (!(PLD.start >= 5 && PLD.goal > PLD.start)) return;
+      PL = { on: 1, start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
+    }
+    else if (t.hasAttribute('data-plgo')) {
+      c = PLC[+t.getAttribute('data-plgo')];
+      var o = c && plNum(PLODDS[c.key]);
+      if (!c || !(o >= 1 / c.pa) || t.disabled) return;
+      var prof = plProf();
+      if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
+      cy = PL.cyc;
+      var stake = cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : Plan.stake1(cy.cb, prof);
+      if (stake < 1) return;
+      if (!cy.steps.length) cy.g = Plan.target(stake, o);
+      cy.steps.push({ legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s, match: l.match, pick: l.pick, icon: l.icon }; }), pa: c.pa, o: o, stake: stake, res: null, t: Date.now() });
+      plSave();
+    }
+    else if (t.hasAttribute('data-plskip')) {
+      c = PLC[+t.getAttribute('data-plskip')];
+      if (c) { PL.skip[T] = PL.skip[T] || {}; c.legs.forEach(function (l) { PL.skip[T][l.id + '|' + l.m + '|' + l.s] = 1; }); plSave(); }
+    }
+    else if (t.hasAttribute('data-plres')) plSettle(t.getAttribute('data-plres') === '1');
+    else if (t.hasAttribute('data-plend')) {
+      cy = PL.cyc;
+      if (cy && cy.steps.length && cy.steps[cy.steps.length - 1].res !== null) { PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: false }); PL.pause = T; PL.cyc = null; plSave(); }
+    }
+    else if (t.hasAttribute('data-plwd')) { PL.bank = Plan.r2(PL.bank - plNum(t.getAttribute('data-plwd'))); PL.start = Math.min(PL.start, PL.bank); PL.goal = Math.max(PL.goal, PL.bank * 2); plSave(); }
+    else if (t.hasAttribute('data-plack')) { PL.ack = 1; plSave(); }
+    else if (t.hasAttribute('data-plreset')) { if (!window.confirm || window.confirm('Effacer ce plan et recommencer ?')) { PL = null; try { localStorage.removeItem('pf-plan'); } catch (err) { /* ignoré */ } } }
+    render(); window.scrollTo(0, y);
+  });
+  app.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t.hasAttribute) return;
+    if (t.hasAttribute('data-plodds')) PLODDS[t.getAttribute('data-plodds')] = t.value;
+    else if (t.hasAttribute('data-plcap')) PLD.start = plNum(t.value);
+    else if (t.hasAttribute('data-plgoal')) PLD.goal = plNum(t.value);
+    else return;
+    var yy = window.scrollY; render(); window.scrollTo(0, yy);
+  });
+
   /* ------------------------------------------------------------ fiche match */
   function line(a, b) { return '<div class="mline"><span>' + esc(a) + '</span><span>' + esc(b) + '</span></div>'; }
   var BETSP = { handball: 'hand', rugby15: 'rugby', TEN: 'tennis' };
@@ -2486,7 +2694,7 @@
     }
   }
   function renderNav() {
-    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['ticket', 'Ticket'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
+    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['plan', 'Stratégie'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : x[0] === 'ticket' ? ticket.length : 0;
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
@@ -2519,6 +2727,7 @@
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
+    else if (st.tab === 'plan') app.innerHTML = planTabHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     app.classList.toggle('dens-compact', DENS === 'compact');
     if (sig !== LASTSIG) { LASTSIG = sig; app.classList.remove('anim'); void app.offsetWidth; app.classList.add('anim'); clearTimeout(ANIMT); ANIMT = setTimeout(function () { app.classList.remove('anim'); }, 1600); }
