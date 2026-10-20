@@ -1964,6 +1964,7 @@
     if (PL.cyc) PL.cyc.steps.forEach(function (s) { s.legs.forEach(function (l) { used[l.match] = 1; }); });
     R.picks.forEach(function (r) {
       if (!r.bid || used[r.match] || r.p > AS_CAP) return;
+      if (PL.ex && ((r.lg && PL.ex.lg && PL.ex.lg[r.lg]) || (PL.ex.sp && PL.ex.sp[r.icon]))) return;          // sport ou compétition que tu as exclu(e)
       if (r.time && kickoff({ date: T, time: r.time }) < Date.now() + 5 * 60000) return;
       var pa = plPa(r);
       if (pa < prof.minDuo - 0.04) return;
@@ -1986,6 +1987,12 @@
     if (bestX && (!best || plKey(bestX) !== plKey(best))) out.push(bestX);
     out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1; if (c.duo) c.low = c.pa < prof.minDuo; });
     return out;
+  }
+  function plExHTML() {                                            // sports et compétitions exclus (introuvables chez ton bookmaker), avec un bouton pour les remettre
+    var ex = (PL && PL.ex) || {}, b = [];
+    Object.keys(ex.sp || {}).forEach(function (k) { b.push('<button class="chip pill on" data-plexrm="sp|' + esc(k) + '">' + k + ' ' + esc(PLSPN[k] || '') + ' ✕</button>'); });
+    Object.keys(ex.lg || {}).forEach(function (k) { b.push('<button class="chip pill on" data-plexrm="lg|' + esc(k) + '">' + esc(k) + ' ✕</button>'); });
+    return b.length ? '<div class="sub">Exclus de mes propositions (touche pour remettre) :</div><div class="chips">' + b.join('') + '</div>' : '';
   }
   function plSettle(won) {                                         // règle l'étape en attente, met à jour le capital, clôt le cycle si c'est fini
     var cy = PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
@@ -2079,6 +2086,8 @@
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
+      (c.legs[0].lg ? '<button class="voir low" data-plex="lg|' + esc(c.legs[0].lg) + '">Plus jamais ' + esc(c.legs[0].lg) + '</button>' : '') +
+      '<button class="voir low" data-plex="sp|' + esc(c.legs[0].icon) + '">Plus de ' + esc((PLSPN[c.legs[0].icon] || 'ce sport').toLowerCase()) + '</button>' +
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
   }
   function plRow(c, i, info) {                                     // un choix de la liste : une ligne, qui s'ouvre sur la carte complète
@@ -2097,7 +2106,7 @@
       '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div><div class="sub">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + ' depuis le début · profil <b>' + esc(prof.name) + '</b></div>' +
       '<details class="tkall"><summary>Modifier mon capital ou mon objectif</summary><div class="tkbet"><label>Capital actuel (€)<input data-plset="bank" inputmode="decimal" value="' + PL.bank + '"></label>' +
       '<label>Capital de départ (€)<input data-plset="start" inputmode="decimal" value="' + PL.start + '"></label><label>Objectif (€)<input data-plset="goal" inputmode="decimal" value="' + PL.goal + '"></label></div>' +
-      '<div class="sub">Tu as rechargé, retiré ou corrigé ton solde : mets-le à jour ici. Le capital de départ sert à la limite des −50 %.</div></details></div>';
+      '<div class="sub">Tu as rechargé, retiré ou corrigé ton solde : mets-le à jour ici. Le capital de départ sert à la limite des −50 %.</div>' + plExHTML() + '</details></div>';
     if (PL.bank < 1) return h + '<div class="bt-warn"><b>Capital épuisé.</b> Le plan est terminé. C’est une perte que le plan avait annoncée dans ses chances ci-dessous.</div>' + plSimHTML(PL.start, PL.goal, PL.prof, 0.78) + plFoot();
     if (PL.bank >= PL.goal) {
       var wd = Math.min(PL.start, PL.bank - 1);
@@ -2170,10 +2179,16 @@
     return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
   }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    var t = e.target.closest('[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
     if (!t) return;
     var T = parisToday(), y = window.scrollY, c, cy;
-    if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
+    if (t.hasAttribute('data-plex') || t.hasAttribute('data-plexrm')) {
+      var ex = (t.getAttribute('data-plex') || t.getAttribute('data-plexrm')).split('|'), kind = ex.shift(), nmx = ex.join('|');
+      PL.ex = PL.ex || { lg: {}, sp: {} }; PL.ex.lg = PL.ex.lg || {}; PL.ex.sp = PL.ex.sp || {};
+      if (t.hasAttribute('data-plex')) PL.ex[kind][nmx] = 1; else delete PL.ex[kind][nmx];
+      plSave();
+    }
+    else if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
     else if (t.hasAttribute('data-plstart')) {
       if (!(PLD.start >= 5 && PLD.goal > PLD.start)) return;
       PL = { on: 1, start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
