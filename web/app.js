@@ -2065,6 +2065,49 @@
     });
     return out.sort(function (x, y) { return y.pa - x.pa; }).slice(0, 12);
   }
+  var PLALL = [['Total buts (plus)', 'Plus de 0,5 buts', '+0,5 buts'], ['Total buts (plus)', 'Plus de 1,5 buts', '+1,5 buts'], ['Total buts (plus)', 'Plus de 2,5 buts', '+2,5 buts'], ['Total buts (moins)', 'Moins de 3,5 buts', '−3,5 buts']];
+  function plAllGroups(R, T, prof) {                               // TOUS les matchs du jour (ceux de « Découvrir »), chacun avec ses paris les plus probables : à toi de choisir ceux qui existent chez ton bookmaker
+    var groups = [], seen = {};
+    function add(g, grid, fams, extra, hair) {
+      var d = { home: g.home, away: g.away }, c = [], ph = 0, pa2 = 0, a, b;
+      function push(m, sel, p, valid) {
+        var pa = p - hair - (valid === false ? 0.02 : 0) - extra;
+        if (p > 0.995 || pa < 0.5) return;
+        c.push({ legs: [{ id: g.bid, m: m, s: sel, match: g.match, pick: m + ' : ' + sel, icon: g.icon || '⚽', lg: g.lg, time: g.time, ref: g.ref }], pa: pa, icon: g.icon || '⚽', low: pa < prof.minPa, duo: false });
+      }
+      if (fams) {
+        var by = {}; fams.forEach(function (x) { by[x.name] = x; });
+        function fp(fam, sel) { var x = by[fam], it = x && x.sels.filter(function (y) { return y[0] === sel; })[0]; if (it) push(fam, sel, it[1], x.validated); }
+        PLALL.forEach(function (t) { fp(t[0], t[1]); });
+        fp('Double chance', g.home + ' ou nul'); fp('Double chance', g.away + ' ou nul'); fp('Résultat du match', g.home); fp('Résultat du match', g.away);
+      } else {
+        PLALL.forEach(function (t) { var ev = tkEvent(null, d, t[0], t[1]); if (ev) push(t[0], t[1], plJoint(grid, [ev]), true); });
+        [['Double chance', g.home + ' ou nul'], ['Double chance', g.away + ' ou nul'], ['Résultat du match', g.home], ['Résultat du match', g.away]].forEach(function (t) { var ev = tkEvent(null, d, t[0], t[1]); if (ev) push(t[0], t[1], plJoint(grid, [ev]), true); });
+      }
+      c.sort(function (x, y) { return y.pa - x.pa; });
+      c.forEach(function (x) { x.key = plKey(x); });
+      groups.push({ match: g.match, lg: g.lg, time: g.time, icon: g.icon || '⚽', ref: g.ref, cands: c, none: !c.length });
+    }
+    D.fixtures.forEach(function (f) {
+      if (f.date !== T || fstate(f) === 'done' || (f.time && kickoff({ date: T, time: f.time }) < Date.now() + 5 * 60000)) return;
+      var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (e) { return; }
+      var g = { home: f.home, away: f.away, bid: f.id, match: nm(f.home) + ' – ' + nm(f.away), lg: (D.leagues[f.div] || {}).name || '', time: f.time, ref: 'data-open="' + f.i + '"' };
+      seen[g.match] = 1; add(g, M.grid, M.fams, 0, asHair({ div: f.div }));
+    });
+    if (isLoaded('cal')) (D.cal || []).forEach(function (c) {
+      if (c.date !== T || c.st !== 'pre' || (c.time && kickoff({ date: T, time: c.time }) < Date.now() + 5 * 60000)) return;
+      var g = { home: c.home, away: c.away, bid: 'cal|' + c.date + '|' + c.home + '|' + c.away, match: nm(c.home) + ' – ' + nm(c.away), lg: c.fr || '', time: c.time, ref: '' };
+      if (seen[g.match]) return;
+      seen[g.match] = 1;
+      if (c.p && c.p.length === 3) { var fit = Plan.fitLambdas(c.p[0], c.p[1], c.p[2]); add(g, Plan.poissonGrid(fit.lh, fit.la), null, 0.02, AS_HAIR); }
+      else groups.push({ match: g.match, lg: g.lg, time: g.time, icon: '⚽', ref: '', cands: [], none: true });
+    });
+    var other = {};
+    R.picks.forEach(function (r) { if (r.icon === '⚽' || !r.bid) return; (other[r.match] = other[r.match] || { match: r.match, lg: r.lg || '', time: r.time, icon: r.icon, ref: r.ref, cands: [] }).cands.push({ legs: [{ id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg, time: r.time, ref: r.ref }], pa: plPa(r), icon: r.icon, low: plPa(r) < prof.minPa, duo: false }); });
+    Object.keys(other).forEach(function (k) { var g = other[k]; g.cands.forEach(function (x) { x.key = plKey(x); }); g.cands.sort(function (x, y) { return y.pa - x.pa; }); groups.push(g); });
+    groups = groups.filter(function (g) { return !(PL.ex && ((g.lg && PL.ex.lg && PL.ex.lg[g.lg]) || (PL.ex.sp && PL.ex.sp[g.icon]))); });
+    return groups.sort(function (x, y) { return (x.time || '99:99') < (y.time || '99:99') ? -1 : (x.time || '99:99') > (y.time || '99:99') ? 1 : 0; });
+  }
   function plCands(R, prof, T) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
     var skip = (PL.skip && PL.skip[T]) || {}, used = {}, seen = {}, pool = [], out = [];
     if (PL.cyc) PL.cyc.steps.forEach(function (s) { s.legs.forEach(function (l) { used[l.match] = 1; }); });
@@ -2307,6 +2350,14 @@
       if (PLC.length > (hi === 0 ? 1 : 0)) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + (PLC.length - (hi === 0 ? 1 : 0)) + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
         PLC.slice(hi === 0 ? 1 : 0).map(function (c, i) { return plRow(c, i + (hi === 0 ? 1 : 0), info); }).join('');
     }
+    var G = plAllGroups(R, T, prof), nm0 = 0;
+    G.forEach(function (g) { g.cands.forEach(function (c) { c.ix = PLC.length; PLC.push(c); nm0++; }); });
+    if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary><div class="sub">Tous les matchs de l’onglet Découvrir, chacun avec ses paris les plus probables (même les très sûrs). Prends ceux que ton bookmaker propose.</div>' +
+      G.map(function (g) {
+        if (g.none) return '<div class="plm none"><span>' + esc(g.time || '') + ' · ' + esc(g.match) + '</span><small>' + esc(g.lg) + ' · pas de pronostic disponible</small></div>';
+        return '<details class="plm"><summary><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + g.icon + ' ' + esc(PLSPN[g.icon] || '') + (g.lg ? ' · ' + esc(g.lg) : '') + ' · jusqu’à ' + pct(g.cands[0].pa) + '</small></span></summary>' +
+          g.cands.map(function (c) { return plRow(c, c.ix, info); }).join('') + '</details>';
+      }).join('') + '</details>';
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
     return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0)));
