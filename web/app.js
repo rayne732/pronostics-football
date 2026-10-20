@@ -2305,6 +2305,7 @@
     }
   });
   function loadUsers() { Account.rpc('pf_admin_users').then(function (rows) { AUI.users = rows || []; acRefresh(); }).catch(function () { AUI.users = []; acRefresh(); }); }
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* ignoré */ }          // demande au navigateur de ne jamais effacer les données du site (paris, plan) quand il manque de place
   if (Account.on()) { Account.loadRole().then(loadProfile); setTimeout(pfSync, 3000); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Account.on() && Date.now() - (Account.state().last || 0) > 60000) pfSync(); });
   function acChip() { return Account.on() ? '' : '<button class="tkan acchip" data-acgo>☁️ Connecte-toi pour sauvegarder tes paris sur tous tes appareils <span>›</span></button>'; }
