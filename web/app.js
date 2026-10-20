@@ -2330,9 +2330,44 @@
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 && !valid && !c.sg && !c.duo ? plRaiseHTML(c) : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
-      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
+      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button>' + (c.legs.length === 1 && !c.sg ? '<button class="voir low" data-plmatch="' + esc(c.legs[0].id) + '">Tous les paris de ce match</button>' : '') + '<button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
 
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
+  }
+  var PLM = null;                                                  // match ouvert pour voir tous ses paris : { id }
+  function plMatchView(info, prof, T) {
+    var f = (D.fixtures || []).filter(function (x) { return x.id === PLM.id; })[0], cal = null, fams = [], hair, extra = 0, name, lg, time, ref, icon = '⚽', home, away;
+    if (f) {
+      var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (e) { M = null; }
+      if (M) fams = M.fams.filter(function (x) { return !x.lottery; }).map(function (x) { return { name: x.name, sels: x.sels, v: x.validated }; });
+      hair = asHair({ div: f.div }); name = nm(f.home) + ' – ' + nm(f.away); lg = (D.leagues[f.div] || {}).name || ''; time = f.time; ref = 'data-open="' + f.i + '"'; home = f.home; away = f.away;
+    } else if (PLM.id.indexOf('cal|') === 0) {
+      var q = PLM.id.split('|'); cal = (D.cal || []).filter(function (c) { return c.date === q[1] && c.home === q[2] && c.away === q[3]; })[0];
+      if (cal && cal.p && cal.p.length === 3) {
+        var fit = Plan.fitLambdas(cal.p[0], cal.p[1], cal.p[2]), g = Plan.poissonGrid(fit.lh, fit.la), d = { home: cal.home, away: cal.away };
+        function mk(fam, sels) { var out = []; sels.forEach(function (sel) { var ev = tkEvent(null, d, fam, sel); if (ev) out.push([sel, plJoint(g, [ev])]); }); if (out.length) fams.push({ name: fam, sels: out, v: true }); }
+        mk('Résultat du match', [cal.home, 'Match nul', cal.away]); mk('Double chance', [cal.home + ' ou nul', cal.away + ' ou nul', cal.home + ' ou ' + cal.away]);
+        mk('Total buts (plus)', ['0,5', '1,5', '2,5', '3,5', '4,5'].map(function (x) { return 'Plus de ' + x + ' buts'; })); mk('Total buts (moins)', ['1,5', '2,5', '3,5', '4,5', '5,5'].map(function (x) { return 'Moins de ' + x + ' buts'; }));
+        mk('Les deux équipes marquent', ['Oui', 'Non']);
+        [cal.home, cal.away].forEach(function (t) { mk('Buts de ' + t + ' (plus)', [t + ' plus de 0,5', t + ' plus de 1,5']); });
+      }
+      hair = AS_HAIR; extra = 0.02; name = cal ? nm(cal.home) + ' – ' + nm(cal.away) : ''; lg = cal ? cal.fr || '' : ''; time = cal ? cal.time : ''; ref = ''; home = cal && cal.home; away = cal && cal.away;
+    }
+    var h = '<button class="voir low" data-plmback>‹ Retour aux plans</button><div class="sec"><span class="dot g"></span>' + esc(name || 'Ce match') + ' <small>' + esc(lg) + (time ? ' · ' + esc(time) : '') + '</small></div>';
+    if (!fams.length) return h + '<div class="sub">Pour ce match, je n’ai pas de liste complète de paris : seuls les paris proposés dans la liste du jour sont disponibles.</div>';
+    h += '<div class="sub">Tous les paris que je sais calculer pour ce match, avec leur probabilité. Si un pari n’existe pas chez ton bookmaker (par exemple « plus de 0,5 buts »), prends-en un autre, puis saisis la cote.</div>';
+    PLC = []; var order = ['Résultat du match', 'Double chance', 'Total buts (plus)', 'Total buts (moins)', 'Les deux équipes marquent'];
+    fams.sort(function (a, b) { var ia = order.indexOf(a.name), ib = order.indexOf(b.name); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
+    fams.forEach(function (fam, fi) {
+      var rows = fam.sels.filter(function (x) { return x[1] >= 0.3 && x[1] < 0.995; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 14);
+      if (!rows.length) return;
+      h += '<details class="plm"' + (fi < 4 ? ' open' : '') + '><summary><span class="plmn"><b>' + esc(fam.name) + '</b><small>' + rows.length + ' paris · jusqu’à ' + pct(rows[0][1]) + '</small></span></summary>' + rows.map(function (x) {
+        var pa = x[1] - hair - (fam.v ? 0 : 0.02) - extra, c = { legs: [{ id: PLM.id, m: fam.name, s: x[0], match: name, pick: fam.name + ' : ' + x[0], icon: icon, lg: lg, time: time, ref: ref }], pa: pa, icon: icon, low: pa < prof.minPa, duo: false, pm: x[1] };
+        c.key = plKey(c); c.ix = PLC.length; PLC.push(c);
+        return '<details class="plrow"><summary><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(x[1]) + '</span><span class="plrt"><b>' + esc(x[0]) + '</b><small>' + esc(fam.name) + '</small></span>' + plWinamax(c) + '</summary>' + plCandHTML(c, c.ix, info) + '</details>';
+      }).join('') + '</details>';
+    });
+    return h;
   }
   function plRow(c, i, info) {                                     // un choix de la liste : une ligne, qui s'ouvre sur la carte complète
     var l = c.legs.map(function (x) { return esc(x.match); }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + '), pk = c.legs.map(function (x) { return esc(x.pick.replace(/^[^:]*: /, '')); }).join(' + ');
@@ -2388,6 +2423,7 @@
     PLC = plCands(R, prof, T, G);
     PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
     PLC.sort(function (x, y) { return x.bad - y.bad || (x.low ? 1 : 0) - (y.low ? 1 : 0) || y.pa - x.pa || x.ord - y.ord; });
+    if (PLM) return h + plMatchView(info, prof, T);
     var hh = -1; PLC.forEach(function (c, i) { if (hh < 0 && !c.low && !c.bad && !c.duo && !c.sg && !c.acc) hh = i; });
     if (hh >= 0) {                                                  // le pari simple le plus sûr en tête, puis les combinés (plusieurs matchs sûrs, même match), puis les autres paris simples
       var heroC = PLC.splice(hh, 1)[0], isCombo = function (c) { return c.acc || c.sg || c.duo; };
@@ -2452,9 +2488,11 @@
     return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
   }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-plgobets],[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    var t = e.target.closest('[data-plmatch],[data-plmback],[data-plgobets],[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
     if (!t) return;
     var T = parisToday(), y = window.scrollY, c, cy;
+    if (t.hasAttribute('data-plmatch')) { PLM = { id: t.getAttribute('data-plmatch') }; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-plmback')) { PLM = null; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plgobets')) { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plex') || t.hasAttribute('data-plexrm')) {
       var ex = (t.getAttribute('data-plex') || t.getAttribute('data-plexrm')).split('|'), kind = ex.shift(), nmx = ex.join('|');
