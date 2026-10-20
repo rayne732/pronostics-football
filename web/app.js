@@ -1515,23 +1515,9 @@
     var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     h += planBody();
-    if (R.counts.length) {
-      var okSp = R.counts.some(function (c) { return c[0] === st.plSport; });
-      if (!okSp) st.plSport = 'all';
-      h += '<div class="chips sprow"><button class="chip' + (st.plSport === 'all' ? ' on' : '') + '" data-plsp="all">Tous<b>' + R.counts.reduce(function (t, c) { return t + c[2]; }, 0) + '</b></button>' + R.counts.map(function (c) {
-        return '<button class="chip' + (st.plSport === c[0] ? ' on' : '') + '" data-plsp="' + c[0] + '">' + c[0] + '<b>' + c[2] + ' ' + (c[4] || 'match') + (c[2] > 1 ? 's' : '') + '</b>' + (c[3] < c[2] ? '<small>' + (c[3] ? c[3] + ' avec pronostic' : 'sans pronostic') + '</small>' : '') + '</button>'; }).join('') + '</div>';
-      if (st.plSport !== 'all') R = { picks: R0.picks.filter(function (r) { return r.icon === st.plSport; }), favs: R0.favs.filter(function (r) { return r.icon === st.plSport; }), counts: R0.counts, T: R0.T };
-    }
-    if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
-    h += '<details class="tkall"><summary>Autres plans du jour (pari sûr, combinés, budget et bilan)</summary>' + plansHTML(R) + assistantHTML(R) + '</details>';
-    h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
-      '<div class="chips"><button class="chip pill' + (st.plSort === 'p' ? ' on' : '') + '" data-plsort="p">Les plus probables</button><button class="chip pill' + (st.plSort === 't' ? ' on' : '') + '" data-plsort="t">Par heure</button></div>';
-    var seen = {}, shown = (st.plSort === 't' ? R.picks.slice().sort(function (a, b) { return (a.time || '99:99') < (b.time || '99:99') ? -1 : (a.time || '99:99') > (b.time || '99:99') ? 1 : b.p - a.p; }) : R.picks).filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
-    h += shown.length ? shown.map(todayRow).join('') : '<div class="empty">Aucun pronostic sûr aujourd’hui.</div>';
-    var seenF = {};
-    var fv = R.favs.filter(function (r) { if (seenF[r.match]) return false; seenF[r.match] = 1; return true; }).slice(0, 10);
-    if (fv.length) h += '<div class="sec"><span class="dot a"></span>Les favoris les plus nets <small>vainqueur à haute confiance</small></div>' + fv.map(todayRow).join('');
-    return h + '<div class="sub" style="margin-top:14px">Les pronostics sûrs d’un même sport restent des estimations : environ 75 % de réussite en moyenne, jamais une certitude. Analyse indicative, pas un conseil de pari.</div>';
+    if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">Aucun match avec pronostic aujourd’hui. Reviens plus tard ou demain.</div>');
+    return h + '<details class="tkall"><summary>Autres plans du jour (pari sûr, combinés, budget et bilan)</summary>' + plansHTML(R) + assistantHTML(R) + '</details>' +
+      '<div class="sub" style="margin-top:14px">Les pronostics restent des estimations : environ 75 % de réussite en moyenne, jamais une certitude. Analyse indicative, pas un conseil de pari.</div>';
   }
 
   /* ------------------------------------------------------------ Formule 1 */
@@ -2129,6 +2115,7 @@
     }
     // proposition de la prochaine étape
     var k = cy ? cy.steps.length : 0, cb = cy ? cy.cb : PL.bank, L = cy ? Plan.r2(cy.cb - PL.bank) : 0, info;
+    h += plFlow(k, cy ? cy.max : prof.steps);
     if (k === 0) {
       var s1 = Plan.stake1(cb, prof);
       info = { fixed: s1, lead: 'Mets' };
@@ -2152,6 +2139,14 @@
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
     return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0))) + plFoot();
+  }
+  function plFlow(k, max) {                                        // schéma du cycle : étape 1, puis un pari de rattrapage seulement si ça perd
+    var h = '<div class="plflow">', i;
+    for (i = 0; i < max; i++) {
+      h += '<span class="' + (i < k ? 'done' : i === k ? 'on' : '') + '">' + (i === 0 ? '1 · Pari' : (i + 1) + ' · Rattrapage') + '</span>';
+      if (i < max - 1) h += '<i>perdu ›</i>';
+    }
+    return h + '</div><div class="sub">Si un pari passe, le cycle est terminé et on recommence avec le nouveau capital. Sinon, le pari suivant rattrape la perte.</div>';
   }
   function plFoot() {
     var H = PL.hist || [], w = H.filter(function (x) { return x.ok; }).length;

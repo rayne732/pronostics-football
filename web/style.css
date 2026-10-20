@@ -1022,3 +1022,5 @@ button.chip small{display:block}
 .plhero{border-color:var(--green);box-shadow:0 14px 32px -20px var(--shadow)}
 .plmise{font-size:1.15rem;margin-bottom:8px}.plmise b{font-size:1.5rem;color:var(--green)}
 .plsp{display:block;color:var(--mute);font-size:.72rem;margin-bottom:2px}
+.plflow{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:6px 0 4px}.plflow span{padding:6px 12px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);font-size:.78rem;font-weight:700;color:var(--mute)}
+.plflow span.on{background:color-mix(in srgb,var(--green) 18%,var(--surface));border-color:var(--green);color:var(--green)}.plflow span.done{opacity:.55;text-decoration:line-through}.plflow i{font-style:normal;font-size:.72rem;color:var(--mute)}
