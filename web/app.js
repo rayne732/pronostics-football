@@ -2330,9 +2330,30 @@
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 && !valid && !c.sg && !c.duo ? plRaiseHTML(c) : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
-      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button>' + (c.legs.length === 1 && !c.sg ? '<button class="voir low" data-plmatch="' + esc(c.legs[0].id) + '">Tous les paris de ce match</button>' : '') + '<button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
+      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button>' + (c.legs.length === 1 && !c.sg ? '<button class="voir low" data-pladd="' + (c.ix == null ? i : c.ix) + '">+ Mon combiné</button><button class="voir low" data-plmatch="' + esc(c.legs[0].id) + '">Tous les paris de ce match</button>' : '') + '<button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
 
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
+  }
+  function plInTk(c) { var l = c.legs[0]; return (PL.tk || []).some(function (x) { return x.id === l.id && x.m === l.m && x.s === l.s; }); }
+  function plSelRow(c) {                                           // une ligne simple : probabilité, pari, et le bouton qui l'ajoute (ou le retire) du combiné
+    var on = plInTk(c), l = c.legs[0];
+    return '<div class="plsel' + (on ? ' on' : '') + '"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(c.pm || c.pa) + '</span><span class="plrt"><b>' + esc(l.s) + '</b><small>' + esc(l.m) + '</small></span>' + plWinamax(c) +
+      '<button class="voir ' + (on ? 'mid' : 'low') + '" data-pladd="' + c.ix + '">' + (on ? '✓ Ajouté' : '+ Ajouter') + '</button></div>';
+  }
+  function plTkCand() {                                            // le combiné en construction, sous la forme d'un pari du plan
+    var L = PL.tk || [], pa = L.reduce(function (t, x) { return t * x.pa; }, 1);
+    return { legs: L.map(function (x) { return { id: x.id, m: x.m, s: x.s, match: x.match, pick: x.pick, icon: x.icon, lg: x.lg, time: x.time }; }), pa: pa, key: 'tk', duo: L.length > 1, acc: L.length > 1 };
+  }
+  function plTicketHTML(info) {                                    // « Mon combiné » : les paris choisis, la cote du combiné à saisir, la mise
+    var L = PL.tk || [];
+    if (!L.length) return '';
+    var c = plTkCand(), pa = c.pa, oe = L.reduce(function (t, x) { return t * plLegOdds(x.pa); }, 1), o = plNum(PLODDS.tk), valid = o >= 1 / pa, stake = info.fn(o > 1 ? o : oe, c);
+    return '<div class="tkan pltk"><div class="plch"><b>Mon combiné · ' + L.length + ' pari' + (L.length > 1 ? 's' : '') + '</b><button class="lnk" data-pltkclr style="margin-left:auto">Vider</button></div>' +
+      L.map(function (x, i) { return '<div class="pltkl"><span class="plrt"><b>' + esc(x.match) + '</b><small>' + esc(x.s) + ' · ' + esc(x.m) + ' · ' + pct(x.pa) + '</small></span><button class="rm" data-pltkrm="' + i + '" aria-label="Retirer">✕</button></div>'; }).join('') +
+      '<div class="plmeta"><span>Chances que tout passe<b>' + pct(pa) + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
+      '<div class="as-odds"><label>Cote du combiné chez ton bookmaker<input data-plodds="tk" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
+      (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Ajoute d’autres matchs, puis saisis la cote du combiné.</div>') + '</div>' +
+      '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="tk"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button></div></div>';
   }
   var PLM = null;                                                  // match ouvert pour voir tous ses paris : { id }
   function plMatchView(info, prof, T) {
@@ -2364,7 +2385,7 @@
       h += '<details class="plm"' + (fi < 4 ? ' open' : '') + '><summary><span class="plmn"><b>' + esc(fam.name) + '</b><small>' + rows.length + ' paris · jusqu’à ' + pct(rows[0][1]) + '</small></span></summary>' + rows.map(function (x) {
         var pa = x[1] - hair - (fam.v ? 0 : 0.02) - extra, c = { legs: [{ id: PLM.id, m: fam.name, s: x[0], match: name, pick: fam.name + ' : ' + x[0], icon: icon, lg: lg, time: time, ref: ref }], pa: pa, icon: icon, low: pa < prof.minPa, duo: false, pm: x[1] };
         c.key = plKey(c); c.ix = PLC.length; PLC.push(c);
-        return '<details class="plrow"><summary><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(x[1]) + '</span><span class="plrt"><b>' + esc(x[0]) + '</b><small>' + esc(fam.name) + '</small></span>' + plWinamax(c) + '</summary>' + plCandHTML(c, c.ix, info) + '</details>';
+        return plSelRow(c);
       }).join('') + '</details>';
     });
     return h;
@@ -2419,6 +2440,7 @@
         '<div class="sub">La mise dépend de la cote : plus elle est basse, plus il faut miser pour récupérer. Elle est plafonnée à ' + Math.round(plProf().recCap * 100) + ' % de ton capital restant (' + eur2(bank) + '). ' +
         (rs0.full ? '' : 'Avec une cote de 1,30 tu ne récupérerais pas tout : il faudrait une cote d’au moins <b>' + rs0.minOdds.toFixed(2).replace('.', ',') + '</b> pour tout rattraper avec ce que tu as.') + '</div>';
     }
+    h += plTicketHTML(info);
     var G = plAllGroups(R, T, prof);
     PLC = plCands(R, prof, T, G);
     PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
@@ -2442,8 +2464,9 @@
     if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary><div class="sub">Tous les matchs de l’onglet Découvrir, chacun avec ses paris les plus probables (même les très sûrs). Prends ceux que ton bookmaker propose.</div>' +
       G.map(function (g) {
         if (g.none) return '<div class="plm none"><span>' + esc(g.time || '') + ' · ' + esc(g.match) + '</span><small>' + esc(g.lg) + ' · pas de pronostic disponible</small></div>';
+        if (g.icon === '⚽' && g.cands[0]) return '<button class="plm plmbtn" data-plmatch="' + esc(g.cands[0].legs[0].id) + '"><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + (g.lg ? esc(g.lg) + ' · ' : '') + 'jusqu’à ' + pct(g.cands[0].pa) + '</small></span><span class="plgo">›</span></button>';
         return '<details class="plm"><summary><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + g.icon + ' ' + esc(PLSPN[g.icon] || '') + (g.lg ? ' · ' + esc(g.lg) : '') + ' · jusqu’à ' + pct(g.cands[0].pa) + '</small></span></summary>' +
-          g.cands.map(function (c) { return plRow(c, c.ix, info); }).join('') + '</details>';
+          g.cands.map(function (c) { return plSelRow(c); }).join('') + '</details>';
       }).join('') + '</details>';
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
@@ -2488,10 +2511,22 @@
     return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
   }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-plmatch],[data-plmback],[data-plgobets],[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    var t = e.target.closest('[data-pladd],[data-pltkrm],[data-pltkclr],[data-plmatch],[data-plmback],[data-plgobets],[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
     if (!t) return;
     var T = parisToday(), y = window.scrollY, c, cy;
-    if (t.hasAttribute('data-plmatch')) { PLM = { id: t.getAttribute('data-plmatch') }; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-pladd')) {
+      var ca = PLC[+t.getAttribute('data-pladd')];
+      if (ca) {
+        PL.tk = PL.tk || []; var la = ca.legs[0], at = -1;
+        PL.tk.forEach(function (x, i2) { if (x.id === la.id && x.m === la.m && x.s === la.s) at = i2; });
+        if (at >= 0) PL.tk.splice(at, 1);
+        else { PL.tk = PL.tk.filter(function (x) { return x.id !== la.id; }); PL.tk.push({ id: la.id, m: la.m, s: la.s, match: la.match, pick: la.pick, icon: la.icon, lg: la.lg, time: la.time, pa: ca.pa }); }
+        PLODDS.tk = ''; plSave();
+      }
+    }
+    else if (t.hasAttribute('data-pltkrm')) { PL.tk.splice(+t.getAttribute('data-pltkrm'), 1); PLODDS.tk = ''; plSave(); }
+    else if (t.hasAttribute('data-pltkclr')) { PL.tk = []; PLODDS.tk = ''; plSave(); }
+    else if (t.hasAttribute('data-plmatch')) { PLM = { id: t.getAttribute('data-plmatch') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plmback')) { PLM = null; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plgobets')) { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plex') || t.hasAttribute('data-plexrm')) {
@@ -2506,8 +2541,9 @@
       PL = { on: 1, init: PLD.start, wd: 0, log: [], start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
     }
     else if (t.hasAttribute('data-plgo')) {
-      c = PLC[+t.getAttribute('data-plgo')];
-      var o = c && plOddsOf(c);
+      var isTk = t.getAttribute('data-plgo') === 'tk';
+      c = isTk ? plTkCand() : PLC[+t.getAttribute('data-plgo')];
+      var o = c && (isTk ? plNum(PLODDS.tk) : plOddsOf(c));
       if (!c || !(o >= 1 / c.pa) || t.disabled) return;
       var prof = plProf();
       if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
@@ -2518,6 +2554,7 @@
       var bid = 'pl' + Date.now().toString(36), spk = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
       cy.steps.push({ legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s, match: l.match, pick: l.pick, icon: l.icon, lg: l.lg }; }), pa: c.pa, o: o, stake: stake, res: null, t: Date.now(), bid: bid });
       if (window.Bets && Bets.add) Bets.add({ id: bid, t: Date.now(), d: T, label: c.legs.map(function (l) { return l.match + ' : ' + l.pick.replace(/^[^:]*: /, ''); }).join(' + '), sport: spk[c.legs[0].icon] || 'autre', kind: c.legs.length > 1 ? 'combine' : 'simple', cat: 'Plan', book: '', stake: stake, odds: o, st: 'p', p: Plan.r2(c.pa), legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s }; }), nLegs: c.legs.length });
+      if (isTk) { PL.tk = []; PLODDS.tk = ''; }
       plSave();
     }
     else if (t.hasAttribute('data-plskip')) {
