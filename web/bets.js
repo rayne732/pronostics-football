@@ -310,5 +310,7 @@ var Bets = (function () {
       box.textContent = o > 1 ? 'Cette cote suppose ' + pc(1 / o) + ' de chances de gagner' + (s > 0 ? ' · gain possible : ' + eur(s * (o - 1), true) : '') + '.' : '';
     });
   }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, resolver: null };
+  function add(bet) { if (!bet || !bet.id || mem.bets.some(function (x) { return x.id === bet.id; })) return; mem.bets.push(bet); save(); }          // pari ajouté par l'appli (onglet Plans)
+  function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; ch = true; } }); if (ch) save(); }
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, resolver: null };
 })();

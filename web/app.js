@@ -2061,11 +2061,27 @@
     Object.keys(ex.lg || {}).forEach(function (k) { b.push('<button class="chip pill on" data-plexrm="lg|' + esc(k) + '">' + esc(k) + ' ✕</button>'); });
     return b.length ? '<div class="sub">Exclus de mes propositions (touche pour remettre) :</div><div class="chips">' + b.join('') + '</div>' : '';
   }
+  function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
+    if (!PL || !PL.on) return '';
+    var init = PL.init || PL.start, wd = PL.wd || 0, net = Plan.r2(PL.bank + wd - init), L = PL.log || [], w = L.filter(function (x) { return x.res; }).length, staked = 0, ret = 0, pend = 0;
+    L.forEach(function (x) { staked += x.stake; if (x.res) ret += x.stake * x.o; });
+    if (PL.cyc) PL.cyc.steps.forEach(function (x) { if (x.res === null) pend++; });
+    var H = PL.hist || [], cw = H.filter(function (x) { return x.ok; }).length, prog = Math.max(0, Math.min(1, (PL.bank - init) / Math.max(1, PL.goal - init)));
+    return '<div class="tkan"><div class="plch"><b>Mon plan de mise</b></div><div class="tkmeta"><span>Départ<b>' + eur2(init) + '</b></span><span>Capital actuel<b>' + eur2(PL.bank) + '</b></span><span>Objectif<b>' + eur2(PL.goal) + '</b></span></div>' +
+      '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div>' +
+      '<div class="plgrid"><span>' + (net >= 0 ? 'Gain net' : 'Perte nette') + '<b class="' + (net >= 0 ? '' : 'ko') + '">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + '</b>' + (wd ? '<small>dont retiré : ' + eur2(wd) + '</small>' : '') + '</span>' +
+      '<span>Paris gagnés<b>' + w + ' / ' + L.length + '</b>' + (pend ? '<small>' + pend + ' en cours</small>' : '') + '</span><span>Misé au total<b>' + eur2(staked) + '</b><small>encaissé ' + eur2(ret) + '</small></span></div>' +
+      '<div class="sub">Cycles gagnés : <b>' + cw + ' sur ' + H.length + '</b>. Chaque pari misé depuis l’onglet Plans est ajouté ci-dessous avec la catégorie « Plan » et se règle tout seul.</div></div>';
+  }
   function plSettle(won) {                                         // règle l'étape en attente, met à jour le capital, clôt le cycle si c'est fini
     var cy = PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
     if (!s || s.res !== null) return;
     s.res = won;
     PL.bank = Plan.r2(PL.bank + (won ? s.stake * (s.o - 1) : -s.stake));
+    PL.log = PL.log || [];
+    PL.log.unshift({ d: parisToday(), label: s.legs.map(function (l) { return l.match; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + '), stake: s.stake, o: s.o, res: !!won });
+    if (PL.log.length > 200) PL.log.length = 200;
+    if (s.bid && window.Bets && Bets.setStatus) Bets.setStatus(s.bid, won ? 'w' : 'l');
     var T = parisToday();
     if (won || cy.steps.length >= cy.max || PL.bank < 1) {
       PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: !!won });
@@ -2292,7 +2308,7 @@
     else if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
     else if (t.hasAttribute('data-plstart')) {
       if (!(PLD.start >= 5 && PLD.goal > PLD.start)) return;
-      PL = { on: 1, start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
+      PL = { on: 1, init: PLD.start, wd: 0, log: [], start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
     }
     else if (t.hasAttribute('data-plgo')) {
       c = PLC[+t.getAttribute('data-plgo')];
@@ -2304,7 +2320,9 @@
       var stake = cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : Plan.stake1(cy.cb, prof);
       if (stake < 1) return;
       if (!cy.steps.length) cy.g = Plan.target(stake, o);
-      cy.steps.push({ legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s, match: l.match, pick: l.pick, icon: l.icon, lg: l.lg }; }), pa: c.pa, o: o, stake: stake, res: null, t: Date.now() });
+      var bid = 'pl' + Date.now().toString(36), spk = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
+      cy.steps.push({ legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s, match: l.match, pick: l.pick, icon: l.icon, lg: l.lg }; }), pa: c.pa, o: o, stake: stake, res: null, t: Date.now(), bid: bid });
+      if (window.Bets && Bets.add) Bets.add({ id: bid, t: Date.now(), d: T, label: c.legs.map(function (l) { return l.match + ' : ' + l.pick.replace(/^[^:]*: /, ''); }).join(' + '), sport: spk[c.legs[0].icon] || 'autre', kind: c.legs.length > 1 ? 'combine' : 'simple', cat: 'Plan', book: '', stake: stake, odds: o, st: 'p', p: Plan.r2(c.pa), legs: c.legs.map(function (l) { return { id: l.id, m: l.m, s: l.s }; }), nLegs: c.legs.length });
       plSave();
     }
     else if (t.hasAttribute('data-plskip')) {
@@ -2316,7 +2334,7 @@
       cy = PL.cyc;
       if (cy && cy.steps.length && cy.steps[cy.steps.length - 1].res !== null) { PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: false }); PL.pause = T; PL.cyc = null; plSave(); }
     }
-    else if (t.hasAttribute('data-plwd')) { PL.bank = Plan.r2(PL.bank - plNum(t.getAttribute('data-plwd'))); PL.start = Math.min(PL.start, PL.bank); PL.goal = Math.max(PL.goal, PL.bank * 2); plSave(); }
+    else if (t.hasAttribute('data-plwd')) { PL.wd = Plan.r2((PL.wd || 0) + plNum(t.getAttribute('data-plwd'))); PL.bank = Plan.r2(PL.bank - plNum(t.getAttribute('data-plwd'))); PL.start = Math.min(PL.start, PL.bank); PL.goal = Math.max(PL.goal, PL.bank * 2); plSave(); }
     else if (t.hasAttribute('data-plack')) { PL.ack = 1; plSave(); }
     else if (t.hasAttribute('data-plreset')) { if (!window.confirm || window.confirm('Effacer ce plan et recommencer ?')) { PL = null; try { localStorage.removeItem('pf-plan'); } catch (err) { /* ignoré */ } } }
     render(); window.scrollTo(0, y);
@@ -2891,7 +2909,7 @@
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'bets') {
-      app.innerHTML = Bets.html();
+      app.innerHTML = planSummaryHTML() + Bets.html();
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
