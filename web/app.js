@@ -2191,15 +2191,13 @@
     if (!PL || !PL.on) return '';
     plSync();
     plAuto();
-    var init = PL.init || PL.start, wd = PL.wd || 0, net = Plan.r2(PL.bank + wd - init), L = PL.log || [], w = L.filter(function (x) { return x.res; }).length, staked = 0, ret = 0, pend = 0;
-    L.forEach(function (x) { staked += x.stake; if (x.res) ret += x.stake * x.o; });
-    if (PL.cyc) PL.cyc.steps.forEach(function (x) { if (x.res === null) pend++; });
+    var init = PL.init || PL.start, wd = PL.wd || 0, net = Plan.r2(PL.bank + wd - init), SA = Bets.statsAll(), L = { length: SA.n }, w = SA.w, staked = SA.staked, ret = SA.ret, pend = SA.p;
     var H = PL.hist || [], cw = H.filter(function (x) { return x.ok; }).length, prog = Math.max(0, Math.min(1, (PL.bank - init) / Math.max(1, PL.goal - init)));
     return '<div class="tkan"><div class="plch"><b>Mon plan de mise</b></div><div class="tkmeta"><span>Départ<b>' + eur2(init) + '</b></span><span>Capital actuel<b>' + eur2(PL.bank) + '</b></span><span>Objectif<b>' + eur2(PL.goal) + '</b></span></div>' +
       '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div>' +
       '<div class="plgrid"><span>' + (net >= 0 ? 'Gain net' : 'Perte nette') + '<b class="' + (net >= 0 ? '' : 'ko') + '">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + '</b>' + (wd ? '<small>dont retiré : ' + eur2(wd) + '</small>' : '') + '</span>' +
       '<span>Paris gagnés<b>' + w + ' / ' + L.length + '</b>' + (pend ? '<small>' + pend + ' en cours</small>' : '') + '</span><span>Misé au total<b>' + eur2(staked) + '</b><small>encaissé ' + eur2(ret) + '</small></span></div>' +
-      '<div class="sub">Cycles gagnés : <b>' + cw + ' sur ' + H.length + '</b>. Chaque pari misé depuis l’onglet Plans est ajouté ci-dessous avec la catégorie « Plan » et se règle tout seul.</div></div>' + plCycleHTML() + plFoot();
+      '<div class="sub">Cycles gagnés : <b>' + cw + ' sur ' + H.length + '</b>. Ton capital, tes gains et tes pertes viennent de <b>tous</b> les paris de cette page : le plan de l’onglet Plans s’adapte à ce que tu gagnes ou perds ici.</div></div>' + plCycleHTML() + plFoot();
   }
   function plMode(bank) {                                          // 'gain' : tu es au-dessus de ton départ (tu joues avec tes gains) ; 'baisse' : tu as perdu plus de 20 % ; sinon 'normal'
     var init = PL.init || PL.start;
@@ -2223,21 +2221,30 @@
     var cy = PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
     if (!s || s.res !== null) return;
     s.res = won;
-    PL.bank = Plan.r2(PL.bank + (won ? s.stake * (s.o - 1) : -s.stake));
+    if (s.bid && window.Bets && Bets.setStatus) Bets.setStatus(s.bid, won ? 'w' : 'l');
+    else PL.adj = Plan.r2((PL.adj || 0) + (won ? s.stake * (s.o - 1) : -s.stake));
+    PL.bank = plBankNow();
     PL.log = PL.log || [];
     PL.log.unshift({ d: parisToday(), label: s.legs.map(function (l) { return l.match; }).filter(function (x, i, a) { return a.indexOf(x) === i; }).join(' + '), stake: s.stake, o: s.o, res: !!won });
     if (PL.log.length > 200) PL.log.length = 200;
     if (s.bid && window.Bets && Bets.setStatus) Bets.setStatus(s.bid, won ? 'w' : 'l');
     var T = parisToday();
     if (won || cy.steps.length >= cy.max || PL.bank < 1) {
-      PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: !!won });
+      PL.hist.unshift({ day: T, net: plCycNet(cy), n: cy.steps.length, ok: !!won });
       if (PL.hist.length > 40) PL.hist.length = 40;
       if (!won) PL.pause = T;
       PL.cyc = null;
     }
     plSave();
   }
-  function plSync() {                                              // le résultat saisi dans « Mes paris » règle l'étape du plan (gagné, perdu, ou remboursé : l'étape est annulée)
+  function plBankNow() {                                           // capital du plan = départ + résultat de TOUS les paris de Mes paris (gagnés, perdus) - retraits + correction manuelle
+    var st0 = window.Bets && Bets.statsAll ? Bets.statsAll() : { profit: 0 };
+    return Plan.r2((PL.init || PL.start) + (PL.adj || 0) - (PL.wd || 0) + st0.profit);
+  }
+  function plCycLoss(cy) { var L = 0; cy.steps.forEach(function (x) { if (x.res === false) L += x.stake; else if (x.res === true) L -= x.stake * (x.o - 1); }); return Plan.r2(L); }
+  function plCycNet(cy) { return Plan.r2(-plCycLoss(cy)); }
+  function plSync() {
+    if (PL && PL.on) PL.bank = plBankNow();                                              // le résultat saisi dans « Mes paris » règle l'étape du plan (gagné, perdu, ou remboursé : l'étape est annulée)
     var cy = PL && PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
     if (!s || s.res !== null || !s.bid || !window.Bets || !Bets.status) return;
     var st = Bets.status(s.bid);
@@ -2451,7 +2458,7 @@
       return h + '<div class="tkrec"><b>Assez pour aujourd’hui</b><div class="tkn3">Deux cycles par jour au maximum. Reviens demain.</div></div>';
     }
     // proposition de la prochaine étape
-    var k = cy ? cy.steps.length : 0, cb = cy ? cy.cb : PL.bank, L = cy ? Plan.r2(cy.cb - PL.bank) : 0, info;
+    var k = cy ? cy.steps.length : 0, cb = cy ? cy.cb : PL.bank, L = cy ? plCycLoss(cy) : 0, info;
     h += plFlow(k, cy ? cy.max : prof.steps);
     if (k === 0) {
       var s1 = plBase(cb, prof);
@@ -2506,7 +2513,7 @@
   function plTreeHTML(hero, k, cy, T) {                            // « Et ensuite ? » : le pari suivant si ça passe, et si ça perd, avec la mise recalculée
     var prof = plProf(), o1 = (plAutoOdds(hero) || {}).o || (1 - Plan.MARGIN) / hero.pa, stake, L, g;
     if (k === 0) { stake = plBase(PL.bank, prof, hero.pa); L = 0; g = Plan.target(stake, o1); }
-    else { L = Plan.r2(cy.cb - PL.bank); g = cy.g; stake = Plan.recStake(L, g, o1, PL.bank, prof).stake; }
+    else { L = plCycLoss(cy); g = cy.g; stake = Plan.recStake(L, g, o1, PL.bank, prof).stake; }
     var bankW = Plan.r2(PL.bank + stake * (o1 - 1)), bankL = Plan.r2(PL.bank - stake), ko = hero.legs[0].time ? kickoff({ date: T, time: hero.legs[0].time }).getTime() + 130 * 60000 : 0;
     function later(c) { return c !== hero && !c.bad && c.legs.every(function (l) { return hero.legs.every(function (x) { return x.match !== l.match; }) && (!l.time || kickoff({ date: T, time: l.time }).getTime() >= ko); }); }
     var pool = PLC.filter(later), days = ((PL.days || {})[T] || 0) + (k === 0 ? 1 : 0), rows = '';
@@ -2579,7 +2586,7 @@
       var prof = plProf();
       if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
       cy = PL.cyc;
-      var stake = (isTk && plNum(PLODDS.tkstake) > 0) ? plNum(PLODDS.tkstake) : cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof, c.pa);
+      var stake = (isTk && plNum(PLODDS.tkstake) > 0) ? plNum(PLODDS.tkstake) : cy.steps.length ? Plan.recStake(plCycLoss(cy), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof, c.pa);
       if (stake < 1) return;
       if (!cy.steps.length) cy.g = Plan.target(stake, o);
       var bid = 'pl' + Date.now().toString(36), spk = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
@@ -2595,9 +2602,9 @@
     else if (t.hasAttribute('data-plres')) plSettle(t.getAttribute('data-plres') === '1');
     else if (t.hasAttribute('data-plend')) {
       cy = PL.cyc;
-      if (cy && cy.steps.length && cy.steps[cy.steps.length - 1].res !== null) { PL.hist.unshift({ day: T, net: Plan.r2(PL.bank - cy.cb), n: cy.steps.length, ok: false }); PL.pause = T; PL.cyc = null; plSave(); }
+      if (cy && cy.steps.length && cy.steps[cy.steps.length - 1].res !== null) { PL.hist.unshift({ day: T, net: plCycNet(cy), n: cy.steps.length, ok: false }); PL.pause = T; PL.cyc = null; plSave(); }
     }
-    else if (t.hasAttribute('data-plwd')) { PL.wd = Plan.r2((PL.wd || 0) + plNum(t.getAttribute('data-plwd'))); PL.bank = Plan.r2(PL.bank - plNum(t.getAttribute('data-plwd'))); PL.start = Math.min(PL.start, PL.bank); PL.goal = Math.max(PL.goal, PL.bank * 2); plSave(); }
+    else if (t.hasAttribute('data-plwd')) { PL.wd = Plan.r2((PL.wd || 0) + plNum(t.getAttribute('data-plwd'))); PL.bank = plBankNow(); PL.start = Math.min(PL.start, PL.bank); PL.goal = Math.max(PL.goal, PL.bank * 2); plSave(); }
     else if (t.hasAttribute('data-plack')) { PL.ack = 1; plSave(); }
     else if (t.hasAttribute('data-plreset')) { if (!window.confirm || window.confirm('Effacer ce plan et recommencer ?')) { PL = null; try { localStorage.removeItem('pf-plan'); } catch (err) { /* ignoré */ } } }
     render(); window.scrollTo(0, y);
@@ -2611,8 +2618,8 @@
     else if (t.hasAttribute('data-plgoal')) PLD.goal = plNum(t.value);
     else if (t.hasAttribute('data-plset') && PL) {
       var kk = t.getAttribute('data-plset'), v = plNum(t.value);
-      if (kk === 'bank' && v >= 0) { if (PL.cyc) PL.cyc.cb = Plan.r2(PL.cyc.cb + v - PL.bank); PL.bank = Plan.r2(v); }
-      else if (kk === 'start' && v >= 1) PL.start = Plan.r2(v);
+      if (kk === 'bank' && v >= 0) { PL.adj = Plan.r2((PL.adj || 0) + v - plBankNow()); if (PL.cyc) PL.cyc.cb = Plan.r2(PL.cyc.cb + v - PL.bank); PL.bank = plBankNow(); }
+      else if (kk === 'start' && v >= 1) { var keep = plBankNow(); PL.init = Plan.r2(v); PL.start = Plan.r2(v); PL.adj = Plan.r2((PL.adj || 0) + keep - plBankNow()); PL.bank = plBankNow(); }
       else if (kk === 'goal' && v > PL.start) PL.goal = Plan.r2(v);
       else if (kk === 'target' && v >= 1) PL.target = Plan.r2(v);
       plSave();
@@ -3416,7 +3423,7 @@
   var GEN0 = D.generated, GENCHK = 0;
   function typing() { var ae = document.activeElement; return !!((ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) || app.querySelector('details[open]')); }          // saisie en cours ou rubrique ouverte : on ne dérange pas
   function checkNewData(force) {
-    if (!force && Date.now() - GENCHK < 4 * 60000) return;
+    if (Date.now() - GENCHK < (force ? 30000 : 4 * 60000)) return;                    // jamais plus d'une vérification toutes les 30 s (4 min en veille)
     GENCHK = Date.now();
     fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (t) {
       var blk = /<script id="data"[^>]*>([\s\S]*?)<\/script>/.exec(t), m = blk && /"generated"\s*:\s*"([^"]+)"/.exec(blk[1]), g = null;

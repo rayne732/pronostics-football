@@ -297,7 +297,8 @@ var Bets = (function () {
     });
   }
   function add(bet) { if (!bet || !bet.id || mem.bets.some(function (x) { return x.id === bet.id; })) return; mem.bets.push(bet); save(); }          // pari ajouté par l'appli (onglet Plans)
+  function statsAll() { settle(); return stats(mem.bets); }                    // bilan de TOUS les paris (le plan de mise s'appuie dessus)
   function status(id) { var r = null; mem.bets.forEach(function (x) { if (x.id === id) r = x.st; }); return r; }
   function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; ch = true; } }); if (ch) save(); }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, resolver: null };
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, statsAll: statsAll, resolver: null };
 })();
