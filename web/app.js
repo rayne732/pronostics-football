@@ -2050,26 +2050,6 @@
       '<div class="tkbtns"><button class="voir mid wide" data-plstart>Démarrer ce plan</button></div>';
     return h;
   }
-  var PLMK = { all: 'Tous les paris', o15: '+1,5 buts', o25: '+2,5 buts', dc: 'Double chance', win: 'Victoire' };
-  function plPool(R, T) {                                          // type de pari choisi : on le calcule pour tous les matchs de foot du jour (pas seulement les « sûrs »)
-    var mk = (PL && PL.mkt) || 'all';
-    if (mk === 'all') return R;
-    var picks = [];
-    D.fixtures.forEach(function (f) {
-      if (f.date !== T || fstate(f) === 'done') return;
-      var M, by = {}, cand = [];
-      try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (e) { return; }
-      M.fams.forEach(function (x) { by[x.name] = x; });
-      function add(fam, sel) { var x = by[fam], it = x && x.sels.filter(function (y) { return y[0] === sel; })[0]; if (it) cand.push({ m: fam, s: sel, p: it[1], v: x.validated }); }
-      if (mk === 'o15') add('Total buts (plus)', 'Plus de 1,5 buts');
-      else if (mk === 'o25') add('Total buts (plus)', 'Plus de 2,5 buts');
-      else if (mk === 'dc') { add('Double chance', f.home + ' ou nul'); add('Double chance', f.away + ' ou nul'); }
-      else if (mk === 'win') { add('Résultat du match', f.home); add('Résultat du match', f.away); }
-      cand.sort(function (a, b) { return b.p - a.p; });
-      if (cand[0]) picks.push({ icon: '⚽', lg: (D.leagues[f.div] || {}).name || '', match: nm(f.home) + ' – ' + nm(f.away), time: f.time, pick: cand[0].m + ' : ' + cand[0].s, p: cand[0].p, v: cand[0].v, div: f.div, ref: 'data-open="' + f.i + '"', bid: f.id, bm: cand[0].m, bs: cand[0].s });
-    });
-    return { picks: picks.sort(function (a, b) { return b.p - a.p; }), favs: [], counts: R.counts, T: R.T };
-  }
   var PLFX = null;
   function plAutoOdds(c) {                                         // cote lue automatiquement (The Odds API, marché 1N2) ; Winamax, Betclic, Unibet ou PMU d'abord, sinon la moyenne. Double chance et « remboursé si nul » sont déduits du 1N2 : estimation un peu optimiste
     if (!PLFX) { PLFX = {}; D.fixtures.forEach(function (f) { PLFX[f.id] = f; }); }
@@ -2162,9 +2142,7 @@
         '<div class="sub">La mise dépend de la cote : plus elle est basse, plus il faut miser pour récupérer. Elle est plafonnée à ' + Math.round(plProf().recCap * 100) + ' % de ton capital restant (' + eur2(bank) + '). ' +
         (rs0.full ? '' : 'Avec une cote de 1,30 tu ne récupérerais pas tout : il faudrait une cote d’au moins <b>' + rs0.minOdds.toFixed(2).replace('.', ',') + '</b> pour tout rattraper avec ce que tu as.') + '</div>';
     }
-    h += '<div class="chips">' + Object.keys(PLMK).map(function (k) { return '<button class="chip pill' + (((PL.mkt || 'all') === k) ? ' on' : '') + '" data-plmkt="' + k + '">' + PLMK[k] + '</button>'; }).join('') + '</div>' +
-      ((PL.mkt || 'all') !== 'all' ? '<div class="sub">Type de pari choisi : football seulement (les autres sports n’ont pas ce marché). La cote se saisit à la main pour ce type de pari.</div>' : '');
-    PLC = plCands(plPool(R, T), prof, T);
+    PLC = plCands(R, prof, T);
     PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
     PLC.sort(function (x, y) { return x.bad - y.bad || x.ord - y.ord; });
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
@@ -2184,11 +2162,10 @@
     return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
   }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-plmkt],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    var t = e.target.closest('[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
     if (!t) return;
     var T = parisToday(), y = window.scrollY, c, cy;
-    if (t.hasAttribute('data-plmkt')) { PL.mkt = t.getAttribute('data-plmkt'); plSave(); }
-    else if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
+    if (t.hasAttribute('data-plprof')) { PLD.prof = t.getAttribute('data-plprof'); }
     else if (t.hasAttribute('data-plstart')) {
       if (!(PLD.start >= 5 && PLD.goal > PLD.start)) return;
       PL = { on: 1, start: PLD.start, bank: PLD.start, goal: PLD.goal, prof: PLD.prof, cyc: null, hist: [], skip: {}, days: {}, pause: '' }; plSave();
