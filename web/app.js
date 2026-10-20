@@ -2063,6 +2063,7 @@
   }
   function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
     if (!PL || !PL.on) return '';
+    plSync();
     var init = PL.init || PL.start, wd = PL.wd || 0, net = Plan.r2(PL.bank + wd - init), L = PL.log || [], w = L.filter(function (x) { return x.res; }).length, staked = 0, ret = 0, pend = 0;
     L.forEach(function (x) { staked += x.stake; if (x.res) ret += x.stake * x.o; });
     if (PL.cyc) PL.cyc.steps.forEach(function (x) { if (x.res === null) pend++; });
@@ -2090,6 +2091,13 @@
       PL.cyc = null;
     }
     plSave();
+  }
+  function plSync() {                                              // le résultat saisi dans « Mes paris » règle l'étape du plan (gagné, perdu, ou remboursé : l'étape est annulée)
+    var cy = PL && PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
+    if (!s || s.res !== null || !s.bid || !window.Bets || !Bets.status) return;
+    var st = Bets.status(s.bid);
+    if (st === 'w' || st === 'l') plSettle(st === 'w');
+    else if (st === 'v') { cy.steps.pop(); if (!cy.steps.length) { PL.cyc = null; if (PL.days) PL.days[parisToday()] = Math.max(0, (PL.days[parisToday()] || 1) - 1); } plSave(); }
   }
   function plAuto() {                                              // règle tout seul l'étape en attente quand les résultats des matchs sont connus
     var cy = PL && PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
@@ -2194,6 +2202,7 @@
     h += '<div class="bt-warn">Aucune stratégie ne bat les cotes sur la durée : la marge du bookmaker fait perdre en moyenne ~7 % de chaque euro misé. Ce plan cadre le risque, il ne le supprime pas. Ne mise que de l’argent que tu peux perdre. Joueurs Info Service : 09 74 75 13 13.</div>';
     if (!PL) return h + plSetup(R);
     PL.skip = PL.skip || {}; PL.hist = PL.hist || [];
+    plSync();
     plAuto();
     var prof = plProf(), cy = PL.cyc, sec = prof.key === 'se', prog = Math.max(0, Math.min(1, (PL.bank - PL.start) / Math.max(1, PL.goal - PL.start))), net = Plan.r2(PL.bank - PL.start);
     h += '<div class="tkan"><div class="tkmeta"><span>Capital<b>' + eur2(PL.bank) + '</b></span><span>Départ<b>' + eur2(PL.start) + '</b></span><span>Objectif<b>' + eur2(PL.goal) + '</b></span></div>' +
@@ -2218,8 +2227,8 @@
         var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
         h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
           s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>'; }).join('') +
-          '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Le résultat se règle tout seul quand le match est fini ; sinon, tu peux le saisir :' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
-          (s.res === null && last ? '<div class="plbtns"><button class="voir mid" data-plres="1">Gagné</button><button class="voir low" data-plres="0">Perdu</button></div>' : '') + '</div>';
+          '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Ce pari est dans Mes paris : il se règle tout seul quand le match est fini, ou tu le règles là-bas avec Gagné / Perdu.' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
+          (s.res === null && last ? '<div class="plbtns"><button class="voir mid" data-plgobets>Régler dans Mes paris</button></div>' : '') + '</div>';
       });
       if (cy.steps[cy.steps.length - 1].res === null) return h + plFoot();
     } else if (PL.pause === T) {
@@ -2296,9 +2305,10 @@
     return h + '<div class="tkbtns"><button class="voir low wide" data-plreset>Recommencer un plan</button></div>';
   }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
+    var t = e.target.closest('[data-plgobets],[data-plex],[data-plexrm],[data-plprof],[data-plstart],[data-plgo],[data-plskip],[data-plres],[data-plend],[data-plreset],[data-plwd],[data-plack]');
     if (!t) return;
     var T = parisToday(), y = window.scrollY, c, cy;
+    if (t.hasAttribute('data-plgobets')) { st.tab = 'bets'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-plex') || t.hasAttribute('data-plexrm')) {
       var ex = (t.getAttribute('data-plex') || t.getAttribute('data-plexrm')).split('|'), kind = ex.shift(), nmx = ex.join('|');
       PL.ex = PL.ex || { lg: {}, sp: {} }; PL.ex.lg = PL.ex.lg || {}; PL.ex.sp = PL.ex.sp || {};

@@ -193,21 +193,7 @@ var Bets = (function () {
     }
     h += '<div class="bt-line"><input id="bt-budget" inputmode="decimal" placeholder="Budget par mois (€)" value="' + (mem.budget > 0 ? String(mem.budget).replace('.', ',') : '') + '"><button class="bt-b" data-bbud>Enregistrer</button></div></div>';
 
-    // formulaire
-    h += '<div class="sec"><span class="dot g"></span>Ajouter un pari</div><div class="fm bt-form">' +
-      (ui.pre ? '<div class="srcnote">Pré-rempli depuis le site' + (ui.pre.p ? ' : notre probabilité est de <b>' + pc(ui.pre.p) + '</b> (cote juste ' + (1 / ui.pre.p).toFixed(2).replace('.', ',') + ')' : '') +
-        '. Ajoute la <b>mise</b> et la <b>cote réelle vue chez ton bookmaker</b>.</div>' : '') +
-      '<label>Description<input id="bt-label" type="text" maxlength="120" placeholder="ex. PSG gagne, plus de 2,5 buts" value="' + (ui.pre ? esc(ui.pre.label) : '') + '"></label>' +
-      '<div class="bt-2"><label>Mise (€)<input id="bt-stake" inputmode="decimal" placeholder="10" value="' + (ui.pre && ui.pre.stake ? String(ui.pre.stake).replace('.', ',') : '') + '"></label><label>Cote<input id="bt-odds" inputmode="decimal" placeholder="1,85" value="' + (ui.pre && ui.pre.odds ? String(ui.pre.odds).replace('.', ',') : '') + '"></label></div>' +
-      '<div class="bt-imp" id="bt-imp"></div>' +
-      '<div class="bt-2"><label>Sport<select id="bt-sport">' + SPORTS.map(function (s) { return '<option value="' + s[0] + '"' + (ui.sport === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></label>' +
-      '<label>Type<select id="bt-kind"><option value="simple"' + (ui.kind === 'simple' ? ' selected' : '') + '>Simple</option><option value="combine"' + (ui.kind === 'combine' ? ' selected' : '') + '>Combiné</option></select></label></div>' +
-      '<label>Bookmaker<select id="bt-book"><option value="">Non précisé</option>' + Books.list.map(function (b) { return '<option value="' + b[0] + '"' + (ui.book === b[0] ? ' selected' : '') + '>' + b[1] + '</option>'; }).join('') + '<option value="autre"' + (ui.book === 'autre' ? ' selected' : '') + '>Autre</option></select></label>' +
-      '<label>Catégorie<input id="bt-cat" type="text" maxlength="30" list="bt-cats" placeholder="ex. Pronostic sûr, Combiné, Test…" value="' + esc(ui.pre && ui.pre.cat ? ui.pre.cat : ui.cat) + '"></label>' +
-      '<datalist id="bt-cats">' + allCats().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist>' +
-      '<label>Date<input id="bt-date" type="date" value="' + today + '"></label>' +
-      (ui.msg ? '<div class="bt-warn">' + esc(ui.msg) + '</div>' : '') +
-      '<button class="voir mid wide" data-badd>Ajouter ce pari</button></div>';
+    h += '<div class="srcnote">Les paris s’ajoutent ici tout seuls quand tu mises depuis l’onglet <b>Plans</b>. Règle-les avec <b>Gagné</b>, <b>Perdu</b> ou <b>Remboursé</b> : les statistiques et ton capital se mettent à jour.</div>';
 
     // courbe et répartition
     h += chart(list);
@@ -311,6 +297,7 @@ var Bets = (function () {
     });
   }
   function add(bet) { if (!bet || !bet.id || mem.bets.some(function (x) { return x.id === bet.id; })) return; mem.bets.push(bet); save(); }          // pari ajouté par l'appli (onglet Plans)
+  function status(id) { var r = null; mem.bets.forEach(function (x) { if (x.id === id) r = x.st; }); return r; }
   function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; ch = true; } }); if (ch) save(); }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, resolver: null };
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, resolver: null };
 })();
