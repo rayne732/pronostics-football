@@ -2187,12 +2187,13 @@
       });
     return h;
   }
-  /* ------------------------------------------------------------ compte et synchronisation */
-  var AUI = { step: 'email', email: '', code: '', msg: '' }, SYNC = { timer: 0 };
+  /* ------------------------------------------------------------ compte : connexion, profil, niveaux d'accès, synchronisation des paris */
+  var AUI = { mode: 'login', step: 'email', email: '', pass: '', code: '', msg: '', ok: '', users: null, ask: '' }, SYNC = { timer: 0 }, PROF = null;
   var ROLES = { free: 'Gratuit', premium: 'Premium', admin: 'Admin' };
-  function betsTabRefresh() { if (st.tab === 'bets' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+  var ACCESS = [['Suivi de tes paris et statistiques', 1, 1, 1], ['Plans de mise et combinés', 1, 1, 1], ['Synchronisation sur tous tes appareils', 1, 1, 1], ['Plans avancés et alertes', 0, 1, 1], ['Gestion des comptes', 0, 0, 1]];
   function pfChanged() { if (!Account.on()) return; clearTimeout(SYNC.timer); SYNC.timer = setTimeout(function () { pfSync(); }, 2500); }
   window.pfChanged = pfChanged; Bets.onChange = pfChanged;
+  function acRefresh() { if ((st.tab === 'account' || st.tab === 'bets') && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } else renderAvatar(); }
   function pfSync() {                                              // récupère la sauvegarde du compte, la fusionne avec cet appareil, puis renvoie le résultat
     if (!Account.on() || Account.state().busy) return Promise.resolve();
     Account.set({ busy: true, msg: '' });
@@ -2203,50 +2204,111 @@
       return Account.push({ v: 1, bets: Bets.dump(), plan: PL });
     }).then(function () { Account.set({ last: Date.now(), msg: '' }); }).catch(function (e) {
       Account.set({ msg: String(e && e.message) === 'auth' ? 'Session expirée : reconnecte-toi.' : 'Synchronisation impossible pour l’instant (tes données restent sur cet appareil).' });
-    }).then(function () { Account.set({ busy: false }); betsTabRefresh(); });
+    }).then(function () { Account.set({ busy: false }); acRefresh(); });
   }
-  function accountHTML() {
-    var h = '<div class="tkan plac"><div class="plch"><b>Mon compte</b></div>';
-    if (Account.on()) {
-      var A = Account.state(), r = Account.role();
-      return h + '<div class="sub">' + esc(Account.email()) + ' · <b>' + esc(ROLES[r] || '…') + '</b>' + (A.last ? ' · synchronisé à ' + new Date(A.last).toTimeString().slice(0, 5) : '') + (A.busy ? ' · synchronisation…' : '') + '</div>' +
-        (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') + '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button><button class="voir low" data-acout>Se déconnecter</button></div></div>';
+  function loadProfile() { return Account.profile().then(function (p) { PROF = p; acRefresh(); }); }
+  function initials() { var e = Account.email() || ''; return (e.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 2) || '?').toUpperCase(); }
+  function renderAvatar() {                                        // pastille en haut à droite : initiales + niveau d'accès, ou pictogramme quand on n'est pas connecté
+    var b = document.getElementById('acbtn');
+    if (!b) { b = document.createElement('button'); b.id = 'acbtn'; b.setAttribute('aria-label', 'Mon compte'); document.body.appendChild(b); b.addEventListener('click', function () { st.tab = 'account'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); }); }
+    var r = Account.on() ? Account.role() : null;
+    b.className = 'acbtn' + (Account.on() ? ' on' : '') + (st.tab === 'account' && !st.detail ? ' cur' : '');
+    b.innerHTML = Account.on() ? '<span>' + esc(initials()) + '</span>' + (r === 'premium' || r === 'admin' ? '<i>' + (r === 'admin' ? 'ADMIN' : 'PRO') + '</i>' : '') : '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>';
+  }
+  function acBox(inner, title) { return '<div class="tkan acbox">' + (title ? '<div class="plch"><b>' + title + '</b></div>' : '') + inner + '</div>'; }
+  function acMsg() { return (AUI.msg ? '<div class="bt-warn">' + esc(AUI.msg) + '</div>' : '') + (AUI.ok ? '<div class="acok">' + esc(AUI.ok) + '</div>' : ''); }
+  function accountPageHTML() {
+    var h = '<div class="top"><h1>Mon compte</h1></div>';
+    if (!Account.on()) {
+      var tabs = '<div class="seg3 acseg"><button class="' + (AUI.mode === 'login' ? 'on' : '') + '" data-acmode="login">Connexion</button><button class="' + (AUI.mode === 'signup' ? 'on' : '') + '" data-acmode="signup">Créer un compte</button></div>';
+      var f;
+      if (AUI.mode === 'code') {
+        f = AUI.step === 'email'
+          ? '<label class="acf">Email<input data-acemail type="email" autocomplete="email" value="' + esc(AUI.email) + '"></label><div class="plbtns"><button class="voir mid wide" data-accodereq>Recevoir un code</button></div>'
+          : '<div class="sub">Code envoyé à <b>' + esc(AUI.email) + '</b></div><label class="acf">Code<input data-accode inputmode="numeric" autocomplete="one-time-code" value="' + esc(AUI.code) + '"></label><div class="plbtns"><button class="voir mid wide" data-accodever>Valider</button></div>';
+        f += '<div class="plbtns"><button class="lnk" data-acmode="login">← Connexion avec mot de passe</button></div>';
+        return h + acBox(acMsg() + f);
+      }
+      f = '<label class="acf">Email<input data-acemail type="email" autocomplete="email" value="' + esc(AUI.email) + '"></label><label class="acf">Mot de passe<input data-acpass type="password" autocomplete="' + (AUI.mode === 'signup' ? 'new-password' : 'current-password') + '" placeholder="8 caractères minimum" value="' + esc(AUI.pass) + '"></label>' +
+        '<div class="plbtns"><button class="voir mid wide" data-ac' + (AUI.mode === 'signup' ? 'signup>Créer mon compte' : 'login>Se connecter') + '</button></div>' +
+        (AUI.mode === 'login' ? '<div class="plbtns"><button class="lnk" data-acforgot>Mot de passe oublié ?</button><button class="lnk" data-acmode="code">Recevoir un code par email</button></div>' : '<div class="sub">Réservé aux majeurs. En créant un compte, tu acceptes les conditions d’utilisation.</div>');
+      return h + acBox(tabs + acMsg() + f) + acBox('<div class="acperks"><span>☁️ Tes paris sur tous tes appareils</span><span>📈 Ton plan et tes statistiques sauvegardés</span><span>⭐ Accès Premium bientôt</span></div>');
     }
-    return h + (AUI.step === 'email'
-      ? '<div class="sub">Connecte-toi pour retrouver tes paris sur tous tes appareils.</div><div class="as-odds"><label>Email<input data-acemail type="email" autocomplete="email" value="' + esc(AUI.email) + '"></label></div>'
-      : '<div class="sub">Un code a été envoyé à <b>' + esc(AUI.email) + '</b>.</div><div class="as-odds"><label>Code<input data-accode inputmode="numeric" autocomplete="one-time-code" value="' + esc(AUI.code) + '"></label></div>') +
-      (AUI.msg ? '<div class="bt-warn">' + esc(AUI.msg) + '</div>' : '') +
-      '<div class="plbtns">' + (AUI.step === 'email' ? '<button class="voir mid" data-acreq>Recevoir le code</button>' : '<button class="voir mid" data-acver>Valider</button><button class="voir low" data-acback>Changer d’email</button>') + '</div></div>';
+    var A = Account.state(), r = Account.role() || 'free', since = PROF && PROF.created_at ? new Date(PROF.created_at).toLocaleDateString('fr-FR') : '';
+    h += acBox('<div class="acid"><div class="acav">' + esc(initials()) + '</div><div><b>' + esc(Account.email()) + '</b><small>Niveau : <span class="acrole ' + r + '">' + esc(ROLES[r] || r) + '</span>' + (since ? ' · membre depuis le ' + since : '') + '</small></div></div>');
+    h += acBox('<div class="sub">' + (A.busy ? 'Synchronisation…' : A.last ? 'Dernière synchronisation à ' + new Date(A.last).toTimeString().slice(0, 5) : 'Pas encore synchronisé') + '</div>' + (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') +
+      '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button></div>', 'Synchronisation');
+    h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th><th>Admin</th></tr>' + ACCESS.map(function (x) {
+      return '<tr><td>' + esc(x[0]) + '</td>' + [1, 2, 3].map(function (i) { return '<td class="' + (['free', 'premium', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
+    }).join('') + '</table>', 'Mon niveau d’accès');
+    if (r === 'admin') {
+      h += acBox((AUI.users ? '<div class="acusers">' + AUI.users.map(function (u) {
+        return '<div class="acu"><span><b>' + esc(u.email || '?') + '</b><small>inscrit le ' + new Date(u.created_at).toLocaleDateString('fr-FR') + (u.last_sign_in ? ' · vu le ' + new Date(u.last_sign_in).toLocaleDateString('fr-FR') : '') + '</small></span>' +
+          '<select data-acrole="' + esc(u.user_id) + '">' + ['free', 'premium', 'admin'].map(function (k) { return '<option value="' + k + '"' + (u.role === k ? ' selected' : '') + '>' + ROLES[k] + '</option>'; }).join('') + '</select></div>';
+      }).join('') + '</div>' : '<div class="sub">Chargement…</div>') + '<div class="plbtns"><button class="voir low" data-acusers>Actualiser</button></div>', 'Gestion des comptes');
+    }
+    h += acBox(acMsg() + '<label class="acf">Nouveau mot de passe<input data-acnew type="password" autocomplete="new-password" placeholder="8 caractères minimum"></label><div class="plbtns"><button class="voir low" data-acpw>Changer le mot de passe</button></div>', 'Sécurité');
+    h += acBox(AUI.ask === 'del' ? '<div class="bt-warn">Ton compte et toutes tes données synchronisées seront supprimés définitivement. Tes paris restent sur cet appareil.</div><div class="plbtns"><button class="voir low" data-acdelok>Oui, supprimer mon compte</button><button class="lnk" data-acno>Annuler</button></div>'
+      : '<div class="plbtns"><button class="voir low" data-acout>Se déconnecter</button><button class="lnk" data-acdel>Supprimer mon compte</button></div>');
+    return h;
   }
+  function acRead() {
+    ['acemail', 'acpass', 'accode'].forEach(function (k) { var el = app.querySelector('[data-' + k + ']'); if (el) AUI[{ acemail: 'email', acpass: 'pass', accode: 'code' }[k]] = el.value.trim(); });
+  }
+  function acGo() { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+  function acAfterLogin() { AUI = { mode: 'login', step: 'email', email: '', pass: '', code: '', msg: '', ok: '', users: null, ask: '' }; Account.loadRole().then(function () { return loadProfile(); }); pfSync(); }
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-acmode],[data-aclogin],[data-acsignup],[data-acforgot],[data-accodereq],[data-accodever],[data-acsync],[data-acout],[data-acdel],[data-acdelok],[data-acno],[data-acpw],[data-acusers]');
+    if (!t) return;
+    acRead();
+    var bad = function (m) { AUI.msg = m; AUI.ok = ''; acGo(); };
+    var okmail = /^\S+@\S+\.\S+$/.test(AUI.email);
+    if (t.hasAttribute('data-acmode')) { AUI.mode = t.getAttribute('data-acmode'); AUI.step = 'email'; AUI.msg = ''; AUI.ok = ''; acGo(); }
+    else if (t.hasAttribute('data-aclogin')) {
+      if (!okmail || !AUI.pass) return bad('Saisis ton email et ton mot de passe.');
+      AUI.msg = ''; AUI.ok = 'Connexion…'; acGo();
+      Account.signIn(AUI.email, AUI.pass).then(function (err) { if (err) { AUI.ok = ''; bad(err); } else acAfterLogin(); });
+    } else if (t.hasAttribute('data-acsignup')) {
+      if (!okmail) return bad('Adresse email invalide.');
+      if (AUI.pass.length < 8) return bad('Mot de passe : 8 caractères minimum.');
+      AUI.msg = ''; AUI.ok = 'Création du compte…'; acGo();
+      Account.signUp(AUI.email, AUI.pass).then(function (r) { if (r.ok) acAfterLogin(); else { AUI.ok = ''; bad(r.info); if (/confirme/.test(r.info)) { AUI.msg = ''; AUI.ok = r.info; AUI.mode = 'login'; acGo(); } } });
+    } else if (t.hasAttribute('data-acforgot')) {
+      if (!okmail) return bad('Saisis d’abord ton email.');
+      Account.recover(AUI.email).then(function (err) { if (err) bad(err); else { AUI.msg = ''; AUI.ok = 'Un email de réinitialisation t’a été envoyé.'; acGo(); } });
+    } else if (t.hasAttribute('data-accodereq')) {
+      if (!okmail) return bad('Adresse email invalide.');
+      AUI.ok = 'Envoi du code…'; AUI.msg = ''; acGo();
+      Account.requestCode(AUI.email).then(function (err) { AUI.ok = ''; if (err) bad(err); else { AUI.step = 'code'; AUI.msg = ''; acGo(); } });
+    } else if (t.hasAttribute('data-accodever')) {
+      Account.verify(AUI.email, AUI.code).then(function (err) { if (err) bad(err); else acAfterLogin(); });
+    } else if (t.hasAttribute('data-acsync')) { Account.loadRole().then(loadProfile); pfSync(); }
+    else if (t.hasAttribute('data-acpw')) {
+      var np = (app.querySelector('[data-acnew]') || {}).value || '';
+      if (np.length < 8) return bad('Mot de passe : 8 caractères minimum.');
+      Account.changePassword(np).then(function (err) { if (err) bad(err); else { AUI.msg = ''; AUI.ok = 'Mot de passe modifié.'; acGo(); } });
+    } else if (t.hasAttribute('data-acout')) { Account.signOut(); PROF = null; AUI.ask = ''; st.tab = 'home'; render(); window.scrollTo(0, 0); }
+    else if (t.hasAttribute('data-acdel')) { AUI.ask = 'del'; acGo(); }
+    else if (t.hasAttribute('data-acno')) { AUI.ask = ''; acGo(); }
+    else if (t.hasAttribute('data-acdelok')) {
+      Account.rpc('pf_delete_me').then(function () { Account.signOut(); PROF = null; AUI.ask = ''; AUI.ok = 'Compte supprimé.'; st.tab = 'account'; render(); }).catch(function () { AUI.ask = ''; bad('Suppression impossible pour l’instant.'); });
+    } else if (t.hasAttribute('data-acusers')) { loadUsers(); }
+  });
   app.addEventListener('change', function (e) {
     var t = e.target;
     if (!t.hasAttribute) return;
     if (t.hasAttribute('data-acemail')) AUI.email = t.value.trim();
+    else if (t.hasAttribute('data-acpass')) AUI.pass = t.value;
     else if (t.hasAttribute('data-accode')) AUI.code = t.value.trim();
+    else if (t.hasAttribute('data-acrole')) {
+      Account.rpc('pf_admin_set_role', { target: t.getAttribute('data-acrole'), new_role: t.value }).then(loadUsers).catch(function () { AUI.msg = 'Modification refusée.'; acGo(); });
+    }
   });
-  app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-acreq],[data-acver],[data-acback],[data-acsync],[data-acout]');
-    if (!t) return;
-    var em = app.querySelector('[data-acemail]'), cd = app.querySelector('[data-accode]');
-    if (em) AUI.email = em.value.trim();
-    if (cd) AUI.code = cd.value.trim();
-    if (t.hasAttribute('data-acreq')) {
-      if (!/^\S+@\S+\.\S+$/.test(AUI.email)) { AUI.msg = 'Adresse email invalide.'; bets2(); return; }
-      AUI.msg = 'Envoi du code…'; bets2();
-      Account.requestCode(AUI.email).then(function (err) { AUI.msg = err || ''; if (!err) AUI.step = 'code'; bets2(); });
-    } else if (t.hasAttribute('data-acver')) {
-      AUI.msg = 'Vérification…'; bets2();
-      Account.verify(AUI.email, AUI.code).then(function (err) {
-        AUI.msg = err || ''; if (!err) { AUI = { step: 'email', email: '', code: '', msg: '' }; Account.loadRole().then(betsTabRefresh); pfSync(); }
-        bets2();
-      });
-    } else if (t.hasAttribute('data-acback')) { AUI.step = 'email'; AUI.code = ''; AUI.msg = ''; bets2(); }
-    else if (t.hasAttribute('data-acsync')) { Account.loadRole().then(betsTabRefresh); pfSync(); }
-    else if (t.hasAttribute('data-acout')) { Account.signOut(); bets2(); }
-  });
-  function bets2() { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
-  if (Account.on()) { Account.loadRole().then(betsTabRefresh); setTimeout(pfSync, 3000); }
+  function loadUsers() { Account.rpc('pf_admin_users').then(function (rows) { AUI.users = rows || []; acRefresh(); }).catch(function () { AUI.users = []; acRefresh(); }); }
+  if (Account.on()) { Account.loadRole().then(loadProfile); setTimeout(pfSync, 3000); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Account.on() && Date.now() - (Account.state().last || 0) > 60000) pfSync(); });
+  function acChip() { return Account.on() ? '' : '<button class="tkan acchip" data-acgo>☁️ Connecte-toi pour sauvegarder tes paris sur tous tes appareils <span>›</span></button>'; }
+  document.addEventListener('click', function (e) { if (e.target.closest('[data-acgo]')) { st.tab = 'account'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); } });
   function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
     if (!PL || !PL.on) return '';
     plSync();
@@ -3239,15 +3301,17 @@
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'bets') {
-      app.innerHTML = accountHTML() + planSummaryHTML() + Bets.html();
+      app.innerHTML = acChip() + planSummaryHTML() + Bets.html();
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
+    else if (st.tab === 'account') app.innerHTML = accountPageHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     app.classList.toggle('dens-compact', DENS === 'compact');
     if (sig !== LASTSIG) { LASTSIG = sig; app.classList.remove('anim'); void app.offsetWidth; app.classList.add('anim'); clearTimeout(ANIMT); ANIMT = setTimeout(function () { app.classList.remove('anim'); }, 1600); }
     renderNav();
     decorate();
+    renderAvatar();
     var fab = document.getElementById('fab');
     if (!fab) { fab = document.createElement('button'); fab.id = 'fab'; fab.setAttribute('data-ticket', ''); document.body.appendChild(fab); }
     fab.className = 'fab' + (ticket.length && st.tab !== 'ticket' ? '' : ' hide');

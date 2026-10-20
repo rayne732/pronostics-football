@@ -54,6 +54,44 @@ var Account = (function () {
       return call('/rest/v1/pf_profiles?select=role', {}, t).then(function (r) { role = r.ok && r.body && r.body[0] ? r.body[0].role : 'free'; return role; });
     }).catch(function () { return role; });
   }
+  function signUp(email, pass) {
+    return call('/auth/v1/signup', { method: 'POST', body: { email: email, password: pass } }).then(function (r) {
+      if (r.ok && r.body && r.body.access_token) { setSession(r.body, email); return { ok: true }; }
+      if (r.ok) return { ok: false, info: 'Compte créé : confirme ton adresse avec l’email reçu, puis connecte-toi.' };
+      var m = r.body && (r.body.msg || r.body.error_description || r.body.message) || '';
+      if (r.status === 429) return { ok: false, info: 'Trop de demandes : patiente un peu.' };
+      if (/already|registered/i.test(m)) return { ok: false, info: 'Cette adresse a déjà un compte : connecte-toi.' };
+      if (/password/i.test(m)) return { ok: false, info: 'Mot de passe trop faible (8 caractères minimum).' };
+      return { ok: false, info: 'Création impossible pour l’instant.' };
+    }).catch(function () { return { ok: false, info: 'Pas de connexion : réessaie plus tard.' }; });
+  }
+  function signIn(email, pass) {
+    return call('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: email, password: pass } }).then(function (r) {
+      if (r.ok && r.body && r.body.access_token) { setSession(r.body, email); return null; }
+      if (r.status === 429) return 'Trop d’essais : patiente une minute.';
+      if (r.body && /confirm/i.test(r.body.msg || r.body.error_description || '')) return 'Adresse non confirmée : clique sur le lien reçu par email.';
+      return 'Email ou mot de passe incorrect.';
+    }).catch(function () { return 'Pas de connexion : réessaie plus tard.'; });
+  }
+  function recover(email) {
+    return call('/auth/v1/recover', { method: 'POST', body: { email: email } }).then(function (r) { return r.ok ? null : (r.status === 429 ? 'Trop de demandes : patiente une minute.' : 'Envoi impossible pour l’instant.'); }).catch(function () { return 'Pas de connexion : réessaie plus tard.'; });
+  }
+  function changePassword(pass) {
+    return token().then(function (t) { return t ? call('/auth/v1/user', { method: 'PUT', body: { password: pass } }, t) : { ok: false }; }).then(function (r) { return r.ok ? null : 'Mot de passe refusé (8 caractères minimum).'; }).catch(function () { return 'Pas de connexion.'; });
+  }
+  function profile() {
+    return token().then(function (t) { return t ? call('/rest/v1/pf_profiles?select=role,created_at', {}, t) : null; }).then(function (r) {
+      if (r && r.ok && r.body && r.body[0]) { role = r.body[0].role; return r.body[0]; }
+      if (r && r.ok) { role = 'free'; return { role: 'free' }; }
+      return null;
+    }).catch(function () { return null; });
+  }
+  function rpc(name, args) {
+    return token().then(function (t) { if (!t) throw new Error('auth'); return call('/rest/v1/rpc/' + name, { method: 'POST', body: args || {} }, t); }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.body; });
+  }
+  function wipeState() {
+    return token().then(function (t) { return t ? call('/rest/v1/pf_state?user_id=eq.' + S.uid, { method: 'DELETE' }, t) : null; });
+  }
   function pull() {                                                // -> { data, updated } ou null (aucune sauvegarde) ; lève une erreur si le réseau échoue
     return token().then(function (t) {
       if (!t) throw new Error('auth');
@@ -70,7 +108,8 @@ var Account = (function () {
     }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return true; });
   }
   return {
-    on: function () { return !!S; }, email: function () { return S ? S.email : ''; }, role: function () { return role; }, loadRole: loadRole,
+    on: function () { return !!S; }, email: function () { return S ? S.email : ''; }, role: function () { return role; }, loadRole: loadRole, profile: profile,
+    signUp: signUp, signIn: signIn, recover: recover, changePassword: changePassword, rpc: rpc, wipeState: wipeState,
     requestCode: requestCode, verify: verify, signOut: signOut, pull: pull, push: push,
     state: function () { return { last: last, busy: busy, msg: msg }; }, set: function (o) { if ('last' in o) last = o.last; if ('busy' in o) busy = o.busy; if ('msg' in o) msg = o.msg; }
   };
