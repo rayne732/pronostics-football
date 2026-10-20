@@ -2109,7 +2109,7 @@
     R.picks.concat(R.more || []).forEach(function (r) { if (r.icon === '⚽' || !r.bid) return; (other[r.match] = other[r.match] || { match: r.match, lg: r.lg || '', time: r.time, icon: r.icon, ref: r.ref, cands: [] }).cands.push({ legs: [{ id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg, time: r.time, ref: r.ref }], pa: plPa(r), icon: r.icon, low: plPa(r) < prof.minPa, duo: false }); });
     Object.keys(other).forEach(function (k) { var g = other[k]; g.cands.forEach(function (x) { x.key = plKey(x); }); g.cands.sort(function (x, y) { return y.pa - x.pa; }); groups.push(g); });
     groups = groups.filter(function (g) { return !(PL.ex && ((g.lg && PL.ex.lg && PL.ex.lg[g.lg]) || (PL.ex.sp && PL.ex.sp[g.icon]))); });
-    return groups.sort(function (x, y) { return (x.time || '99:99') < (y.time || '99:99') ? -1 : (x.time || '99:99') > (y.time || '99:99') ? 1 : 0; });
+    return groups.sort(function (x, y) { return (x.none ? 1 : 0) - (y.none ? 1 : 0) || (y.none ? 0 : y.cands[0].pa - x.cands[0].pa); });      // du plus sûr au moins sûr ; les matchs sans pronostic à la fin
   }
   function plLegOdds(pa) { return Math.max(1.04, (1 - Plan.MARGIN) / pa); }   // cote habituelle d'un pari très sûr : jamais en dessous de ≈ 1,04
   function plSafeCombos(G, prof, used, skip) {                    // paris très sûrs (+0,5 buts...) : seuls, puis combinés de 2, 3 ou 4 matchs pour relever la cote
@@ -2478,11 +2478,17 @@
     }
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
     else {
-      var hi = PLC[0].low || PLC[0].bad ? -1 : 0;
-      if (hi === 0) h += plCandHTML(PLC[0], 0, info, true) + plTreeHTML(PLC[0], k, cy, T);
+      var hi = PLC[0].low || PLC[0].bad ? -1 : 0, shown = [];
+      var planBlock = function (title, c) { shown.push(c); return '<div class="sec"><span class="dot g"></span>' + title + '</div>' + plCandHTML(c, PLC.indexOf(c), info, true); };
+      if (hi === 0) h += planBlock('Plan 1 · le plus sûr <small>un seul pari</small>', PLC[0]) + plTreeHTML(PLC[0], k, cy, T);
       else h += '<div class="bt-warn">Aucun pari ne passe le niveau de sûreté de ton profil (' + pct(prof.minPa) + '). Voici des choix un peu moins sûrs : à toi de voir, ou ne joue pas aujourd’hui.</div>';
-      if (PLC.length > (hi === 0 ? 1 : 0)) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + (PLC.length - (hi === 0 ? 1 : 0)) + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
-        PLC.slice(hi === 0 ? 1 : 0).map(function (c, i) { return plRow(c, i + (hi === 0 ? 1 : 0), info); }).join('');
+      var p2 = PLC.filter(function (c) { return c.acc && !c.low && !c.bad; })[0] || PLC.filter(function (c) { return c.acc; })[0];
+      if (p2 && shown.indexOf(p2) < 0) h += planBlock('Plan 2 · plusieurs matchs sûrs <small>combiné de ' + p2.legs.length + ' matchs</small>', p2);
+      var p3 = PLC.filter(function (c) { return c.sg && !c.low && !c.bad; })[0] || PLC.filter(function (c) { return c.sg || (c.duo && !c.acc); })[0];
+      if (p3 && shown.indexOf(p3) < 0) h += planBlock(p3.sg ? 'Plan 3 · plusieurs paris sur un même match <small>cote relevée</small>' : 'Plan 3 · combiné de 2 matchs <small>cote plus haute</small>', p3);
+      var rest = PLC.filter(function (c) { return shown.indexOf(c) < 0; });
+      if (rest.length) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + rest.length + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
+        rest.map(function (c) { return plRow(c, PLC.indexOf(c), info); }).join('');
     }
     var nm0 = 0;
     G.forEach(function (g) { g.cands.forEach(function (c) { c.ix = PLC.length; PLC.push(c); nm0++; }); });
