@@ -1515,7 +1515,7 @@
   }
   function todayHTML() {
     todayLoad();
-    var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
+    var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus · données du ' + esc(D.generated) +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
     h += planBody();
     if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">Aucun match avec pronostic aujourd’hui. Reviens plus tard ou demain.</div>');
@@ -3412,6 +3412,29 @@
     return null;
   };
   app.classList.add('anim'); setTimeout(function () { app.classList.remove('anim'); }, 1100);
+  /* mise à jour automatique : l'onglet Plans se recalcule toutes les minutes (matchs commencés retirés, scores, règlements), et la page se recharge toute seule quand une nouvelle version des données est publiée */
+  var GEN0 = D.generated, GENCHK = 0;
+  function typing() { var ae = document.activeElement; return !!((ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) || app.querySelector('details[open]')); }          // saisie en cours ou rubrique ouverte : on ne dérange pas
+  function checkNewData(force) {
+    if (!force && Date.now() - GENCHK < 4 * 60000) return;
+    GENCHK = Date.now();
+    fetch(location.pathname + '?chk=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (t) {
+      var blk = /<script id="data"[^>]*>([\s\S]*?)<\/script>/.exec(t), m = blk && /"generated"\s*:\s*"([^"]+)"/.exec(blk[1]), g = null;
+      try { g = m ? JSON.parse('"' + m[1] + '"') : null; } catch (e) { g = null; }
+      if (!g || g === GEN0 || typing() || st.detail) return;
+      var last = 0; try { last = +sessionStorage.getItem('pf-reload') || 0; } catch (e) { /* ignoré */ }
+      if (Date.now() - last < 10 * 60000) return;                                  // jamais plus d'un rechargement automatique toutes les 10 minutes
+      try { sessionStorage.setItem('pf-reload', String(Date.now())); } catch (e) { /* ignoré */ }
+      location.reload();
+    }).catch(function () { /* hors connexion : on réessaiera */ });
+  }
+  function plansTick() {
+    if (document.visibilityState !== 'visible') return;
+    if (st.tab === 'today' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+    checkNewData(false);
+  }
+  setInterval(plansTick, 60000);
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkNewData(true); plansTick(); } });
   setTimeout(liveTick, 2500); setInterval(liveTick, 90000);                    // scores en direct : seulement quand un match est en cours
   loadLazy('logos', function (err) { if (!err && !st.detail) { var yl = window.scrollY; render(); window.scrollTo(0, yl); } });          // logos des équipes : affichés dès qu'ils sont arrivés
   Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
