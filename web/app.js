@@ -1974,7 +1974,7 @@
     Object.keys(seen).forEach(function (m) { pool.push(seen[m]); });
     pool.sort(function (a, b) { return b.pa - a.pa; });
     function leg(x) { return { id: x.r.bid, m: x.r.bm, s: x.r.bs, match: x.r.match, pick: x.r.pick, icon: x.r.icon, lg: x.r.lg, time: x.r.time, ref: x.r.ref }; }
-    pool.filter(function (x) { return x.pa >= prof.minPa; }).slice(0, 5).forEach(function (x) { out.push({ legs: [leg(x)], pa: x.pa, icon: x.r.icon }); });
+    pool.filter(function (x) { return x.pa >= prof.minPa - 0.06; }).slice(0, 15).forEach(function (x) { out.push({ legs: [leg(x)], pa: x.pa, icon: x.r.icon, low: x.pa < prof.minPa }); });
     var top = pool.slice(0, 8), best = null, bestX = null;
     for (var i = 0; i < top.length; i++) for (var j = i + 1; j < top.length; j++) {
       var pp = top[i].pa * top[j].pa;
@@ -1984,7 +1984,7 @@
     }
     if (best && prof.steps > 0) out.push(best);
     if (bestX && (!best || plKey(bestX) !== plKey(best))) out.push(bestX);
-    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1; });
+    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1; if (c.duo) c.low = c.pa < prof.minDuo; });
     return out;
   }
   function plSettle(won) {                                         // règle l'étape en attente, met à jour le capital, clôt le cycle si c'est fini
@@ -2059,6 +2059,12 @@
     var nm2 = Object.keys(names);
     return { o: Math.round(tot * 100) / 100, best: Math.round(best * 100) / 100, est: est, src: nm2.length === 1 ? nm2[0] : 'moyenne des bookmakers' };
   }
+  function plWinamax(c) {                                          // le match est-il chez Winamax ? (d'après les cotes lues ; inconnu pour les autres sports)
+    if (!PLFX) plAutoOdds(c);
+    var ok = 0, no = 0;
+    c.legs.forEach(function (l) { var f = PLFX && PLFX[l.id]; if (f && f.od) { if (f.od.k && f.od.k.winamax_fr) ok++; else no++; } });
+    return no ? '<span class="plwx ko">pas chez Winamax</span>' : ok ? '<span class="plwx ok">chez Winamax</span>' : '';
+  }
   function plOddsOf(c) { var t = plNum(PLODDS[c.key]), a = plAutoOdds(c); return t || (a ? a.o : 0); }
   var PLSPN = { '⚽': 'Football', '🎾': 'Tennis', '🏀': 'Basket', '🏉': 'Rugby', '🤾': 'Handball', '🏒': 'Hockey', '⚾': 'Baseball', '🏈': 'Football US', '🥊': 'MMA', '🏐': 'Volley', '🏁': 'Formule 1', '⛳': 'Golf' };
   function plCandHTML(c, i, stakeInfo, hero) {
@@ -2067,13 +2073,18 @@
       return '<div class="plleg"><small class="plsp">' + l.icon + ' ' + esc(PLSPN[l.icon] || '') + (l.lg ? ' · ' + esc(l.lg) : '') + ' · aujourd’hui ' + esc(l.time || '') + '</small><span>' + esc(l.match) + '</span><small>Pari : <b>' + esc(l.pick) + '</b></small></div>';
     }).join('');
     return '<div class="plc' + (hero ? ' plhero' : '') + '">' + (hero ? '<div class="plmise">' + esc(stakeInfo.lead || 'Mets') + ' <b>' + eur2(stake) + '</b> sur ça</div>' : '') +
-      '<div class="plch"><span class="tkg high">' + pct(pa) + ' de chances</span><b>' + (c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b></div>' + legs +
+      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '</div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
       '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
       (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
+  }
+  function plRow(c, i, info) {                                     // un choix de la liste : une ligne, qui s'ouvre sur la carte complète
+    var l = c.legs.map(function (x) { return esc(x.match); }).join(' + '), pk = c.legs.map(function (x) { return esc(x.pick.replace(/^[^:]*: /, '')); }).join(' + ');
+    return '<details class="plrow"><summary><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(c.pa) + '</span><span class="plrt"><b>' + l + '</b><small>' + c.legs[0].icon + ' ' + esc(PLSPN[c.legs[0].icon] || '') + (c.legs[0].lg ? ' · ' + esc(c.legs[0].lg) : '') +
+      ' · ' + esc(c.legs[0].time || '') + ' · ' + pk + '</small></span>' + plWinamax(c) + '</summary>' + plCandHTML(c, i, info) + '</details>';
   }
   function planBody() {                                            // plan de mise guidé : affiché en tête de l'onglet Plans
     var T = parisToday(), R = todayRows(), h = '';
@@ -2130,11 +2141,14 @@
     }
     PLC = plCands(R, prof, T);
     PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
-    PLC.sort(function (x, y) { return x.bad - y.bad || x.ord - y.ord; });
+    PLC.sort(function (x, y) { return x.bad - y.bad || (x.low ? 1 : 0) - (y.low ? 1 : 0) || x.ord - y.ord; });
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
     else {
-      h += plCandHTML(PLC[0], 0, info, true);
-      if (PLC.length > 1) h += '<details class="tkall"><summary>Voir d’autres paris possibles (' + (PLC.length - 1) + ')</summary>' + PLC.slice(1).map(function (c, i) { return plCandHTML(c, i + 1, info); }).join('') + '</details>';
+      var hi = PLC[0].low || PLC[0].bad ? -1 : 0;
+      if (hi === 0) h += plCandHTML(PLC[0], 0, info, true);
+      else h += '<div class="bt-warn">Aucun pari ne passe le niveau de sûreté de ton profil (' + pct(prof.minPa) + '). Voici des choix un peu moins sûrs : à toi de voir, ou ne joue pas aujourd’hui.</div>';
+      if (PLC.length > (hi === 0 ? 1 : 0)) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + (PLC.length - (hi === 0 ? 1 : 0)) + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
+        PLC.slice(hi === 0 ? 1 : 0).map(function (c, i) { return plRow(c, i + (hi === 0 ? 1 : 0), info); }).join('');
     }
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
