@@ -239,7 +239,7 @@
     return new Date(+p[0], +p[1] - 1, +p[2], +t[0], +t[1]);
   }
   /* scores en direct (football) : flux mondial d'ESPN lu depuis le téléphone, relié à nos matchs par le logo de chaque équipe */
-  var LIVE = {}, LIVE_BUSY = false;
+  var LIVE = {}, LIVE_BUSY = false, LIVEL = [];                  // LIVEL : tous les matchs de foot du flux ESPN (aussi ceux que le site ne modélise pas)
   function espLogo(t) { var u = (t && t.logo) || '', P = 'https://a.espncdn.com/i/teamlogos/'; return u.indexOf(P) === 0 ? u.slice(P.length) : ''; }
   function liveFoot(cb) {
     if (LIVE_BUSY) return;
@@ -259,6 +259,7 @@
           } catch (x) { /* événement illisible : ignoré */ }
         });
       });
+      LIVEL = list;
       var L = D.logos || {};
       D.fixtures.forEach(function (f) {
         if (f.date !== T && days.length < 2) return;
@@ -271,6 +272,7 @@
   }
   function liveWanted() {                                   // y a-t-il un match de foot en cours ou sur le point de commencer ?
     var T = parisToday(), nowMs = Date.now();
+    if (window.plLiveWanted && plLiveWanted()) return true;
     return D.fixtures.some(function (f) { if (f.date !== T && f.date !== isoDate(new Date(parseD(T).getTime() - 864e5))) return false; var d = nowMs - kickoff(f); return d > -10 * 60000 && d < 3.5 * 3600000 || (LIVE[f.id] && LIVE[f.id].st === 'in'); });
   }
   function liveTick() {
@@ -1974,17 +1976,55 @@
     });
     return out;
   }
+  function plLegTeams(l) {                                         // [domicile, extérieur] d'un pari du plan
+    if (l.id.indexOf('cal|') === 0) { var q = l.id.split('|'); return [q[2], q[3]]; }
+    var f = (D.fixtures || []).filter(function (x) { return x.id === l.id; })[0];
+    return f ? [f.home, f.away] : null;
+  }
+  function plLive(l) {                                             // score en direct ou final d'un match de foot : { st: 'in' | 'post', hs, as, clock } ou null
+    var tm = plLegTeams(l);
+    if (!tm) return null;
+    var fx = (D.fixtures || []).filter(function (x) { return x.id === l.id; })[0], LV = fx && LIVE[fx.id];
+    if (LV) return LV;
+    var hit = LIVEL.filter(function (v) { return sameTeam(tm[0], v.h) && sameTeam(tm[1], v.a); })[0];
+    return hit ? { st: hit.st, hs: hit.hs, as: hit.as, clock: hit.clock } : null;
+  }
+  function plLiveRes(l) {                                          // pari gagné ou perdu d'après le score : à la fin du match, ou plus tôt quand c'est déjà acquis (« plus de 0,5 buts » après un but)
+    var sc = plLive(l), tm = plLegTeams(l);
+    if (!sc || !tm || !isFinite(sc.hs) || !isFinite(sc.as)) return null;
+    var ev = tkEvent(null, { home: tm[0], away: tm[1] }, l.m, l.s);
+    if (!ev) return null;
+    var now = !!ev(sc.hs, sc.as);
+    if (sc.st === 'post') return now;
+    if (/^Total buts \(plus\)/.test(l.m) || (l.m === 'Les deux équipes marquent' && l.s === 'Oui')) return now ? true : null;
+    if (/^Total buts \(moins\)/.test(l.m) || (l.m === 'Les deux équipes marquent' && l.s === 'Non')) return now ? null : false;
+    return null;
+  }
+  window.plLiveWanted = function () {                              // un pari du plan est en attente et son match est en cours ou va commencer
+    var cy = PL && PL.cyc, s0 = cy && cy.steps[cy.steps.length - 1], T = parisToday();
+    if (!s0 || s0.res !== null) return false;
+    return s0.legs.some(function (l) {
+      var f = (D.fixtures || []).filter(function (x) { return x.id === l.id; })[0], t = f ? f.time : ((D.cal || []).filter(function (c) { return 'cal|' + c.date + '|' + c.home + '|' + c.away === l.id; })[0] || {}).time, d = t ? Date.now() - kickoff({ date: T, time: t }) : 0;
+      return t && d > -10 * 60000 && d < 3.5 * 3600000;
+    });
+  };
+  function plLiveHTML(l) {                                         // ligne « en direct » d'un pari en attente
+    var sc = plLive(l), tm = plLegTeams(l);
+    if (!sc || !tm) return '';
+    return '<div class="pllive' + (sc.st === 'in' ? ' on' : '') + '">' + (sc.st === 'in' ? '● En direct · ' : 'Terminé · ') + esc(nm(tm[0])) + ' <b>' + sc.hs + ' – ' + sc.as + '</b> ' + esc(nm(tm[1])) + (sc.st === 'in' && sc.clock ? ' · ' + esc(sc.clock) : '') + '</div>';
+  }
   function plRes(l) {                                              // résultat d'un pari : nos résultats habituels, ou le score du calendrier mondial
     if (l.id.indexOf('cal|') === 0) {
       var q = l.id.split('|'), c = (D.cal || []).filter(function (x) { return x.date === q[1] && x.home === q[2] && x.away === q[3]; })[0];
-      if (!c || c.st !== 'post' || c.hs == null || c.as_ == null) return null;
+      if (!c || c.st !== 'post' || c.hs == null || c.as_ == null) return plLiveRes(l);
       if (l.m === 'Résultat du match') return l.s === c.home ? c.hs > c.as_ : l.s === c.away ? c.hs < c.as_ : null;
       if (l.m === 'Double chance') return l.s === c.home + ' ou nul' ? c.hs >= c.as_ : l.s === c.away + ' ou nul' ? c.hs <= c.as_ : null;
       var tm = /^(Plus|Moins) de ([\d,]+) buts$/.exec(l.s), tx = tm ? +tm[2].replace(',', '.') : 0;
       if (tm && /^Total buts/.test(l.m)) return tm[1] === 'Plus' ? c.hs + c.as_ > tx : c.hs + c.as_ < tx;
       return null;
     }
-    return Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null;
+    var rr = Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null;
+    return rr !== null ? rr : plLiveRes(l);
   }
   var PLSG = {};                                                   // combinés « même match » du jour, par nom de match : sert aussi à relever une cote trop basse
   function plJoint(grid, evs) { var p = 0, a, b; for (a = 0; a < grid.length; a++) for (b = 0; b < grid[a].length; b++) if (evs.every(function (e) { return e(a, b); })) p += grid[a][b]; return p; }
@@ -2064,6 +2104,7 @@
   function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
     if (!PL || !PL.on) return '';
     plSync();
+    plAuto();
     var init = PL.init || PL.start, wd = PL.wd || 0, net = Plan.r2(PL.bank + wd - init), L = PL.log || [], w = L.filter(function (x) { return x.res; }).length, staked = 0, ret = 0, pend = 0;
     L.forEach(function (x) { staked += x.stake; if (x.res) ret += x.stake * x.o; });
     if (PL.cyc) PL.cyc.steps.forEach(function (x) { if (x.res === null) pend++; });
@@ -2226,7 +2267,7 @@
       cy.steps.forEach(function (s, i) {
         var last = i === cy.steps.length - 1, st2 = s.res === true ? ['Gagné', 'ok'] : s.res === false ? ['Perdu', 'ko'] : ['En attente', 'mid'];
         h += '<div class="tka ' + st2[1] + '"><div class="tkah"><span class="tkt">Étape ' + (i + 1) + ' · mise ' + eur2(s.stake) + ' à ' + String(s.o).replace('.', ',') + '</span><span class="tkb2">' + st2[0] + '</span></div>' +
-          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>'; }).join('') +
+          s.legs.map(function (l) { return '<div class="tkam">' + l.icon + ' ' + esc(l.match) + ' · ' + esc(l.pick) + '</div>' + (s.res === null ? plLiveHTML(l) : ''); }).join('') +
           '<div class="tkan2">' + (s.res === null ? 'Si ça passe : <b>+' + eur2(s.stake * (s.o - 1)) + '</b>. Ce pari est dans Mes paris : il se règle tout seul quand le match est fini, ou tu le règles là-bas avec Gagné / Perdu.' : s.res ? 'Gain : +' + eur2(s.stake * (s.o - 1)) : 'Perte : −' + eur2(s.stake)) + '</div>' +
           (s.res === null && last ? '<div class="plbtns"><button class="voir mid" data-plgobets>Régler dans Mes paris</button></div>' : '') + '</div>';
       });

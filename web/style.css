@@ -1036,3 +1036,4 @@ button.chip small{display:block}
 .pltr{margin:8px 0;padding:11px 13px;border-radius:16px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--line);font-size:.82rem;line-height:1.4}.pltr.ok{border-left-color:var(--green)}.pltr.ko{border-left-color:var(--red)}.pltr>b{display:block;margin-bottom:3px}.pltr>div{color:var(--ink)}
 /* les paris viennent uniquement de l'onglet Plans : plus de saisie manuelle */
 .bt-b[data-bet],.bt-b[data-bcombo],[data-bcomb],.add.bet,.betbar{display:none !important}
+.pllive{margin:4px 0 6px;padding:6px 10px;border-radius:10px;background:var(--surface2);font-size:.82rem}.pllive.on{border:1px solid var(--green)}.pllive.on{color:var(--ink)}.pllive b{font-variant-numeric:tabular-nums}
