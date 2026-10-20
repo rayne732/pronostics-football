@@ -2202,12 +2202,15 @@
     var init = PL.init || PL.start;
     return bank > init + 1 ? 'gain' : bank < init * 0.8 ? 'baisse' : 'normal';
   }
-  function plBase(bank, prof) {                                    // mise de départ d'un cycle, adaptée à ton capital
+  function plBoost(pa) { return pa >= 0.95 ? 2 : pa >= 0.92 ? 1.7 : pa >= 0.9 ? 1.4 : pa >= 0.85 ? 1.15 : 1; }
+  function plBase(bank, prof, pa) {                                // mise de départ d'un cycle : adaptée à ton capital, et plus forte quand le pari est très sûr
     var s = Plan.stake1(bank, prof), m = plMode(bank);
     if (prof.key === 'se') return s;
-    if (m === 'gain') s = Math.min(Plan.floor05(PL.target || 5), Math.max(1, Plan.floor05(bank * 0.25)));     // tu es en gain : mise fixe (5 € par défaut), toujours sur des petites cotes
-    else if (m === 'baisse') s = Math.max(1, Math.min(s, Plan.floor05(bank * 0.10)));                          // tu as perdu pas mal : on baisse la mise, on ne l'augmente pas
-    return Math.min(s, bank);
+    if (m === 'gain') s = Math.min(Plan.floor05(PL.target || 5), Math.max(1, Plan.floor05(bank * 0.25)));     // tu es en gain : mise fixe (5 € par défaut)
+    else if (m === 'baisse') s = Math.max(1, Math.min(s, Plan.floor05(bank * 0.15)));                          // tu as perdu pas mal : on baisse la mise, on ne l'augmente pas
+    if (pa) s = Plan.floor05(s * plBoost(pa));
+    var cap = Math.max(1, Plan.floor05(bank * (m === 'baisse' ? 0.20 : 0.30)));                                // jamais plus de 30 % du capital (20 % après des pertes)
+    return Math.max(1, Math.min(s, cap, bank));
   }
   function plBaseTxt(bank, prof) {
     var m = plMode(bank);
@@ -2313,7 +2316,7 @@
     }).join('') + '<div class="sub">Plus la cote monte, plus la probabilité baisse : compare avec la cote réelle de ton bookmaker avant de jouer.</div></div>';
   }
   function plCandHTML(c, i, stakeInfo, hero) {
-    var pa = c.pa, oe = c.oe || (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
+    var pa = c.pa, oe = c.oe || (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fn(o > 1 ? o : oe, c);
     var legs = c.legs.map(function (l) {
       return '<div class="plleg"><small class="plsp">' + l.icon + ' ' + esc(PLSPN[l.icon] || '') + (l.lg ? ' · ' + esc(l.lg) : '') + ' · aujourd’hui ' + esc(l.time || '') + '</small><span>' + esc(l.match) + '</span><small>Pari : <b>' + esc(l.pick) + '</b></small></div>';
     }).join('');
@@ -2371,8 +2374,8 @@
     h += plFlow(k, cy ? cy.max : prof.steps);
     if (k === 0) {
       var s1 = plBase(cb, prof);
-      info = { fixed: s1, lead: 'Mets' };
-      h += '<div class="sec"><span class="dot g"></span>Étape 1 <small>mise ' + eur2(s1) + ' (' + plBaseTxt(cb, prof) + ')</small></div>' + (plMode(PL.bank) === 'gain' ? '<div class="sub">Tu es en gain de <b>+' + eur2(PL.bank - (PL.init || PL.start)) + '</b> : je te propose de ne miser que ' + eur2(s1) + ', sur des petites cotes, pour garder tes gains.</div>' : plMode(PL.bank) === 'baisse' ? '<div class="sub">Tu as perdu plus de 20 % de ton départ : je baisse la mise au lieu de l’augmenter. Se refaire en misant plus est ce qui fait perdre le plus.</div>' : '');
+      info = { lead: 'Mets', fn: function (o, c) { return plBase(cb, prof, c.pa); } };
+      h += '<div class="sec"><span class="dot g"></span>Étape 1 <small>mise de base ' + eur2(s1) + ' (' + plBaseTxt(cb, prof) + '), plus forte quand le pari est très sûr</small></div>' + (plMode(PL.bank) === 'gain' ? '<div class="sub">Tu es en gain de <b>+' + eur2(PL.bank - (PL.init || PL.start)) + '</b> : je te propose de ne miser que ' + eur2(s1) + ', sur des petites cotes, pour garder tes gains.</div>' : plMode(PL.bank) === 'baisse' ? '<div class="sub">Tu as perdu plus de 20 % de ton départ : je baisse la mise au lieu de l’augmenter. Se refaire en misant plus est ce qui fait perdre le plus.</div>' : '');
     } else {
       var g = cy.g, bank = PL.bank;
       info = { lead: 'Pour rattraper la perte, mets', fn: function (o) { return Plan.recStake(L, g, o, bank, plProf()).stake; } };
@@ -2412,7 +2415,7 @@
   }
   function plTreeHTML(hero, k, cy, T) {                            // « Et ensuite ? » : le pari suivant si ça passe, et si ça perd, avec la mise recalculée
     var prof = plProf(), o1 = (plAutoOdds(hero) || {}).o || (1 - Plan.MARGIN) / hero.pa, stake, L, g;
-    if (k === 0) { stake = plBase(PL.bank, prof); L = 0; g = Plan.target(stake, o1); }
+    if (k === 0) { stake = plBase(PL.bank, prof, hero.pa); L = 0; g = Plan.target(stake, o1); }
     else { L = Plan.r2(cy.cb - PL.bank); g = cy.g; stake = Plan.recStake(L, g, o1, PL.bank, prof).stake; }
     var bankW = Plan.r2(PL.bank + stake * (o1 - 1)), bankL = Plan.r2(PL.bank - stake), ko = hero.legs[0].time ? kickoff({ date: T, time: hero.legs[0].time }).getTime() + 130 * 60000 : 0;
     function later(c) { return c !== hero && !c.bad && c.legs.every(function (l) { return hero.legs.every(function (x) { return x.match !== l.match; }) && (!l.time || kickoff({ date: T, time: l.time }).getTime() >= ko); }); }
@@ -2421,7 +2424,7 @@
     // si ça passe : cycle gagné, on repart avec le nouveau capital
     var pw = Plan.profile(PL.prof, bankW, PL.goal), nextW = pool.filter(function (c) { return !c.low; })[0] || pool[0];
     rows += '<div class="pltr ok"><b>✅ Si ça passe</b> (+' + eur2(stake * (o1 - 1)) + ', capital ' + eur2(bankW) + ')<div>' +
-      (days >= 2 ? 'Assez pour aujourd’hui : on s’arrête sur ce gain. Reviens demain.' : nextW ? 'Pari suivant : mets <b>' + eur2(plBase(bankW, pw)) + '</b> sur ' + pickTxt(nextW) + ' · ' + pct(nextW.pa) + ' de chances.' : 'Aucun match assez tard aujourd’hui : on s’arrête là.') + '</div></div>';
+      (days >= 2 ? 'Assez pour aujourd’hui : on s’arrête sur ce gain. Reviens demain.' : nextW ? 'Pari suivant : mets <b>' + eur2(plBase(bankW, pw, nextW.pa)) + '</b> sur ' + pickTxt(nextW) + ' · ' + pct(nextW.pa) + ' de chances.' : 'Aucun match assez tard aujourd’hui : on s’arrête là.') + '</div></div>';
     // si ça perd : rattrapage tant qu'il reste des étapes dans le cycle
     var max = cy ? cy.max : prof.steps, step = k + 1;
     if (step < max && bankL >= 1) {
@@ -2471,7 +2474,7 @@
       var prof = plProf();
       if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
       cy = PL.cyc;
-      var stake = cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof);
+      var stake = cy.steps.length ? Plan.recStake(Plan.r2(cy.cb - PL.bank), cy.g, o, PL.bank, prof).stake : plBase(cy.cb, prof, c.pa);
       if (stake < 1) return;
       if (!cy.steps.length) cy.g = Plan.target(stake, o);
       var bid = 'pl' + Date.now().toString(36), spk = { '⚽': 'foot', '🎾': 'tennis', '🏀': 'basket', '🏉': 'rugby', '🤾': 'hand', '🏒': 'hockey', '⚾': 'baseball', '🏈': 'nfl', '🥊': 'mma', '🏐': 'volley', '🏁': 'f1', '⛳': 'golf' };
