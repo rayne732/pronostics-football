@@ -1192,8 +1192,8 @@
     var left = jobs.length;
     var finish = function () {
       TODAY.step++; left--;
-      if ((st.tab === 'today' || st.tab === 'plan') && !st.detail) render();
-      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if ((st.tab === 'today' || st.tab === 'plan') && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+      if (st.tab === 'today' && !st.detail) render();
+      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
     };
     jobs.forEach(function (j) {
       loadLazy(j[0], function (err) {
@@ -1512,8 +1512,9 @@
   }
   function todayHTML() {
     todayLoad();
-    var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans du jour</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
+    var R0 = todayRows(), R = R0, h = '<div class="top"><h1>Plans</h1></div><div class="sub">' + WD[parseD(R0.T).getDay()] + ' ' + dm(R.T) + ' · tous sports confondus' +
       (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
+    h += planBody();
     if (R.counts.length) {
       var okSp = R.counts.some(function (c) { return c[0] === st.plSport; });
       if (!okSp) st.plSport = 'all';
@@ -1522,8 +1523,7 @@
       if (st.plSport !== 'all') R = { picks: R0.picks.filter(function (r) { return r.icon === st.plSport; }), favs: R0.favs.filter(function (r) { return r.icon === st.plSport; }), counts: R0.counts, T: R0.T };
     }
     if (!R.counts.length) return h + (TODAY.busy ? skel(4) : '<div class="empty">' + ( 'Aucun match avec pronostic aujourd’hui. Regarde l’onglet « Découvrir » pour les jours suivants.') + '</div>');
-    h += plansHTML(R);
-    h += assistantHTML(R);
+    h += '<details class="tkall"><summary>Autres plans du jour (pari sûr, combinés, budget et bilan)</summary>' + plansHTML(R) + assistantHTML(R) + '</details>';
     h += '<div class="sec"><span class="dot g"></span>Les pronostics les plus sûrs <small>probabilité ≥ ' + Math.round(SAFE * 100) + ' %</small></div>' +
       '<div class="chips"><button class="chip pill' + (st.plSort === 'p' ? ' on' : '') + '" data-plsort="p">Les plus probables</button><button class="chip pill' + (st.plSort === 't' ? ' on' : '') + '" data-plsort="t">Par heure</button></div>';
     var seen = {}, shown = (st.plSort === 't' ? R.picks.slice().sort(function (a, b) { return (a.time || '99:99') < (b.time || '99:99') ? -1 : (a.time || '99:99') > (b.time || '99:99') ? 1 : b.p - a.p; }) : R.picks).filter(function (r) { var k = r.match; seen[k] = (seen[k] || 0) + 1; return seen[k] <= 2; }).slice(0, 15);
@@ -2022,7 +2022,7 @@
     var rs = s.legs.map(function (l) { return Bets.resolver(l.id, l.m, l.s); });
     if (rs.some(function (x) { return x === false; })) plSettle(false);
     else if (rs.every(function (x) { return x === true; })) plSettle(true);
-    else if (!isLoaded('res')) loadLazy('res', function () { if (st.tab === 'plan' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+    else if (!isLoaded('res')) loadLazy('res', function () { if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
   }
   function plSimHTML(start, goal, profKey, pa) {
     var a = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: Plan.MARGIN }), b = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: 0 });
@@ -2089,9 +2089,8 @@
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
   }
-  function planTabHTML() {
-    todayLoad();
-    var T = parisToday(), R = todayRows(), h = '<div class="top"><h1>Stratégie</h1></div><div class="sub">Un plan de mise pour avancer par petits paliers, tous sports confondus' + (TODAY.busy ? ' · chargement ' + TODAY.step + '/' + TODAY.total + '…' : '') + '</div>';
+  function planBody() {                                            // plan de mise guidé : affiché en tête de l'onglet Plans
+    var T = parisToday(), R = todayRows(), h = '';
     h += '<div class="bt-warn">Aucune stratégie ne bat les cotes sur la durée : la marge du bookmaker fait perdre en moyenne ~7 % de chaque euro misé. Ce plan cadre le risque, il ne le supprime pas. Ne mise que de l’argent que tu peux perdre. Joueurs Info Service : 09 74 75 13 13.</div>';
     if (!PL) return h + plSetup(R);
     PL.skip = PL.skip || {}; PL.hist = PL.hist || [];
@@ -2738,7 +2737,7 @@
     }
   }
   function renderNav() {
-    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['plan', 'Stratégie'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
+    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
       var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : x[0] === 'ticket' ? ticket.length : 0;
       return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
@@ -2771,7 +2770,6 @@
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
-    else if (st.tab === 'plan') app.innerHTML = planTabHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     app.classList.toggle('dens-compact', DENS === 'compact');
     if (sig !== LASTSIG) { LASTSIG = sig; app.classList.remove('anim'); void app.offsetWidth; app.classList.add('anim'); clearTimeout(ANIMT); ANIMT = setTimeout(function () { app.classList.remove('anim'); }, 1600); }
