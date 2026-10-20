@@ -1957,7 +1957,7 @@
   try { PL = JSON.parse(localStorage.getItem('pf-plan') || 'null'); } catch (e) { PL = null; }
   var PLD = { start: 20, goal: 100, prof: 'pr' };                  // brouillon de l'écran de départ
   var PLODDS = {}, PLC = [];                                       // cotes saisies (par clé de pari) ; liste des paris proposés affichés (pour les boutons)
-  function plSave() { try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } }
+  function plSave() { if (PL) PL.u = Date.now(); try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } if (window.pfChanged) pfChanged(); }
   function plNum(v) { var x = parseFloat(String(v == null ? '' : v).replace(',', '.')); return x > 0 ? x : 0; }
   function plKey(c) { return c.legs.map(function (l) { return l.id + '|' + l.m + '|' + l.s; }).join('+'); }
   function plProf() { return PL ? Plan.profile(PL.prof, PL.bank, PL.goal) : Plan.PROF.pr; }
@@ -2187,6 +2187,66 @@
       });
     return h;
   }
+  /* ------------------------------------------------------------ compte et synchronisation */
+  var AUI = { step: 'email', email: '', code: '', msg: '' }, SYNC = { timer: 0 };
+  var ROLES = { free: 'Gratuit', premium: 'Premium', admin: 'Admin' };
+  function betsTabRefresh() { if (st.tab === 'bets' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+  function pfChanged() { if (!Account.on()) return; clearTimeout(SYNC.timer); SYNC.timer = setTimeout(function () { pfSync(); }, 2500); }
+  window.pfChanged = pfChanged; Bets.onChange = pfChanged;
+  function pfSync() {                                              // récupère la sauvegarde du compte, la fusionne avec cet appareil, puis renvoie le résultat
+    if (!Account.on() || Account.state().busy) return Promise.resolve();
+    Account.set({ busy: true, msg: '' });
+    return Account.pull().then(function (remote) {
+      var d = (remote && remote.data) || {};
+      if (d.bets) Bets.merge(d.bets);
+      if (d.plan && (!PL || (d.plan.u || 0) > (PL.u || 0))) { PL = d.plan; try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } }
+      return Account.push({ v: 1, bets: Bets.dump(), plan: PL });
+    }).then(function () { Account.set({ last: Date.now(), msg: '' }); }).catch(function (e) {
+      Account.set({ msg: String(e && e.message) === 'auth' ? 'Session expirée : reconnecte-toi.' : 'Synchronisation impossible pour l’instant (tes données restent sur cet appareil).' });
+    }).then(function () { Account.set({ busy: false }); betsTabRefresh(); });
+  }
+  function accountHTML() {
+    var h = '<div class="tkan plac"><div class="plch"><b>Mon compte</b></div>';
+    if (Account.on()) {
+      var A = Account.state(), r = Account.role();
+      return h + '<div class="sub">' + esc(Account.email()) + ' · <b>' + esc(ROLES[r] || '…') + '</b>' + (A.last ? ' · synchronisé à ' + new Date(A.last).toTimeString().slice(0, 5) : '') + (A.busy ? ' · synchronisation…' : '') + '</div>' +
+        (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') + '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button><button class="voir low" data-acout>Se déconnecter</button></div></div>';
+    }
+    return h + (AUI.step === 'email'
+      ? '<div class="sub">Connecte-toi pour retrouver tes paris sur tous tes appareils.</div><div class="as-odds"><label>Email<input data-acemail type="email" autocomplete="email" value="' + esc(AUI.email) + '"></label></div>'
+      : '<div class="sub">Un code a été envoyé à <b>' + esc(AUI.email) + '</b>.</div><div class="as-odds"><label>Code<input data-accode inputmode="numeric" autocomplete="one-time-code" value="' + esc(AUI.code) + '"></label></div>') +
+      (AUI.msg ? '<div class="bt-warn">' + esc(AUI.msg) + '</div>' : '') +
+      '<div class="plbtns">' + (AUI.step === 'email' ? '<button class="voir mid" data-acreq>Recevoir le code</button>' : '<button class="voir mid" data-acver>Valider</button><button class="voir low" data-acback>Changer d’email</button>') + '</div></div>';
+  }
+  app.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t.hasAttribute) return;
+    if (t.hasAttribute('data-acemail')) AUI.email = t.value.trim();
+    else if (t.hasAttribute('data-accode')) AUI.code = t.value.trim();
+  });
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-acreq],[data-acver],[data-acback],[data-acsync],[data-acout]');
+    if (!t) return;
+    var em = app.querySelector('[data-acemail]'), cd = app.querySelector('[data-accode]');
+    if (em) AUI.email = em.value.trim();
+    if (cd) AUI.code = cd.value.trim();
+    if (t.hasAttribute('data-acreq')) {
+      if (!/^\S+@\S+\.\S+$/.test(AUI.email)) { AUI.msg = 'Adresse email invalide.'; bets2(); return; }
+      AUI.msg = 'Envoi du code…'; bets2();
+      Account.requestCode(AUI.email).then(function (err) { AUI.msg = err || ''; if (!err) AUI.step = 'code'; bets2(); });
+    } else if (t.hasAttribute('data-acver')) {
+      AUI.msg = 'Vérification…'; bets2();
+      Account.verify(AUI.email, AUI.code).then(function (err) {
+        AUI.msg = err || ''; if (!err) { AUI = { step: 'email', email: '', code: '', msg: '' }; Account.loadRole().then(betsTabRefresh); pfSync(); }
+        bets2();
+      });
+    } else if (t.hasAttribute('data-acback')) { AUI.step = 'email'; AUI.code = ''; AUI.msg = ''; bets2(); }
+    else if (t.hasAttribute('data-acsync')) { Account.loadRole().then(betsTabRefresh); pfSync(); }
+    else if (t.hasAttribute('data-acout')) { Account.signOut(); bets2(); }
+  });
+  function bets2() { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+  if (Account.on()) { Account.loadRole().then(betsTabRefresh); setTimeout(pfSync, 3000); }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Account.on() && Date.now() - (Account.state().last || 0) > 60000) pfSync(); });
   function planSummaryHTML() {                                     // en tête de « Mes paris » : où en est le plan de mise
     if (!PL || !PL.on) return '';
     plSync();
@@ -3179,7 +3239,7 @@
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsHTML();
     else if (st.tab === 'bets') {
-      app.innerHTML = planSummaryHTML() + Bets.html();
+      app.innerHTML = accountHTML() + planSummaryHTML() + Bets.html();
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();

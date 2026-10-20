@@ -11,10 +11,10 @@ var Bets = (function () {
   function load() {
     try {
       var raw = localStorage.getItem(KEY);
-      if (raw) { var d = JSON.parse(raw); if (d && Array.isArray(d.bets)) mem = { bets: d.bets, budget: +d.budget || 0 }; }
+      if (raw) { var d = JSON.parse(raw); if (d && Array.isArray(d.bets)) mem = { bets: d.bets, budget: +d.budget || 0, del: d.del || {} }; }
     } catch (e) { /* stockage indisponible : on garde la mémoire de la page */ }
   }
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignoré */ } }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* ignoré */ } if (Bets.onChange) Bets.onChange(); }
   load();
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -265,12 +265,12 @@ var Bets = (function () {
         save(); again();
       } else if (t.hasAttribute('data-bst')) {
         var p = t.getAttribute('data-bst').split('|');
-        mem.bets.forEach(function (b) { if (b.id === p[0]) b.st = p[1]; });
+        mem.bets.forEach(function (b) { if (b.id === p[0]) { b.st = p[1]; b.u = Date.now(); } });
         save(); again();
       } else if (t.hasAttribute('data-bask')) { ui.ask = t.getAttribute('data-bask'); again(); }
       else if (t.hasAttribute('data-bdel')) {
         var id = t.getAttribute('data-bdel');
-        mem.bets = mem.bets.filter(function (b) { return b.id !== id; }); ui.ask = ''; save(); again();
+        mem.bets = mem.bets.filter(function (b) { return b.id !== id; }); (mem.del = mem.del || {})[id] = Date.now(); ui.ask = ''; save(); again();
       } else if (t.hasAttribute('data-bbud')) {
         var v = num((document.getElementById('bt-budget') || {}).value);
         mem.budget = v > 0 ? v : 0; save(); again();
@@ -296,9 +296,28 @@ var Bets = (function () {
       box.textContent = o > 1 ? 'Cette cote suppose ' + pc(1 / o) + ' de chances de gagner' + (s > 0 ? ' · gain possible : ' + eur(s * (o - 1), true) : '') + '.' : '';
     });
   }
-  function add(bet) { if (!bet || !bet.id || mem.bets.some(function (x) { return x.id === bet.id; })) return; mem.bets.push(bet); save(); }          // pari ajouté par l'appli (onglet Plans)
+  function add(bet) { if (!bet || !bet.id || mem.bets.some(function (x) { return x.id === bet.id; })) return; bet.u = bet.u || Date.now(); mem.bets.push(bet); save(); }          // pari ajouté par l'appli (onglet Plans)
   function statsAll() { settle(); return stats(mem.bets); }                    // bilan de TOUS les paris (le plan de mise s'appuie dessus)
+  function dump() { return JSON.parse(JSON.stringify(mem)); }
+  function merge(r) {                                              // fusionne la sauvegarde du compte : union des paris, le plus récent gagne, les suppressions sont respectées
+    if (!r || !Array.isArray(r.bets)) return false;
+    var ch = false, del = mem.del = mem.del || {}, byId = {}, n0 = mem.bets.length;
+    function ts(x) { return x.u || x.t || 0; }
+    mem.bets.forEach(function (x) { byId[x.id] = x; });
+    Object.keys(r.del || {}).forEach(function (id) { if (!del[id] || del[id] < r.del[id]) { del[id] = r.del[id]; ch = true; } });
+    r.bets.forEach(function (rb) {
+      if (!rb || !rb.id || !(rb.stake > 0) || !(rb.odds > 1)) return;
+      var lb = byId[rb.id];
+      if (!lb) { if (!(del[rb.id] && del[rb.id] >= ts(rb))) { mem.bets.push(rb); byId[rb.id] = rb; ch = true; } }
+      else if (ts(rb) > ts(lb)) { Object.keys(rb).forEach(function (k) { lb[k] = rb[k]; }); ch = true; }
+    });
+    mem.bets = mem.bets.filter(function (x) { return !(del[x.id] && del[x.id] >= ts(x)); });
+    if (mem.bets.length !== n0) ch = true;
+    if (!mem.budget && r.budget > 0) { mem.budget = +r.budget; ch = true; }
+    if (ch) save();
+    return ch;
+  }
   function status(id) { var r = null; mem.bets.forEach(function (x) { if (x.id === id) r = x.st; }); return r; }
-  function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; ch = true; } }); if (ch) save(); }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, statsAll: statsAll, resolver: null };
+  function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; x.u = Date.now(); ch = true; } }); if (ch) save(); }
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, statsAll: statsAll, dump: dump, merge: merge, onChange: null, resolver: null };
 })();
