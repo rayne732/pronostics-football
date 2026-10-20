@@ -2232,7 +2232,7 @@
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
     else {
       var hi = PLC[0].low || PLC[0].bad ? -1 : 0;
-      if (hi === 0) h += plCandHTML(PLC[0], 0, info, true);
+      if (hi === 0) h += plCandHTML(PLC[0], 0, info, true) + plTreeHTML(PLC[0], k, cy, T);
       else h += '<div class="bt-warn">Aucun pari ne passe le niveau de sûreté de ton profil (' + pct(prof.minPa) + '). Voici des choix un peu moins sûrs : à toi de voir, ou ne joue pas aujourd’hui.</div>';
       if (PLC.length > (hi === 0 ? 1 : 0)) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + (PLC.length - (hi === 0 ? 1 : 0)) + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
         PLC.slice(hi === 0 ? 1 : 0).map(function (c, i) { return plRow(c, i + (hi === 0 ? 1 : 0), info); }).join('');
@@ -2240,6 +2240,29 @@
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
     var pa0 = PLC.length ? PLC.filter(function (c) { return !c.duo; }).concat(PLC)[0].pa : 0.78;
     return h + plSimHTML(PL.start, PL.goal, PL.prof, Math.max(0.6, Math.min(0.9, pa0))) + plFoot();
+  }
+  function plTreeHTML(hero, k, cy, T) {                            // « Et ensuite ? » : le pari suivant si ça passe, et si ça perd, avec la mise recalculée
+    var prof = plProf(), o1 = (plAutoOdds(hero) || {}).o || (1 - Plan.MARGIN) / hero.pa, stake, L, g;
+    if (k === 0) { stake = Plan.stake1(PL.bank, prof); L = 0; g = Plan.target(stake, o1); }
+    else { L = Plan.r2(cy.cb - PL.bank); g = cy.g; stake = Plan.recStake(L, g, o1, PL.bank, prof).stake; }
+    var bankW = Plan.r2(PL.bank + stake * (o1 - 1)), bankL = Plan.r2(PL.bank - stake), ko = hero.legs[0].time ? kickoff({ date: T, time: hero.legs[0].time }).getTime() + 130 * 60000 : 0;
+    function later(c) { return c !== hero && !c.bad && c.legs.every(function (l) { return hero.legs.every(function (x) { return x.match !== l.match; }) && (!l.time || kickoff({ date: T, time: l.time }).getTime() >= ko); }); }
+    var pool = PLC.filter(later), days = ((PL.days || {})[T] || 0) + (k === 0 ? 1 : 0), rows = '';
+    function pickTxt(c) { return c.legs.map(function (l) { return esc(l.match) + ' (' + esc(l.pick.replace(/^[^:]*: /, '')) + ', ' + esc(l.time || '') + ')'; }).join(' + '); }
+    // si ça passe : cycle gagné, on repart avec le nouveau capital
+    var pw = Plan.profile(PL.prof, bankW, PL.goal), nextW = pool.filter(function (c) { return !c.low; })[0] || pool[0];
+    rows += '<div class="pltr ok"><b>✅ Si ça passe</b> (+' + eur2(stake * (o1 - 1)) + ', capital ' + eur2(bankW) + ')<div>' +
+      (days >= 2 ? 'Assez pour aujourd’hui : on s’arrête sur ce gain. Reviens demain.' : nextW ? 'Pari suivant : mets <b>' + eur2(Plan.stake1(bankW, pw)) + '</b> sur ' + pickTxt(nextW) + ' · ' + pct(nextW.pa) + ' de chances.' : 'Aucun match assez tard aujourd’hui : on s’arrête là.') + '</div></div>';
+    // si ça perd : rattrapage tant qu'il reste des étapes dans le cycle
+    var max = cy ? cy.max : prof.steps, step = k + 1;
+    if (step < max && bankL >= 1) {
+      var L2 = Plan.r2(L + stake), g2 = k === 0 ? g : cy.g, nextL = pool.filter(function (c) { return !c.low; }).sort(function (a, b) { return a.pa - b.pa; })[0] || pool[0];          // rattrapage : la cote la plus haute parmi les paris encore assez sûrs
+      if (nextL) {
+        var oL = (plAutoOdds(nextL) || {}).o || (1 - Plan.MARGIN) / nextL.pa, rs = Plan.recStake(L2, g2, oL, bankL, prof);
+        rows += '<div class="pltr ko"><b>❌ Si ça perd</b> (−' + eur2(stake) + ', capital ' + eur2(bankL) + ')<div>Pari de rattrapage : mets <b>' + eur2(rs.stake) + '</b> sur ' + pickTxt(nextL) + ' · ' + pct(nextL.pa) + ' de chances' + (rs.full ? ', pour récupérer ' + eur2(L2) + ' et gagner ≈ ' + eur2(g2) + '.' : ' (récupère une partie seulement : cote minimale ' + rs.minOdds.toFixed(2).replace('.', ',') + ' pour tout rattraper).') + '</div></div>';
+      } else rows += '<div class="pltr ko"><b>❌ Si ça perd</b><div>Aucun match assez tard pour rattraper : le cycle s’arrête, pause jusqu’à demain.</div></div>';
+    } else rows += '<div class="pltr ko"><b>❌ Si ça perd</b> (−' + eur2(stake) + ', capital ' + eur2(bankL) + ')<div>Le cycle est fini : pause jusqu’à demain. C’est la limite qui protège ton capital.</div></div>';
+    return '<div class="sec"><span class="dot a"></span>Et ensuite ? <small>le plan selon le résultat</small></div>' + rows + '<div class="sub">Ces paris sont des prévisions : ils se recalculent à chaque résultat, avec la cote réelle que tu saisis.</div>';
   }
   function plFlow(k, max) {                                        // schéma du cycle : étape 1, puis un pari de rattrapage seulement si ça perd
     var h = '<div class="plflow">', i;
