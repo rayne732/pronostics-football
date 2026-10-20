@@ -2108,7 +2108,32 @@
     groups = groups.filter(function (g) { return !(PL.ex && ((g.lg && PL.ex.lg && PL.ex.lg[g.lg]) || (PL.ex.sp && PL.ex.sp[g.icon]))); });
     return groups.sort(function (x, y) { return (x.time || '99:99') < (y.time || '99:99') ? -1 : (x.time || '99:99') > (y.time || '99:99') ? 1 : 0; });
   }
-  function plCands(R, prof, T) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
+  function plLegOdds(pa) { return Math.max(1.04, (1 - Plan.MARGIN) / pa); }   // cote habituelle d'un pari très sûr : jamais en dessous de ≈ 1,04
+  function plSafeCombos(G, prof, used, skip) {                    // paris très sûrs (+0,5 buts...) : seuls, puis combinés de 2, 3 ou 4 matchs pour relever la cote
+    var best = [], out = [];
+    G.forEach(function (g) {
+      if (used[g.match]) return;
+      var c = g.cands.filter(function (x) { return !skip[x.legs[0].id + '|' + x.legs[0].m + '|' + x.legs[0].s]; })[0];
+      if (c && c.pa >= 0.8) best.push(c);
+    });
+    best.sort(function (a, b) { return b.pa - a.pa; });
+    best.slice(0, 12).forEach(function (c) { var o = plLegOdds(c.pa); out.push({ legs: c.legs, pa: c.pa, icon: c.icon, low: c.pa < prof.minPa, oe: o, safe: true }); });
+    var top = best.slice(0, 10), n, i;
+    for (n = 2; n <= 5; n++) {
+      if (top.length < n) break;
+      var grp = top.slice(0, n), pa = grp.reduce(function (t, x) { return t * x.pa; }, 1), oe = grp.reduce(function (t, x) { return t * plLegOdds(x.pa); }, 1);
+      if (pa >= prof.minPa - 0.10 && oe >= 1.08) out.push({ legs: grp.map(function (x) { return x.legs[0]; }), pa: pa, icon: grp[0].icon, acc: true, safe: true, low: pa < prof.minPa, oe: oe });
+    }
+    // variante : les n matchs les plus sûrs en mélangeant les sports (un seul par sport quand c'est possible)
+    var bySp = {}, mix = [];
+    top.forEach(function (x) { if (!bySp[x.icon]) { bySp[x.icon] = 1; mix.push(x); } });
+    for (n = 2; n <= Math.min(5, mix.length); n++) {
+      var g2 = mix.slice(0, n), pa2 = g2.reduce(function (t, x) { return t * x.pa; }, 1), oe2 = g2.reduce(function (t, x) { return t * plLegOdds(x.pa); }, 1), k2 = g2.map(function (x) { return plKey(x); }).join('#');
+      if (pa2 >= prof.minPa - 0.10 && oe2 >= 1.08) out.push({ legs: g2.map(function (x) { return x.legs[0]; }), pa: pa2, icon: g2[0].icon, acc: true, safe: true, low: pa2 < prof.minPa, oe: oe2, mixed: true });
+    }
+    return out;
+  }
+  function plCands(R, prof, T, G) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
     var skip = (PL.skip && PL.skip[T]) || {}, used = {}, seen = {}, pool = [], out = [];
     if (PL.cyc) PL.cyc.steps.forEach(function (s) { s.legs.forEach(function (l) { used[l.match] = 1; }); });
     R.picks.concat(plCalPicks(T)).forEach(function (r) {
@@ -2135,7 +2160,9 @@
     plSameGame(T, prof).forEach(function (x) { out.push(x); });
     if (best && prof.steps > 0) out.push(best);
     if (bestX && (!best || plKey(bestX) !== plKey(best))) out.push(bestX);
-    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1 && !c.sg; if (c.duo) c.low = c.pa < prof.minDuo; });
+    var have = {}; out.forEach(function (c) { have[plKey(c)] = 1; });
+    (G ? plSafeCombos(G, prof, used, skip) : []).forEach(function (c) { if (!have[plKey(c)]) { have[plKey(c)] = 1; out.push(c); } });
+    out.forEach(function (c) { c.key = plKey(c); c.duo = c.legs.length > 1 && !c.sg; if (c.duo && !c.acc) c.low = c.pa < prof.minDuo; });
     return out;
   }
   function plExHTML() {                                            // sports et compétitions exclus (introuvables chez ton bookmaker), avec un bouton pour les remettre
@@ -2271,12 +2298,12 @@
     }).join('') + '<div class="sub">Plus la cote monte, plus la probabilité baisse : compare avec la cote réelle de ton bookmaker avant de jouer.</div></div>';
   }
   function plCandHTML(c, i, stakeInfo, hero) {
-    var pa = c.pa, oe = (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
+    var pa = c.pa, oe = c.oe || (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
     var legs = c.legs.map(function (l) {
       return '<div class="plleg"><small class="plsp">' + l.icon + ' ' + esc(PLSPN[l.icon] || '') + (l.lg ? ' · ' + esc(l.lg) : '') + ' · aujourd’hui ' + esc(l.time || '') + '</small><span>' + esc(l.match) + '</span><small>Pari : <b>' + esc(l.pick) + '</b></small></div>';
     }).join('');
     return '<div class="plc' + (hero ? ' plhero' : '') + '">' + (hero ? '<div class="plmise">' + esc(stakeInfo.lead || 'Mets') + ' <b>' + eur2(stake) + '</b> sur ça</div>' : '') +
-      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.sg ? 'Combiné sur le même match' : c.duo ? 'Combiné de 2 matchs' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '<details class="plmenu"><summary aria-label="Plus d’options">⋯</summary><div class="plmenuin">' +
+      '<div class="plch"><span class="tkg ' + (c.low ? 'mid' : 'high') + '">' + pct(pa) + ' de chances</span><b>' + (c.sg ? 'Combiné sur le même match' : c.acc ? 'Combiné sûr de ' + c.legs.length + ' matchs' : c.duo ? 'Combiné de 2 matchs' : c.safe ? 'Pari très sûr' : 'Pari simple') + '</b>' + (c.low ? '<span class="plwx ko">moins sûr</span>' : '') + plWinamax(c) + '<details class="plmenu"><summary aria-label="Plus d’options">⋯</summary><div class="plmenuin">' +
       (c.legs[0].lg ? '<button data-plex="lg|' + esc(c.legs[0].lg) + '">Ne plus proposer ' + esc(c.legs[0].lg) + '</button>' : '') +
       '<button data-plex="sp|' + esc(c.legs[0].icon) + '">Ne plus proposer le ' + esc((PLSPN[c.legs[0].icon] || 'sport').toLowerCase()) + '</button></div></details></div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
@@ -2339,9 +2366,15 @@
         '<div class="sub">La mise dépend de la cote : plus elle est basse, plus il faut miser pour récupérer. Elle est plafonnée à ' + Math.round(plProf().recCap * 100) + ' % de ton capital restant (' + eur2(bank) + '). ' +
         (rs0.full ? '' : 'Avec une cote de 1,30 tu ne récupérerais pas tout : il faudrait une cote d’au moins <b>' + rs0.minOdds.toFixed(2).replace('.', ',') + '</b> pour tout rattraper avec ce que tu as.') + '</div>';
     }
-    PLC = plCands(R, prof, T);
+    var G = plAllGroups(R, T, prof);
+    PLC = plCands(R, prof, T, G);
     PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
-    PLC.sort(function (x, y) { return x.bad - y.bad || (x.low ? 1 : 0) - (y.low ? 1 : 0) || x.ord - y.ord; });
+    PLC.sort(function (x, y) { return x.bad - y.bad || (x.low ? 1 : 0) - (y.low ? 1 : 0) || y.pa - x.pa || x.ord - y.ord; });
+    var hh = -1; PLC.forEach(function (c, i) { if (hh < 0 && !c.low && !c.bad && !c.duo && !c.sg && !c.acc) hh = i; });
+    if (hh >= 0) {                                                  // le pari simple le plus sûr en tête, puis les combinés (plusieurs matchs sûrs, même match), puis les autres paris simples
+      var heroC = PLC.splice(hh, 1)[0], isCombo = function (c) { return c.acc || c.sg || c.duo; };
+      PLC = [heroC].concat(PLC.filter(isCombo), PLC.filter(function (c) { return !isCombo(c); }));
+    }
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
     else {
       var hi = PLC[0].low || PLC[0].bad ? -1 : 0;
@@ -2350,7 +2383,7 @@
       if (PLC.length > (hi === 0 ? 1 : 0)) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + (PLC.length - (hi === 0 ? 1 : 0)) + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
         PLC.slice(hi === 0 ? 1 : 0).map(function (c, i) { return plRow(c, i + (hi === 0 ? 1 : 0), info); }).join('');
     }
-    var G = plAllGroups(R, T, prof), nm0 = 0;
+    var nm0 = 0;
     G.forEach(function (g) { g.cands.forEach(function (c) { c.ix = PLC.length; PLC.push(c); nm0++; }); });
     if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary><div class="sub">Tous les matchs de l’onglet Découvrir, chacun avec ses paris les plus probables (même les très sûrs). Prends ceux que ton bookmaker propose.</div>' +
       G.map(function (g) {
