@@ -34,6 +34,7 @@ import tennis
 from digest import build_digest
 from fixtures_api import fetch_fixtures, fetch_espn, fixtures_from_ext
 from markets import fit_all
+import odds
 from page import build_page
 import tracking
 from notify import run as run_notify, run_evening, record_days
@@ -444,6 +445,10 @@ def main():
         esports = dict(zip(("tennis", "basket", "rugby", "handball", "hockey"), (page_args[9], page_args[10], page_args[11], page_args[12], page_args[13])))
         esports.update(baseball=page_args[15], nfl=page_args[16], mma=page_args[17], volley=page_args[19])
         res = results_update(now, esports, models=models, rows_by_div=rows_by_div)                               # résultats de nos pronostics (14 jours) : règlement automatique de « Mes paris »
+        try:
+            odds.refresh(fixtures, now)                                       # cotes réelles des bookmakers (facultatif : sans clé ou en panne, rien ne change)
+        except Exception as exc:
+            print(f"[avertissement] cotes indisponibles : {exc}", file=sys.stderr)
         with open("output/index.html", "w", encoding="utf-8") as fh:
             fh.write(build_page(*page_args, lazy_dir="output/data", res=res, cal=cal, xacc=xacc, logos=logo_map, form=form, full=full_map))
         with open("output/artifact.html", "w", encoding="utf-8") as fh:      # version prête à publier (sans squelette HTML)

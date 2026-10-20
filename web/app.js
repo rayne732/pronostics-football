@@ -2050,12 +2050,37 @@
       '<div class="tkbtns"><button class="voir mid wide" data-plstart>Démarrer ce plan</button></div>';
     return h;
   }
+  var PLFX = null;
+  function plAutoOdds(c) {                                         // cote lue automatiquement (The Odds API, marché 1N2) ; Winamax, Betclic, Unibet ou PMU d'abord, sinon la moyenne. Double chance et « remboursé si nul » sont déduits du 1N2 : estimation un peu optimiste
+    if (!PLFX) { PLFX = {}; D.fixtures.forEach(function (f) { PLFX[f.id] = f; }); }
+    var tot = 1, best = 1, names = {}, est = false, i, l, f, bk, p3, b3;
+    function conv(r, m, s) {                                        // r = [1, N, 2] -> cote du pari, ou 0
+      var h = r[0], d = r[1], a = r[2];
+      if (m === 'Résultat du match') return s === f.home ? h : s === 'Match nul' ? d : s === f.away ? a : 0;
+      if (m === 'Double chance') { est = true; return s === f.home + ' ou nul' ? 1 / (1 / h + 1 / d) : s === f.away + ' ou nul' ? 1 / (1 / a + 1 / d) : s === f.home + ' ou ' + f.away ? 1 / (1 / h + 1 / a) : 0; }
+      if (/^Vainqueur \(rembours/.test(m)) { est = true; return s === f.home ? 1 + h / a : s === f.away ? 1 + a / h : 0; }
+      return 0;
+    }
+    for (i = 0; i < c.legs.length; i++) {
+      l = c.legs[i]; f = PLFX[l.id];
+      if (!f || !f.od) return null;
+      bk = ['winamax_fr', 'betclic_fr', 'unibet_fr', 'pmu_fr'].filter(function (k) { return f.od.k && f.od.k[k]; })[0];
+      p3 = conv(bk ? f.od.k[bk] : f.od.m, l.m, l.s); b3 = conv(f.od.b, l.m, l.s);
+      if (!(p3 > 1)) return null;
+      names[bk ? bk.replace('_fr', '').replace(/^./, function (x) { return x.toUpperCase(); }) : 'moyenne des bookmakers'] = 1;
+      tot *= p3; best *= b3;
+    }
+    var nm2 = Object.keys(names);
+    return { o: Math.round(tot * 100) / 100, best: Math.round(best * 100) / 100, est: est, src: nm2.length === 1 ? nm2[0] : 'moyenne des bookmakers' };
+  }
+  function plOddsOf(c) { var t = plNum(PLODDS[c.key]), a = plAutoOdds(c); return t || (a ? a.o : 0); }
   function plCandHTML(c, i, stakeInfo) {
-    var pa = c.pa, oe = (1 - Plan.MARGIN) / pa, o = plNum(PLODDS[c.key]), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
+    var pa = c.pa, oe = (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fixed || stakeInfo.fn(o > 1 ? o : oe);
     var legs = c.legs.map(function (l) { return '<div class="plleg"><span>' + l.icon + ' ' + esc(l.match) + '</span><small>' + esc(l.time || '') + ' · ' + esc(l.pick) + '</small></div>'; }).join('');
     return '<div class="plc"><div class="plch"><span class="tkg high">' + pct(pa) + '</span><b>' + (c.duo ? 'Combiné de 2' : 'Pari simple') + '</b></div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
       '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
+      (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
       (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button><button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
@@ -2111,6 +2136,8 @@
         (rs0.full ? '' : 'Avec une cote de 1,30 tu ne récupérerais pas tout : il faudrait une cote d’au moins <b>' + rs0.minOdds.toFixed(2).replace('.', ',') + '</b> pour tout rattraper avec ce que tu as.') + '</div>';
     }
     PLC = plCands(R, prof, T);
+    PLC.forEach(function (c, i) { c.ord = i; var a = plAutoOdds(c); c.bad = a && a.o < 1 / c.pa ? 1 : 0; });
+    PLC.sort(function (x, y) { return x.bad - y.bad || x.ord - y.ord; });
     if (!PLC.length) h += TODAY.busy ? skel(3) : '<div class="tkrec"><b>Rien d’assez sûr pour l’instant</b><div class="tkn3">Aucun pari ne passe le seuil de ce plan (' + pct(prof.minPa) + ' de chances réelles, marge de prudence retirée). Ne joue pas : mieux vaut ne rien miser que miser sur du moyen. Reviens plus tard dans la journée.</div></div>';
     else h += PLC.map(function (c, i) { return plCandHTML(c, i, info); }).join('');
     if (cy) h += '<div class="tkbtns"><button class="voir low wide" data-plend>J’arrête ce cycle (je garde ma perte)</button></div>';
@@ -2135,7 +2162,7 @@
     }
     else if (t.hasAttribute('data-plgo')) {
       c = PLC[+t.getAttribute('data-plgo')];
-      var o = c && plNum(PLODDS[c.key]);
+      var o = c && plOddsOf(c);
       if (!c || !(o >= 1 / c.pa) || t.disabled) return;
       var prof = plProf();
       if (!PL.cyc) { PL.cyc = { cb: PL.bank, max: prof.steps, g: 0, steps: [] }; PL.days = PL.days || {}; PL.days[T] = (PL.days[T] || 0) + 1; }
