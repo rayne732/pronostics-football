@@ -1959,10 +1959,35 @@
   function plKey(c) { return c.legs.map(function (l) { return l.id + '|' + l.m + '|' + l.s; }).join('+'); }
   function plProf() { return PL ? Plan.profile(PL.prof, PL.bank, PL.goal) : Plan.PROF.pr; }
   function plPa(r) { return r.p - asHair(r) - (r.v ? 0 : 0.02); }
+  var PLCAL = false;
+  function plCalPicks(T) {                                         // matchs du calendrier mondial (Ligue des Champions, coupes, championnats sans modèle) : probabilités déduites des cotes
+    if (!isLoaded('cal')) {
+      if (!PLCAL) { PLCAL = true; loadLazy('cal', function () { if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
+      return [];
+    }
+    var out = [];
+    (D.cal || []).forEach(function (c) {
+      if (c.date !== T || c.st !== 'pre' || !c.p || c.p.length !== 3) return;
+      var h = c.p[0], d = c.p[1], a = c.p[2], fh = h >= a, fav = fh ? c.home : c.away, pf = fh ? h : a, base = { icon: '⚽', lg: c.fr || '', match: nm(c.home) + ' – ' + nm(c.away), time: c.time, v: true, ref: '', bid: 'cal|' + c.date + '|' + c.home + '|' + c.away };
+      out.push(Object.assign({}, base, { pick: 'Résultat du match : ' + nm(fav), p: pf, bm: 'Résultat du match', bs: fav }));
+      out.push(Object.assign({}, base, { pick: 'Double chance : ' + nm(fav) + ' ou nul', p: pf + d, bm: 'Double chance', bs: fav + ' ou nul' }));
+    });
+    return out;
+  }
+  function plRes(l) {                                              // résultat d'un pari : nos résultats habituels, ou le score du calendrier mondial
+    if (l.id.indexOf('cal|') === 0) {
+      var q = l.id.split('|'), c = (D.cal || []).filter(function (x) { return x.date === q[1] && x.home === q[2] && x.away === q[3]; })[0];
+      if (!c || c.st !== 'post' || c.hs == null || c.as_ == null) return null;
+      if (l.m === 'Résultat du match') return l.s === c.home ? c.hs > c.as_ : l.s === c.away ? c.hs < c.as_ : null;
+      if (l.m === 'Double chance') return l.s === c.home + ' ou nul' ? c.hs >= c.as_ : l.s === c.away + ' ou nul' ? c.hs <= c.as_ : null;
+      return null;
+    }
+    return Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null;
+  }
   function plCands(R, prof, T) {                                   // paris proposables : un par match, pas encore commencés, pas déjà écartés ; singles puis combinés de 2
     var skip = (PL.skip && PL.skip[T]) || {}, used = {}, seen = {}, pool = [], out = [];
     if (PL.cyc) PL.cyc.steps.forEach(function (s) { s.legs.forEach(function (l) { used[l.match] = 1; }); });
-    R.picks.forEach(function (r) {
+    R.picks.concat(plCalPicks(T)).forEach(function (r) {
       if (!r.bid || used[r.match] || r.p > AS_CAP) return;
       if (PL.ex && ((r.lg && PL.ex.lg && PL.ex.lg[r.lg]) || (PL.ex.sp && PL.ex.sp[r.icon]))) return;          // sport ou compétition que tu as exclu(e)
       if (r.time && kickoff({ date: T, time: r.time }) < Date.now() + 5 * 60000) return;
@@ -1975,7 +2000,7 @@
     Object.keys(seen).forEach(function (m) { pool.push(seen[m]); });
     pool.sort(function (a, b) { return b.pa - a.pa; });
     function leg(x) { return { id: x.r.bid, m: x.r.bm, s: x.r.bs, match: x.r.match, pick: x.r.pick, icon: x.r.icon, lg: x.r.lg, time: x.r.time, ref: x.r.ref }; }
-    pool.filter(function (x) { return x.pa >= prof.minPa - 0.06; }).slice(0, 15).forEach(function (x) { out.push({ legs: [leg(x)], pa: x.pa, icon: x.r.icon, low: x.pa < prof.minPa }); });
+    pool.filter(function (x) { return x.pa >= prof.minPa - 0.06; }).slice(0, 30).forEach(function (x) { out.push({ legs: [leg(x)], pa: x.pa, icon: x.r.icon, low: x.pa < prof.minPa }); });
     var top = pool.slice(0, 8), best = null, bestX = null;
     for (var i = 0; i < top.length; i++) for (var j = i + 1; j < top.length; j++) {
       var pp = top[i].pa * top[j].pa;
@@ -2012,7 +2037,7 @@
     var cy = PL && PL.cyc, s = cy && cy.steps[cy.steps.length - 1];
     if (!s || s.res !== null) return;
     if (!Bets.resolver) return;
-    var rs = s.legs.map(function (l) { return Bets.resolver(l.id, l.m, l.s); });
+    var rs = s.legs.map(plRes);
     if (rs.some(function (x) { return x === false; })) plSettle(false);
     else if (rs.every(function (x) { return x === true; })) plSettle(true);
     else if (!isLoaded('res')) loadLazy('res', function () { if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
