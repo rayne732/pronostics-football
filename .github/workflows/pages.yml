@@ -52,7 +52,9 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add -f data/tracking.json data/apif_cache.json data/tennis_model.json data/tennis_matches.json data/notify_state.json data/results_log.json data/match_log.json data/ext_log.json data/espn_leagues.json data/logos.json data/tsdb_cache.json data/apif_cal.json data/strength_log.json data/basket_games.json data/rugby_games.json data/handball_games.json data/handball_window.json data/hockey_games.json data/baseball_games.json data/nfl_games.json data/mma_fights.json data/golf_rounds.json data/golf_backtest.json data/volley_games.json data/volley_window.json data/f1_races.json data/f1_backtest.json 2>/dev/null || git add data/tracking.json
+          for f in tracking apif_cache tennis_model tennis_matches notify_state results_log match_log ext_log espn_leagues logos tsdb_cache apif_cal strength_log basket_games rugby_games handball_games handball_window hockey_games baseball_games nfl_games mma_fights golf_rounds golf_backtest volley_games volley_window f1_races f1_backtest; do
+            if [ -f "data/$f.json" ]; then git add -f "data/$f.json"; fi      # un par un : un fichier absent ne doit pas empêcher d'enregistrer les autres (notify_state.json n'était plus sauvegardé)
+          done
           git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
       - name: Garder uniquement les fichiers du site (le mail du matin est lu depuis digest.txt / digest.html)
         run: rm -f output/artifact.html
