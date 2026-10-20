@@ -2263,11 +2263,10 @@
   function plSimHTML(start, goal, profKey, pa) {
     var a = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: Plan.MARGIN }), b = Plan.sim({ start: start, goal: goal, prof: profKey, pa: pa, margin: 0 });
     function n(x) { return String(Math.round(x * 1000) / 10).replace('.', ',') + ' %'; }
-    return '<div class="plsim"><b>Ce que dit le calcul</b><div class="pltxt">' + a.runs + ' parcours simulés, ' + a.maxCycles + ' cycles maximum, paris à <b>' + pct(pa) + '</b> de chances réelles (cote ≈ ' + a.odds.toFixed(2).replace('.', ',') + ' avec la marge habituelle d’un bookmaker de 7 %).</div>' +
+    return '<details class="tkall"><summary>Chances réalistes de ce plan</summary><div class="plsim"><div class="pltxt">' + a.runs + ' parcours simulés, ' + a.maxCycles + ' cycles maximum, paris à <b>' + pct(pa) + '</b> de chances réelles (cote ≈ ' + a.odds.toFixed(2).replace('.', ',') + ' avec la marge habituelle d’un bookmaker de 7 %).</div>' +
       '<div class="plgrid"><span>Atteindre ' + goal + ' €<b>' + n(a.reach) + '</b><small>sans marge : ' + n(b.reach) + '</small></span><span>Tout perdre<b class="ko">' + n(a.ruin) + '</b><small>sans marge : ' + n(b.ruin) + '</small></span>' +
       '<span>Capital moyen à la fin<b>' + eur2(a.avg) + '</b><small>sans marge : ' + eur2(b.avg) + '</small></span></div>' +
-      '<div class="pltxt">Même avec des cotes sans aucune marge, les chances d’atteindre l’objectif plafonnent autour de <b>' + pct(Math.min(1, start / goal)) + '</b> (capital ÷ objectif) : on ne peut pas faire mieux avec des paris équitables, quelle que soit la façon de miser. ' +
-      'Récupérer ses pertes en doublant la mise ne rend pas un pari plus rentable : ça transforme beaucoup de petits gains en une grosse perte rare.</div></div>';
+      '<div class="pltxt">Au mieux (cotes sans marge), les chances d’atteindre l’objectif plafonnent à environ <b>' + pct(Math.min(1, start / goal)) + '</b>.</div></div></details>';
   }
   function plAvgPa(R, prof, T) {
     var c = plCands(R, prof, T).filter(function (x) { return !x.duo; });
@@ -2279,9 +2278,8 @@
     var h = '<div class="sec"><span class="dot g"></span>Mon plan</div><div class="tkan"><div class="tkbet">' +
       '<label>Capital de départ (€)<input data-plcap inputmode="decimal" value="' + PLD.start + '"></label><label>Objectif (€)<input data-plgoal inputmode="decimal" value="' + PLD.goal + '"></label></div>' +
       '<div class="chips">' + ['pr', 'eq', 'au'].map(function (k) { return '<button class="chip pill' + (PLD.prof === k ? ' on' : '') + '" data-plprof="' + k + '">' + Plan.PROF[k].name + '</button>'; }).join('') + '</div>' +
-      '<div class="sub">' + esc(prof.txt) + '</div>' +
-      '<div class="pltxt">Le principe : une série (un « cycle ») démarre par un pari sûr. S’il passe, le cycle est gagné. S’il perd, je te propose un 2e pari, avec la mise qui permet de récupérer la perte, dans la limite de ton capital. ' +
-      'Si le cycle rate, on s’arrête pour la journée. Dès que l’objectif est atteint, je passe en mode sécurisé et je te conseille de retirer ton capital de départ. Si tu perds la moitié de ton capital, je te dis de t’arrêter.</div></div>' +
+      '<div class="sub">' + esc(prof.txt.split('.')[0]) + '.</div>' +
+      '</div>' +
       (PLD.start >= 5 && PLD.goal > PLD.start ? plSimHTML(PLD.start, PLD.goal, PLD.prof, pa) : '<div class="bt-warn">Le capital doit être d’au moins 5 € et l’objectif supérieur au capital.</div>') +
       '<div class="tkbtns"><button class="voir mid wide" data-plstart>Démarrer ce plan</button></div>';
     return h;
@@ -2323,7 +2321,7 @@
     if (!sg.length) return '';
     return '<div class="plraise"><b>Cote trop basse ? Relève-la avec un 2e pari sur ce match :</b>' + sg.map(function (x) {
       return '<div>' + esc(x.a.lab) + ' <b>+</b> ' + esc(x.b.lab) + ' · <b>' + pct(x.pa) + '</b> de chances · cote minimale ' + (1 / x.pa).toFixed(2).replace('.', ',') + ' (habituelle ≈ ' + x.oe.toFixed(2).replace('.', ',') + ')</div>';
-    }).join('') + '<div class="sub">Plus la cote monte, plus la probabilité baisse : compare avec la cote réelle de ton bookmaker avant de jouer.</div></div>';
+    }).join('') + '</div>';
   }
   function plCandHTML(c, i, stakeInfo, hero) {
     var pa = c.pa, oe = c.oe || (1 - Plan.MARGIN) / pa, auto = plAutoOdds(c), typed = plNum(PLODDS[c.key]), o = typed || (auto ? auto.o : 0), valid = o >= 1 / pa, stake = stakeInfo.fn(o > 1 ? o : oe, c);
@@ -2335,11 +2333,11 @@
       (c.legs[0].lg ? '<button data-plex="lg|' + esc(c.legs[0].lg) + '">Ne plus proposer ' + esc(c.legs[0].lg) + '</button>' : '') +
       '<button data-plex="sp|' + esc(c.legs[0].icon) + '">Ne plus proposer le ' + esc((PLSPN[c.legs[0].icon] || 'sport').toLowerCase()) + '</button></div></details></div>' + legs +
       '<div class="plmeta"><span>Cote habituelle<b>≈ ' + oe.toFixed(2).replace('.', ',') + '</b></span><span>Cote minimale<b>' + (1 / pa).toFixed(2).replace('.', ',') + '</b></span><span>Mise<b>' + eur2(stake) + '</b></span></div>' +
-      (c.sg ? '<div class="sub">Deux paris sur le même match, pour relever la cote tout en restant très probable. Cote habituelle visée : ≈ ' + c.oe.toFixed(2).replace('.', ',') + '. Cherche chez ton bookmaker « combiné même match » (ou joue les deux paris dans un même ticket) et saisis la cote exacte.</div>' : '') +
+      (c.sg ? '<div class="sub">Même match · cote visée ≈ ' + c.oe.toFixed(2).replace('.', ',') + '</div>' : '') +
       '<div class="as-odds"><label>Cote vue chez ton bookmaker<input data-plodds="' + esc(c.key) + '" inputmode="decimal" autocomplete="off" placeholder="ex. ' + oe.toFixed(2).replace('.', ',') + '" value="' + (o ? String(o).replace('.', ',') : '') + '"></label>' +
-      (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote <b>estimée</b> à partir du 1N2 chez <b>' + esc(auto.src) + '</b> (souvent un peu plus haute que la vraie)' : 'Cote lue automatiquement chez <b>' + esc(auto.src) + '</b>') + ' · meilleure du marché : ' + String(auto.best).replace('.', ',') + '. Corrige-la si ton bookmaker affiche autre chose.</div>' : '') +
+      (auto && !typed ? '<div class="sub">' + (auto.est ? 'Cote estimée' : 'Cote lue') + ' · ' + esc(auto.src) + '</div>' : '') +
       (o > 1 && !valid && !c.sg && !c.duo ? plRaiseHTML(c) : '') +
-      (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Dis-moi la cote que tu vois : je te dis si ça vaut le coup, et la mise exacte.</div>') + '</div>' +
+      (o > 1 ? '<div class="as-verdict">' + asVerdict(pa, stake, o) + '</div>' : '<div class="sub">Saisis la cote de ton bookmaker.</div>') + '</div>' +
       '<div class="plbtns"><button class="voir ' + (valid ? 'mid' : 'low') + '" data-plgo="' + i + '"' + (valid && stake >= 1 ? '' : ' disabled') + '>Je mise</button>' + (c.legs.length === 1 && !c.sg ? '<button class="voir low" data-pladd="' + (c.ix == null ? i : c.ix) + '">+ Mon combiné</button><button class="voir low" data-plmatch="' + esc(c.legs[0].id) + '">Tous les paris de ce match</button>' : '') + '<button class="voir low" data-plskip="' + i + '">Pas chez mon bookmaker</button>' +
 
       c.legs.map(function (l) { return l.ref ? '<button class="voir low" ' + l.ref + '>Voir ' + esc(l.match.split(' – ')[0]) + '</button>' : ''; }).join('') + '</div></div>';
@@ -2407,8 +2405,8 @@
       hair = AS_HAIR; extra = 0.02; name = cal ? nm(cal.home) + ' – ' + nm(cal.away) : ''; lg = cal ? cal.fr || '' : ''; time = cal ? cal.time : ''; ref = ''; home = cal && cal.home; away = cal && cal.away;
     }
     var h = '<button class="voir low" data-plmback>‹ Retour aux plans</button><div class="sec"><span class="dot g"></span>' + esc(name || 'Ce match') + ' <small>' + esc(lg) + (time ? ' · ' + esc(time) : '') + '</small></div>';
-    if (!fams.length) return h + '<div class="sub">Pour ce match, je n’ai pas de liste complète de paris : seuls les paris proposés dans la liste du jour sont disponibles.</div>';
-    h += '<div class="sub">Tous les paris que je sais calculer pour ce match, avec leur probabilité. Si un pari n’existe pas chez ton bookmaker (par exemple « plus de 0,5 buts »), prends-en un autre, puis saisis la cote.</div>';
+    if (!fams.length) return h + '<div class="sub">Pas de liste complète pour ce match.</div>';
+    
     PLC = []; var order = ['Résultat du match', 'Double chance', 'Total buts (plus)', 'Total buts (moins)', 'Les deux équipes marquent'];
     fams.sort(function (a, b) { var ia = order.indexOf(a.name), ib = order.indexOf(b.name); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib); });
     fams.forEach(function (fam, fi) {
@@ -2429,7 +2427,7 @@
   }
   function planBody() {                                            // plan de mise guidé : affiché en tête de l'onglet Plans
     var T = parisToday(), R = todayRows(), h = '';
-    h += '<div class="bt-warn">Aucune stratégie ne bat les cotes sur la durée : la marge du bookmaker fait perdre en moyenne ~7 % de chaque euro misé. Ce plan cadre le risque, il ne le supprime pas. Ne mise que de l’argent que tu peux perdre. Joueurs Info Service : 09 74 75 13 13.</div>';
+    h += '<div class="bt-warn">Aucun pari n’est sûr à 100 %. Joue avec modération · Joueurs Info Service 09 74 75 13 13.</div>';
     if (!PL) return h + plSetup(R);
     PL.skip = PL.skip || {}; PL.hist = PL.hist || [];
     plSync();
@@ -2439,7 +2437,7 @@
       '<div class="bar"><i style="width:' + Math.round(prog * 100) + '%"></i></div><div class="sub">' + (net >= 0 ? '+' : '−') + eur2(Math.abs(net)) + ' depuis le début · profil <b>' + esc(prof.name) + '</b></div>' +
       '<details class="tkall"><summary>Modifier mon capital ou mon objectif</summary><div class="tkbet"><label>Capital actuel (€)<input data-plset="bank" inputmode="decimal" value="' + PL.bank + '"></label>' +
       '<label>Capital de départ (€)<input data-plset="start" inputmode="decimal" value="' + PL.start + '"></label><label>Objectif (€)<input data-plset="goal" inputmode="decimal" value="' + PL.goal + '"></label><label>Mise quand je suis en gain (€)<input data-plset="target" inputmode="decimal" value="' + (PL.target || 5) + '"></label></div>' +
-      '<div class="sub">Tu as rechargé, retiré ou corrigé ton solde : mets-le à jour ici. Le capital de départ sert à la limite des −50 %.</div>' + plExHTML() + '</details></div>';
+      plExHTML() + '</details></div>';
     if (PL.bank < 1) return h + '<div class="bt-warn"><b>Capital épuisé.</b> Le plan est terminé. C’est une perte que le plan avait annoncée dans ses chances ci-dessous. Pour recommencer, va dans Mes paris : bouton « Recommencer un plan ».</div>' + plSimHTML(PL.start, PL.goal, PL.prof, 0.78);
     if (PL.bank >= PL.goal) {
       var wd = Math.min(PL.start, PL.bank - 1);
@@ -2463,7 +2461,7 @@
     if (k === 0) {
       var s1 = plBase(cb, prof);
       info = { lead: 'Mets', fn: function (o, c) { return plBase(cb, prof, c.pa); } };
-      h += '<div class="sec"><span class="dot g"></span>Étape 1 <small>mise de base ' + eur2(s1) + ' (' + plBaseTxt(cb, prof) + '), plus forte quand le pari est très sûr</small></div>' + (plMode(PL.bank) === 'gain' ? '<div class="sub">Tu es en gain de <b>+' + eur2(PL.bank - (PL.init || PL.start)) + '</b> : je te propose de ne miser que ' + eur2(s1) + ', sur des petites cotes, pour garder tes gains.</div>' : plMode(PL.bank) === 'baisse' ? '<div class="sub">Tu as perdu plus de 20 % de ton départ : je baisse la mise au lieu de l’augmenter. Se refaire en misant plus est ce qui fait perdre le plus.</div>' : '');
+      h += '<div class="sec"><span class="dot g"></span>Étape 1 <small>mise de base ' + eur2(s1) + ' · ' + plBaseTxt(cb, prof) + '</small></div>';
     } else {
       var g = cy.g, bank = PL.bank;
       info = { lead: 'Pour rattraper la perte, mets', fn: function (o) { return Plan.recStake(L, g, o, bank, plProf()).stake; } };
@@ -2494,12 +2492,12 @@
       var p3 = PLC.filter(function (c) { return c.sg && !c.low && !c.bad; })[0] || PLC.filter(function (c) { return c.sg || (c.duo && !c.acc); })[0];
       if (p3 && shown.indexOf(p3) < 0) h += planBlock(p3.sg ? 'Plan 3 · plusieurs paris sur un même match <small>cote relevée</small>' : 'Plan 3 · combiné de 2 matchs <small>cote plus haute</small>', p3);
       var rest = PLC.filter(function (c) { return shown.indexOf(c) < 0; });
-      if (rest.length) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + rest.length + '</small></div><div class="sub">Si un match n’est pas chez ton bookmaker, prends-en un autre : touche « Pas chez mon bookmaker » ou ouvre un autre choix.</div>' +
+      if (rest.length) h += '<div class="sec"><span class="dot b"></span>Autres choix <small>du plus sûr au moins sûr · ' + rest.length + '</small></div>' +
         rest.map(function (c) { return plRow(c, PLC.indexOf(c), info); }).join('');
     }
     var nm0 = 0;
     G.forEach(function (g) { g.cands.forEach(function (c) { c.ix = PLC.length; PLC.push(c); nm0++; }); });
-    if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary><div class="sub">Tous les matchs de l’onglet Découvrir, chacun avec ses paris les plus probables (même les très sûrs). Prends ceux que ton bookmaker propose.</div>' +
+    if (G.length) h += '<details class="tkall plall"><summary>Tous les matchs d’aujourd’hui (' + G.length + ') : choisis toi-même</summary>' +
       G.map(function (g) {
         if (g.none) return '<div class="plm none"><span>' + esc(g.time || '') + ' · ' + esc(g.match) + '</span><small>' + esc(g.lg) + ' · pas de pronostic disponible</small></div>';
         if (g.icon === '⚽' && g.cands[0]) return '<button class="plm plmbtn" data-plmatch="' + esc(g.cands[0].legs[0].id) + '"><span class="plmt">' + esc(g.time || '') + '</span><span class="plmn"><b>' + esc(g.match) + '</b><small>' + (g.live ? '● en cours · ' : '') + (g.lg ? esc(g.lg) + ' · ' : '') + 'jusqu’à ' + pct(g.cands[0].pa) + '</small></span><span class="plgo">›</span></button>';
@@ -2531,7 +2529,7 @@
         rows += '<div class="pltr ko"><b>❌ Si ça perd</b> (−' + eur2(stake) + ', capital ' + eur2(bankL) + ')<div>Pari de rattrapage : mets <b>' + eur2(rs.stake) + '</b> sur ' + pickTxt(nextL) + ' · ' + pct(nextL.pa) + ' de chances' + (rs.full ? ', pour récupérer ' + eur2(L2) + ' et gagner ≈ ' + eur2(g2) + '.' : ' (récupère une partie seulement : cote minimale ' + rs.minOdds.toFixed(2).replace('.', ',') + ' pour tout rattraper).') + '</div></div>';
       } else rows += '<div class="pltr ko"><b>❌ Si ça perd</b><div>Aucun match assez tard pour rattraper : le cycle s’arrête, pause jusqu’à demain.</div></div>';
     } else rows += '<div class="pltr ko"><b>❌ Si ça perd</b> (−' + eur2(stake) + ', capital ' + eur2(bankL) + ')<div>Le cycle est fini : pause jusqu’à demain. C’est la limite qui protège ton capital.</div></div>';
-    return '<div class="sec"><span class="dot a"></span>Et ensuite ? <small>le plan selon le résultat</small></div>' + rows + '<div class="sub">Ces paris sont des prévisions : ils se recalculent à chaque résultat, avec la cote réelle que tu saisis.</div>';
+    return '<div class="sec"><span class="dot a"></span>Et ensuite ? <small>le plan selon le résultat</small></div>' + rows;
   }
   function plFlow(k, max) {                                        // schéma du cycle : étape 1, puis un pari de rattrapage seulement si ça perd
     var h = '<div class="plflow">', i;
@@ -2539,7 +2537,7 @@
       h += '<span class="' + (i < k ? 'done' : i === k ? 'on' : '') + '">' + (i === 0 ? '1 · Pari' : (i + 1) + ' · Rattrapage') + '</span>';
       if (i < max - 1) h += '<i>perdu ›</i>';
     }
-    return h + '</div><div class="sub">Si un pari passe, le cycle est terminé et on recommence avec le nouveau capital. Sinon, le pari suivant rattrape la perte.</div>';
+    return h + '</div>';
   }
   function plFoot() {
     var H = PL.hist || [], w = H.filter(function (x) { return x.ok; }).length;
