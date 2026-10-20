@@ -55,7 +55,14 @@ jobs:
           for f in tracking apif_cache tennis_model tennis_matches notify_state results_log match_log ext_log espn_leagues logos tsdb_cache apif_cal strength_log basket_games rugby_games handball_games handball_window hockey_games baseball_games nfl_games mma_fights golf_rounds golf_backtest volley_games volley_window f1_races f1_backtest; do
             if [ -f "data/$f.json" ]; then git add -f "data/$f.json"; fi      # un par un : un fichier absent ne doit pas empêcher d'enregistrer les autres (notify_state.json n'était plus sauvegardé)
           done
-          git diff --cached --quiet || (git commit -m "Suivi du $(date +%F)" && git push)
+          if ! git diff --cached --quiet; then
+            git commit -m "Suivi du $(date +%F)"
+            for i in 1 2 3 4; do            # si quelqu'un a poussé pendant ce run, on se recale dessus (nos fichiers de suivi gagnent) puis on repousse
+              git pull --rebase --autostash -X theirs origin main && git push && break
+              git rebase --abort 2>/dev/null || true
+              sleep $((i * 5))
+            done
+          fi
       - name: Garder uniquement les fichiers du site (le mail du matin est lu depuis digest.txt / digest.html)
         run: rm -f output/artifact.html
       - uses: actions/configure-pages@v5
