@@ -92,6 +92,9 @@ var Account = (function () {
   function wipeState() {
     return token().then(function (t) { return t ? call('/rest/v1/pf_state?user_id=eq.' + S.uid, { method: 'DELETE' }, t) : null; });
   }
+  function rest(method, path, body, prefer) {
+    return token().then(function (t) { return t ? call(path, { method: method, body: body || undefined, prefer: prefer }, t) : { ok: false, status: 401, body: null }; }).catch(function () { return { ok: false, status: 0, body: null }; });
+  }
   function pull() {                                                // -> { data, updated } ou null (aucune sauvegarde) ; lève une erreur si le réseau échoue
     return token().then(function (t) {
       if (!t) throw new Error('auth');
@@ -110,7 +113,7 @@ var Account = (function () {
   return {
     on: function () { return !!S; }, email: function () { return S ? S.email : ''; }, role: function () { return role; }, loadRole: loadRole, profile: profile,
     signUp: signUp, signIn: signIn, recover: recover, changePassword: changePassword, rpc: rpc, wipeState: wipeState,
-    requestCode: requestCode, verify: verify, signOut: signOut, pull: pull, push: push,
+    rest: rest, uid: function () { return S ? S.uid : null; }, requestCode: requestCode, verify: verify, signOut: signOut, pull: pull, push: push,
     state: function () { return { last: last, busy: busy, msg: msg }; }, set: function (o) { if ('last' in o) last = o.last; if ('busy' in o) busy = o.busy; if ('msg' in o) msg = o.msg; }
   };
 })();

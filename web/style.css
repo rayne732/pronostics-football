@@ -1150,3 +1150,11 @@ button.chip small{display:block}
 .cbg.k-a,.cbg.k-r,.cbg.k-g{--cc:var(--green)}.cbg.k-a{--cc:var(--amber)}.cbg.k-r{--cc:var(--red)}
 
 .xprof{gap:8px;padding:12px}.xprof .xav{width:48px;height:48px;font-size:1.05rem}.xst{padding:0 6px}.xst b{font-size:1.05rem}.xpn{flex:1 1 0;min-width:48px}.xlvl{gap:6px}.xlvl span{font-size:.8rem}.xlvl i{min-width:16px}
+
+.pc{margin-bottom:12px;border-radius:18px;background:var(--surface);border:1px solid var(--line);overflow:hidden}.pch{display:flex;align-items:center;gap:10px;padding:12px 14px}.xav.sm{width:42px;height:42px;font-size:1rem}.pcn{flex:1;min-width:0}.pcn b{display:block;font-size:1.05rem}.pcn small{color:var(--mute)}
+.pst{display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:99px;background:var(--surface2);color:var(--mute);font-weight:700;font-size:.85rem}.pst .ic{width:16px;height:16px}.pst.ok{color:var(--green)}.pst.ko{color:var(--red)}
+.pcb{padding:7px 12px;border-radius:99px;border:1px solid var(--gold);color:var(--gold);font-weight:700;font-size:.8rem}.pcb.on{background:var(--gold);color:#241603}.pcb .ic{width:18px;height:18px}
+.pcls{margin:0 10px 10px;border-radius:14px;background:var(--bg);border:1px solid var(--line)}.pcl{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}.pcl:last-child{border-bottom:0}.pcl>div{flex:1;display:flex;flex-direction:column;gap:4px}.pcl small{color:var(--mute)}.pcl b{font-size:1.05rem}
+.rk{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid var(--line)}.rk:last-child{border-bottom:0}.rk span{flex:1;font-weight:600}.rk small{color:var(--mute)}.rn{width:26px;color:var(--gold)}
+.cmfab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:9;display:flex;align-items:center;gap:8px;padding:14px 20px;border-radius:99px;background:linear-gradient(180deg,#fbbf3a,#f39a14);color:#241603;font-weight:800;box-shadow:0 10px 26px rgba(0,0,0,.4)}.cmfab .ic{width:20px;height:20px}
+.cmp.on{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 10%,var(--surface))}.cmps{display:block;color:var(--mute);font-weight:500;font-size:.8rem;margin:2px 0 4px}.xcr .xcn .cbk{display:inline-block;margin-top:2px}

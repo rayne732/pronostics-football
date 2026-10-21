@@ -3257,7 +3257,7 @@
   }
 
   /* ------------------------------------------------------------ interface en 5 onglets : Découvrir · Favoris · Combo · Ligues · Social */
-  var X = { day: '', stat: 'all', hc: false, srch: false, q: '', sort: 'time', ff: 'all', fo: false, fs: 'all', cq: '', lg: null, cs: 'act', msg: '', lastSoc: 'bets', lcq: '' };
+  var X = { day: '', stat: 'all', hc: false, srch: false, q: '', sort: 'time', ff: 'all', fo: false, fs: 'all', cq: '', lg: null, cs: 'act', msg: '', lastSoc: 'comm', lcq: '' };
   var LF = {};                                                     // championnats suivis (étoile à droite du nom)
   try { LF = JSON.parse(localStorage.getItem('pf-lfav') || '{}') || {}; } catch (e) { LF = {}; }
   function saveLF() { try { localStorage.setItem('pf-lfav', JSON.stringify(LF)); } catch (e) { /* ignoré */ } }
@@ -3541,11 +3541,11 @@
     var on = Account.on(), r = on ? Account.role() : null, SA = Bets.statsAll(), settled = SA.n, xp = settled * 10 + SA.w * 20, lv = xp < 100 ? ['Débutant', 100] : xp < 400 ? ['Amateur', 400] : xp < 1000 ? ['Confirmé', 1000] : ['Expert', 3000];
     var rate = settled ? Math.round(SA.w / settled * 100) + '%' : '–', init = PL && PL.on ? (PL.init || PL.start) : 0, dfi = PL && PL.on && PL.goal > init ? Math.max(0, Math.min(100, Math.round((PL.bank - init) / (PL.goal - init) * 100))) + '%' : '–';
     var name = on ? Account.email().split('@')[0] : 'Invité';
-    X.lastSoc = st.tab === 'today' ? 'today' : 'bets';
+    X.lastSoc = st.tab === 'today' ? 'today' : st.tab === 'comm' ? 'comm' : 'bets';
     return '<header class="xhd"><b class="xt1">Social</b><span class="xsp"></span>' + XLOGO + '<span class="xsp"></span><button class="xib" data-xset aria-label="Réglages">' + svg(IC.gear) + '</button><button class="xib" data-xbell aria-label="Alertes">' + svg(IC.bell) + '</button></header>' +
       '<button class="xprof" data-xacct>' + xAvatar().replace('<button', '<span').replace('</button>', '</span>').replace(' data-xacct', '') + '<div class="xpn"><b>' + esc(name) + '</b><div class="xlvl"><span>' + lv[0] + '</span><i><u style="width:' + Math.min(100, Math.round(xp / lv[1] * 100)) + '%"></u></i></div></div>' +
       '<div class="xst"><b>' + xp + '</b><small>XP</small></div><div class="xst"><b class="' + (rate === '–' ? '' : 'ok') + '">' + rate + '</b><small>Réussite</small></div><div class="xst"><b>' + dfi + '</b><small>Défi</small></div>' + svg(IC.chev) + '</button>' +
-      '<div class="xtabs"><button class="' + (st.tab === 'bets' ? 'on' : '') + '" data-xsoc="bets">Mes paris</button><button class="' + (st.tab === 'today' ? 'on' : '') + '" data-xsoc="today">Plans</button></div>';
+      '<div class="xtabs"><button class="' + (st.tab === 'comm' ? 'on' : '') + '" data-xsoc="comm">Communauté</button><button class="' + (st.tab === 'bets' ? 'on' : '') + '" data-xsoc="bets">Mes paris</button><button class="' + (st.tab === 'today' ? 'on' : '') + '" data-xsoc="today">Plans</button></div>';
   }
   function setHTML() {
     var h = '<header class="xhd col"><button class="xback" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>Réglages</h1><small>Sport, affichage et outils</small></div></header>';
@@ -3625,6 +3625,106 @@
     for (var i = 0; i < els.length; i++) { var v = +els[i].getAttribute('data-cd') - Date.now(); els[i].textContent = cdFmt(v); if (v <= 0 && !els[i].getAttribute('data-done')) { els[i].setAttribute('data-done', 1); xRefresh(); } }
   }, 1000);
 
+  /* ---- Social : communauté (pronostics partagés, abonnements, classement) */
+  var CM = { sub: 'disc', posts: null, follows: {}, busy: false, ts: 0, err: '', cands: [], sel: {}, nick: '', msg: '' };
+  try { CM.nick = localStorage.getItem('pf-nick') || ''; } catch (e) { CM.nick = ''; }
+  function cmLoad(force) {
+    if (!Account.on() || CM.busy || (CM.posts && !force && Date.now() - CM.ts < 60000)) return;
+    CM.busy = true;
+    Promise.all([Account.rest('GET', '/rest/v1/pf_posts?select=id,user_id,author,legs,created_at&order=created_at.desc&limit=150'), Account.rest('GET', '/rest/v1/pf_follows?select=followed')]).then(function (r) {
+      if (!r[0].ok) throw new Error('http ' + r[0].status);
+      CM.posts = r[0].body || []; CM.follows = {}; (r[1].body || []).forEach(function (f) { CM.follows[f.followed] = 1; }); CM.ts = Date.now(); CM.err = '';
+    }).catch(function () { CM.err = 'Communauté indisponible pour l’instant (la base n’est peut-être pas encore prête).'; }).then(function () { CM.busy = false; if (st.tab === 'comm' && !st.detail && !typing()) xRefresh(); });
+  }
+  function cmRes(p) {
+    var rs = p.legs.map(function (l) { return plRes(l); });
+    return rs.some(function (x) { return x === false; }) ? false : rs.every(function (x) { return x === true; }) ? true : null;
+  }
+  function cmWhen(iso) { var d = new Date(iso), T = new Date(); return (d.toDateString() === T.toDateString() ? 'Aujourd’hui' : dshort(isoDate(d))) + ' · ' + d.toTimeString().slice(0, 5); }
+  function cmCard(p) {
+    var mine = Account.uid() === p.user_id, res = cmRes(p), ini = (p.author || '?').slice(0, 1).toUpperCase();
+    return '<article class="pc"><div class="pch"><span class="xav on sm"><span>' + esc(ini) + '</span></span><div class="pcn"><b>' + esc(p.author) + '</b><small>' + esc(cmWhen(p.created_at)) + '</small></div>' +
+      '<span class="pst ' + (res === true ? 'ok' : res === false ? 'ko' : '') + '">' + svg(res === true ? IC.okmark : res === false ? IC.xmark : IC.clock) + (res === true ? 'Réussi' : res === false ? 'Raté' : 'En attente') + '</span>' +
+      (mine ? '<button class="pcb" data-cmdel="' + esc(p.id) + '" aria-label="Supprimer">' + svg('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>') + '</button>' : '<button class="pcb' + (CM.follows[p.user_id] ? ' on' : '') + '" data-cmfol="' + esc(p.user_id) + '">' + (CM.follows[p.user_id] ? 'Suivi' : 'Suivre') + '</button>') + '</div>' +
+      '<div class="pcls">' + p.legs.map(function (l) {
+        var r = plRes(l);
+        return '<div class="pcl"><div><small>' + esc(l.lg || '') + (l.d ? ' · ' + dshort(l.d) : '') + (l.time ? ' · ' + esc(l.time) : '') + '</small><b>' + esc(l.match) + '</b><span class="cbk">' + esc(l.s) + '</span></div>' +
+          '<span class="cx ' + (r === true ? 'ok' : r === false ? 'ko' : '') + '">' + svg(r === true ? IC.okmark : r === false ? IC.xmark : IC.clock) + '</span></div>';
+      }).join('') + '</div></article>';
+  }
+  function cmRank() {
+    var by = {};
+    (CM.posts || []).forEach(function (p) { var r = cmRes(p); if (r === null) return; var o = by[p.user_id] || (by[p.user_id] = { a: p.author, n: 0, w: 0 }); o.n++; if (r) o.w++; });
+    return Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.w / b.n - a.w / a.n || b.n - a.n; });
+  }
+  function commHTML() {
+    var h = socHead();
+    if (!Account.on()) return h + '<div class="xzero">' + svg(IC.soc) + '<b>Rejoins la communauté</b><p>Connecte-toi pour partager tes pronostics, suivre d’autres membres et voir le classement.</p><button class="cmbb" data-xacct>Se connecter</button></div>';
+    cmLoad(false);
+    if (!isLoaded('res')) loadLazy('res', function () { if (st.tab === 'comm' && !st.detail && !typing()) xRefresh(); });
+    h += '<div class="xseg3">' + [['disc', 'Découvrir'], ['abo', 'Abonnements'], ['top', 'Classement']].map(function (x) { return '<button class="' + (CM.sub === x[0] ? 'on' : '') + '" data-cmsub="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    if (CM.msg) h += '<div class="bt-warn xmsg">' + esc(CM.msg) + '</div>';
+    if (CM.err) return h + '<div class="bt-warn xmsg">' + esc(CM.err) + '</div>';
+    if (!CM.posts) return h + skel(3);
+    if (CM.sub === 'top') {
+      var R = cmRank();
+      h += R.length ? '<div class="cpc">' + R.map(function (r, i) { return '<div class="rk"><b class="rn">' + (i + 1) + '</b><span>' + esc(r.a) + '</span><small>' + r.w + '/' + r.n + '</small><b class="' + (r.w / r.n >= 0.5 ? 'ok' : 'ko') + '">' + Math.round(r.w / r.n * 100) + '%</b></div>'; }).join('') + '</div>' : '<div class="xzero"><b>Pas encore de classement</b><p>Il apparaît quand des pronostics partagés sont terminés.</p></div>';
+    } else {
+      var list = CM.posts.filter(function (p) { return CM.sub === 'disc' || CM.follows[p.user_id] || p.user_id === Account.uid(); });
+      h += list.length ? list.map(cmCard).join('') : '<div class="xzero">' + svg(IC.soc) + '<b>' + (CM.sub === 'abo' ? 'Aucun abonnement' : 'Aucun pronostic partagé') + '</b><p>' + (CM.sub === 'abo' ? 'Suis des membres depuis l’onglet Découvrir.' : 'Sois le premier à partager un pronostic.') + '</p></div>';
+    }
+    return h + '<p class="xfine">Les pronostics partagés sont ceux des membres, pas des conseils : aucun gain n’est garanti.</p><button class="cmfab" data-cmnew>' + svg(IC.plus) + 'Partager un pronostic</button>';
+  }
+  function cmNewHTML() {
+    var T = parisToday(), h = '<button class="xback own" data-cmcancel aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>Partager un pronostic</h1><small>Choisis 1 à 4 sélections de matchs différents</small></div></header>';
+    h += '<label class="acf">Ton pseudo<input id="cmnick" maxlength="24" autocomplete="off" value="' + esc(CM.nick) + '" placeholder="2 à 24 caractères"></label>';
+    h += CM.cands.length ? CM.cands.map(function (c, i) {
+      return '<button class="xcr cmp' + (CM.sel[i] ? ' on' : '') + '" data-cmsel="' + i + '"><span class="xcn">' + esc(c.match) + '<small class="cmps">' + esc(c.lg || '') + ' · ' + esc(c.time || '') + '</small><span class="cbk">' + esc(c.s) + '</span></span><span class="xcnt">' + Math.round(c.p * 100) + '%</span></button>';
+    }).join('') : '<div class="xempty">Aucune sélection disponible pour l’instant.</div>';
+    return h + '<div class="cpf"><div><small>' + Object.keys(CM.sel).length + ' sélection(s)</small></div><button class="cmbb" data-cmpub>PUBLIER</button></div>';
+  }
+  function cmOpenNew() {
+    var T = parisToday(), R = todayRows(), now = Date.now(), seen = {};
+    CM.cands = R.picks.concat(plCalPicks(T)).filter(function (r) { return r.bid && (!r.time || kickoff({ date: T, time: r.time }) > now + 10 * 60000); }).sort(function (a, b) { return b.p - a.p; }).filter(function (r) { var k = r.match + '|' + r.bs; if (seen[k]) return false; seen[k] = 1; return true; }).slice(0, 40).map(function (r) { return cmbLeg(r, T); });
+    CM.sel = {}; CM.sub2 = 'new'; render(); window.scrollTo(0, 0);
+  }
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-cmsub],[data-cmnew],[data-cmcancel],[data-cmsel],[data-cmpub],[data-cmfol],[data-cmdel]');
+    if (!t) return;
+    var y0 = window.scrollY;
+    if (t.hasAttribute('data-cmsub')) { CM.sub = t.getAttribute('data-cmsub'); CM.msg = ''; render(); window.scrollTo(0, y0); }
+    else if (t.hasAttribute('data-cmnew')) cmOpenNew();
+    else if (t.hasAttribute('data-cmcancel')) { CM.sub2 = ''; render(); window.scrollTo(0, 0); }
+    else if (t.hasAttribute('data-cmsel')) {
+      var i = +t.getAttribute('data-cmsel'), n = document.getElementById('cmnick'); if (n) CM.nick = n.value.trim();
+      if (CM.sel[i]) delete CM.sel[i]; else if (Object.keys(CM.sel).length < 4 && !Object.keys(CM.sel).some(function (k) { return CM.cands[k].match === CM.cands[i].match; })) CM.sel[i] = 1;
+      render(); window.scrollTo(0, y0);
+    } else if (t.hasAttribute('data-cmpub')) {
+      var ni = document.getElementById('cmnick'); if (ni) CM.nick = ni.value.trim();
+      var legs = Object.keys(CM.sel).map(function (k) { return CM.cands[k]; });
+      if (CM.nick.length < 2) { CM.msg = 'Choisis un pseudo de 2 caractères au moins.'; }
+      else if (!legs.length) { CM.msg = 'Choisis au moins une sélection.'; }
+      else {
+        try { localStorage.setItem('pf-nick', CM.nick); } catch (err) { /* ignoré */ }
+        Account.rest('POST', '/rest/v1/pf_posts', { user_id: Account.uid(), author: CM.nick, legs: legs }, 'return=minimal').then(function (r) {
+          CM.msg = r.ok ? 'Pronostic publié.' : 'Publication impossible pour l’instant.'; if (r.ok) { CM.sub2 = ''; CM.sub = 'disc'; }
+          cmLoad(true); render(); window.scrollTo(0, 0);
+        });
+        return;
+      }
+      render(); window.scrollTo(0, 0);
+    } else if (t.hasAttribute('data-cmfol')) {
+      var u = t.getAttribute('data-cmfol'), on = !!CM.follows[u];
+      if (on) delete CM.follows[u]; else CM.follows[u] = 1;
+      render(); window.scrollTo(0, y0);
+      Account.rest(on ? 'DELETE' : 'POST', on ? '/rest/v1/pf_follows?followed=eq.' + encodeURIComponent(u) : '/rest/v1/pf_follows', on ? null : { follower: Account.uid(), followed: u }, 'return=minimal');
+    } else if (t.hasAttribute('data-cmdel')) {
+      var id = t.getAttribute('data-cmdel');
+      CM.posts = (CM.posts || []).filter(function (p) { return p.id !== id; }); render(); window.scrollTo(0, y0);
+      Account.rest('DELETE', '/rest/v1/pf_posts?id=eq.' + encodeURIComponent(id), null, 'return=minimal');
+    }
+  });
+
   /* ------------------------------------------------------------ navigation */
   function navCount(today) {                                  // petite pastille sur l'onglet : matchs de foot du jour / favoris à venir
     var T = parisToday();
@@ -3637,7 +3737,7 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -3664,6 +3764,7 @@
     var sig = [st.tab, st.sport, st.detail ? JSON.stringify(st.detail).slice(0, 90) : '', st.dtab, st.ptab, st.day, st.status, st.group, st.filter, st.plSport].join('|');
     if (st.detail) app.innerHTML = st.detail.cmb ? comboPage(st.detail.cmb) : st.detail.how ? howPage() : st.detail.xcal != null ? calPage(st.detail.xcal) : st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? discHTML() : sportHTML();
+    else if (st.tab === 'comm') app.innerHTML = CM.sub2 === 'new' ? cmNewHTML() : commHTML();
     else if (st.tab === 'combo') app.innerHTML = comboHTML();
     else if (st.tab === 'lig') app.innerHTML = ligHTML();
     else if (st.tab === 'set') app.innerHTML = setHTML();
