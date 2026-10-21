@@ -1160,3 +1160,8 @@ button.chip small{display:block}
 .cmp.on{border-color:var(--gold);background:color-mix(in srgb,var(--gold) 10%,var(--surface))}.cmps{display:block;color:var(--mute);font-weight:500;font-size:.8rem;margin:2px 0 4px}.xcr .xcn .cbk{display:inline-block;margin-top:2px}
 .seg3.acseg{grid-template-columns:1fr 1fr!important;position:static!important;animation:none!important}.seg3.acseg button{font-size:.95rem;min-height:44px;padding:0 10px;transition:none!important;transform:none!important}
 .acbox{padding:16px}.acbox .acf{display:block;margin:10px 0}.acbox .acf input{width:100%;max-width:none}
+.xhd .xpillb{flex:1 1 0;min-width:0;white-space:normal;line-height:1.1;text-align:left;font-size:.7rem;padding:7px 10px;justify-content:center}.xhd .xpillb .ic{flex:none}.xhd .xt1{font-size:1.15rem;flex:none}.xhd .xmark.gold{flex:none;width:28px;height:28px}
+
+.xpillb .ps{display:none}
+@media (max-width:420px){.xpillb .pl{display:none}.xpillb .ps{display:inline}.xhd .xpillb{flex:0 0 auto;font-size:.8rem;padding:9px 12px}.cmbu{padding:8px 14px;flex:none}.cmbu .ic{width:22px;height:22px}.cmbu span b{font-size:1.2rem}.cmbf{flex-wrap:nowrap}.cmbw{min-width:0}.cmbw b{font-size:1.15rem}.cmbb{font-size:.72rem;padding:11px 8px}}
+@media (max-width:420px){.cmbw small{white-space:normal;font-size:.74rem;line-height:1.15}}

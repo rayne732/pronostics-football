@@ -3504,7 +3504,7 @@
     var T = parisToday(), L = CMB.list.slice().sort(function (a, b) { return b.made - a.made || (a.id < b.id ? 1 : -1); }), kl = keysLeft();
     L.forEach(cmbRes);
     var act = L.filter(function (c) { return c.res === null || c.res === undefined; }), fin = L.filter(function (c) { return c.res === true || c.res === false; }), mine = L.filter(function (c) { return c.un; });
-    var h = '<header class="xhd"><span class="xmark gold">' + svg(IC.combo) + '</span><b class="xt1">AI Combo</b><span class="xsp"></span><button class="xpillb" data-xhow>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + 'Comment ça marche ?</button><button class="xkeys" data-xkeys>' + svg(IC.key) + '<b>' + (kl === Infinity ? '∞' : kl) + '</b>' + (kl === Infinity ? '' : svg(IC.plus)) + '</button></header>';
+    var h = '<header class="xhd"><span class="xmark gold">' + svg(IC.combo) + '</span><b class="xt1">AI Combo</b><span class="xsp"></span><button class="xpillb" data-xhow>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + '<span class="pl">Comment ça marche ?</span><span class="ps">Aide</span></button><button class="xkeys" data-xkeys>' + svg(IC.key) + '<b>' + (kl === Infinity ? '∞' : kl) + '</b>' + (kl === Infinity ? '' : svg(IC.plus)) + '</button></header>';
     h += '<div class="xseg3">' + [['act', 'Actifs', act.length], ['fin', 'Terminés', 0], ['mine', 'Mes Combos', mine.length]].map(function (x) { return '<button class="' + (X.cs === x[0] ? 'on' : '') + '" data-xcs="' + x[0] + '">' + x[1] + (x[2] ? '<i>' + x[2] + '</i>' : '') + '</button>'; }).join('') + '</div>';
     if (X.msg) h += '<div class="bt-warn xmsg">' + esc(X.msg) + '</div>';
     var show = X.cs === 'act' ? act : X.cs === 'fin' ? fin : mine;
