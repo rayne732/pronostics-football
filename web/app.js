@@ -19,7 +19,7 @@
   var DENS = 'comfort';                                    // affichage des listes : « comfort » ou « compact »
   try { DENS = localStorage.getItem('pf-dens') || 'comfort'; } catch (e) { /* ignoré */ }
   var THEME = '';                                         // '', 'dark', 'light' ou 'auto' (clair le jour, sombre la nuit)
-  try { THEME = localStorage.getItem('pf-theme') || ''; } catch (e) { /* ignoré */ }
+  try { THEME = localStorage.getItem('pf-theme') || 'dark'; } catch (e) { /* ignoré */ }
   function applyTheme() {
     var t = THEME === 'auto' ? (new Date().getHours() >= 8 && new Date().getHours() < 20 ? 'light' : 'dark') : THEME;
     if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
@@ -1195,7 +1195,7 @@
     var finish = function () {
       TODAY.step++; left--;
       if (st.tab === 'today' && !st.detail) render();
-      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+      if (left <= 0) { TODAY.busy = false; TODAY.ts = Date.now(); asSync(); if (st.tab === 'combo' && !st.detail) { var yc = window.scrollY; render(); window.scrollTo(0, yc); } if (st.tab === 'today' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
     };
     jobs.forEach(function (j) {
       loadLazy(j[0], function (err) {
@@ -1788,9 +1788,11 @@
 
   var ALMSG = '';
   function favItems() {
-    return D.fixtures.filter(function (f) { return favs[f.id]; }).map(function (f) {
+    var a = D.fixtures.filter(function (f) { return favs[f.id]; }).map(function (f) {
       return { id: f.id, ko: +kickoff(f), title: 'Dans 45 min : ' + f.home + ' – ' + f.away, msg: cpName(f) + ' · ' + favName(f) + ' ' + pct(f.fav) };
     });
+    (D.cal || []).forEach(function (c) { var k = 'c:' + c.date + '|' + c.home + '|' + c.away; if (favs[k] && c.st === 'pre') a.push({ id: k, ko: +calKick(c), title: 'Dans 45 min : ' + c.home + ' – ' + c.away, msg: c.fr }); });
+    return a;
   }
   function alertsPanel() {
     var t = Alerts.topic();
@@ -2208,13 +2210,7 @@
   }
   function loadProfile() { return Account.profile().then(function (p) { PROF = p; acRefresh(); }); }
   function initials() { var e = Account.email() || ''; return (e.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 2) || '?').toUpperCase(); }
-  function renderAvatar() {                                        // pastille en haut à droite : initiales + niveau d'accès, ou pictogramme quand on n'est pas connecté
-    var b = document.getElementById('acbtn');
-    if (!b) { b = document.createElement('button'); b.id = 'acbtn'; b.setAttribute('aria-label', 'Mon compte'); document.body.appendChild(b); b.addEventListener('click', function () { st.tab = 'account'; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); }); }
-    var r = Account.on() ? Account.role() : null;
-    b.className = 'acbtn' + (Account.on() ? ' on' : '') + (st.tab === 'account' && !st.detail ? ' cur' : '');
-    b.innerHTML = Account.on() ? '<span>' + esc(initials()) + '</span>' + (r === 'premium' || r === 'admin' ? '<i>' + (r === 'admin' ? 'ADMIN' : 'PRO') + '</i>' : '') : '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>';
-  }
+  function renderAvatar() { var b = document.getElementById('acbtn'); if (b) b.remove(); }
   function acBox(inner, title) { return '<div class="tkan acbox">' + (title ? '<div class="plch"><b>' + title + '</b></div>' : '') + inner + '</div>'; }
   function acMsg() { return (AUI.msg ? '<div class="bt-warn">' + esc(AUI.msg) + '</div>' : '') + (AUI.ok ? '<div class="acok">' + esc(AUI.ok) + '</div>' : ''); }
   function accountPageHTML() {
@@ -3260,6 +3256,375 @@
     return h + vsBlock(dd) + detailBody(dd, null);
   }
 
+  /* ------------------------------------------------------------ interface en 5 onglets : Découvrir · Favoris · Combo · Ligues · Social */
+  var X = { day: '', stat: 'all', hc: false, srch: false, q: '', sort: 'time', ff: 'all', fo: false, fs: 'all', cq: '', lg: null, cs: 'act', msg: '', lastSoc: 'bets', lcq: '' };
+  var LF = {};                                                     // championnats suivis (étoile à droite du nom)
+  try { LF = JSON.parse(localStorage.getItem('pf-lfav') || '{}') || {}; } catch (e) { LF = {}; }
+  function saveLF() { try { localStorage.setItem('pf-lfav', JSON.stringify(LF)); } catch (e) { /* ignoré */ } }
+  IC.combo = '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.2"/><path d="M12 12l7-7M16 5h3v3"/>';
+  IC.lig = '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.6 2.4 3.8 5.2 3.8 8.5s-1.2 6.1-3.8 8.5c-2.6-2.4-3.8-5.2-3.8-8.5S9.4 5.9 12 3.5z"/>';
+  IC.soc = '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.6a3.2 3.2 0 0 1 0 5.8M17.5 14.2a5.5 5.5 0 0 1 3 4.8"/>';
+  IC.bell = '<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>';
+  IC.gear = '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>';
+  IC.cal = '<rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>';
+  IC.filt = '<path d="M4 5h16l-6 7.5V19l-4-2v-4.5z"/>';
+  IC.lock = '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>';
+  IC.shield = '<path d="M12 3l7 2.6v5.6c0 4.4-2.8 8-7 9.8-4.2-1.8-7-5.4-7-9.8V5.6z"/><path d="M8.8 12l2.2 2.2 4.2-4.4"/>';
+  IC.key = '<circle cx="8" cy="12" r="3.6"/><path d="M11.6 12H21M17.5 12v3.2M20.5 12v2.2"/>';
+  IC.gem = '<path d="M7 4h10l3.5 5L12 20.5 3.5 9z"/><path d="M3.5 9h17M9.5 4L8 9l4 11.5M14.5 4l1.5 5-4 11.5"/>';
+  IC.clock = '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>';
+  IC.xmark = '<circle cx="12" cy="12" r="8.5"/><path d="M9 9l6 6M15 9l-6 6"/>';
+  IC.okmark = '<circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.3l2.6 2.6 5-5.3"/>';
+  IC.flame2 = '<path d="M12 3c1 3.5 4.5 5.2 4.5 9.6A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.4c0-1.7.8-2.9 1.8-3.9C9.4 10.9 10.7 11 11 9.6 11.3 7.6 10.6 5.3 12 3z"/>';
+  IC.sortv = '<path d="M8 4v16M8 20l-3-3M8 20l3-3M16 20V4M16 4l-3 3M16 4l3 3"/>';
+  IC.plus = '<path d="M12 5v14M5 12h14"/>';
+  var TOPMIN = 0.8;                                                // à partir de là, un match modélisé est un « Top Pick »
+  var CISO = { 'Afrique du Sud': 'za', 'Albanie': 'al', 'Algérie': 'dz', 'Allemagne': 'de', 'Angleterre': 'gb-eng', 'Angola': 'ao', 'Arabie saoudite': 'sa', 'Argentine': 'ar', 'Arménie': 'am', 'Australie': 'au', 'Autriche': 'at', 'Azerbaïdjan': 'az', 'Belgique': 'be', 'Bolivie': 'bo', 'Bosnie-Herzégovine': 'ba', 'Brésil': 'br', 'Bulgarie': 'bg', 'Cameroun': 'cm', 'Canada': 'ca', 'Chili': 'cl', 'Chine': 'cn', 'Chypre': 'cy', 'Colombie': 'co', 'Corée du Sud': 'kr', 'Costa Rica': 'cr', 'Croatie': 'hr', 'Danemark': 'dk', 'Écosse': 'gb-sct', 'Égypte': 'eg', 'Émirats arabes unis': 'ae', 'Équateur': 'ec', 'Espagne': 'es', 'Estonie': 'ee', 'États-Unis': 'us', 'Finlande': 'fi', 'France': 'fr', 'Géorgie': 'ge', 'Ghana': 'gh', 'Grèce': 'gr', 'Guatemala': 'gt', 'Honduras': 'hn', 'Hongrie': 'hu', 'Inde': 'in', 'Indonésie': 'id', 'Irlande': 'ie', 'Irlande du Nord': 'gb-nir', 'Islande': 'is', 'Israël': 'il', 'Italie': 'it', 'Japon': 'jp', 'Kazakhstan': 'kz', 'Kenya': 'ke', 'Lettonie': 'lv', 'Lituanie': 'lt', 'Luxembourg': 'lu', 'Malaisie': 'my', 'Malte': 'mt', 'Maroc': 'ma', 'Mexique': 'mx', 'Moldavie': 'md', 'Norvège': 'no', 'Nouvelle-Zélande': 'nz', 'Paraguay': 'py', 'Pays de Galles': 'gb-wls', 'Pays-Bas': 'nl', 'Pérou': 'pe', 'Pologne': 'pl', 'Portugal': 'pt', 'Qatar': 'qa', 'République tchèque': 'cz', 'Roumanie': 'ro', 'Russie': 'ru', 'Serbie': 'rs', 'Slovaquie': 'sk', 'Slovénie': 'si', 'Suède': 'se', 'Suisse': 'ch', 'Thaïlande': 'th', 'Tunisie': 'tn', 'Turquie': 'tr', 'Ukraine': 'ua', 'Uruguay': 'uy', 'Venezuela': 've', 'Vietnam': 'vn', 'Jamaïque': 'jm', 'Panama': 'pa', 'Salvador': 'sv', 'Nigeria': 'ng', 'Sénégal': 'sn', 'Côte d’Ivoire': 'ci', 'Mali': 'ml', 'Bahreïn': 'bh', 'Koweït': 'kw', 'Jordanie': 'jo', 'Irak': 'iq', 'Iran': 'ir', 'Ouzbékistan': 'uz', 'Biélorussie': 'by', 'Monténégro': 'me', 'Macédoine du Nord': 'mk', 'Kosovo': 'xk', 'Îles Féroé': 'fo', 'Andorre': 'ad', 'Saint-Marin': 'sm', 'Gibraltar': 'gi', 'Liechtenstein': 'li', 'Trinité-et-Tobago': 'tt', 'Haïti': 'ht', 'Nicaragua': 'ni', 'République dominicaine': 'do', 'Zambie': 'zm', 'Zimbabwe': 'zw', 'Ouganda': 'ug', 'Tanzanie': 'tz', 'Éthiopie': 'et', 'Soudan': 'sd', 'Libye': 'ly', 'Mozambique': 'mz', 'RD Congo': 'cd', 'Gabon': 'ga', 'Burkina Faso': 'bf', 'Guinée': 'gn', 'Botswana': 'bw', 'Namibie': 'na', 'Madagascar': 'mg', 'Philippines': 'ph', 'Singapour': 'sg', 'Hong Kong': 'hk', 'Taïwan': 'tw', 'Cambodge': 'kh', 'Myanmar': 'mm', 'Liban': 'lb', 'Syrie': 'sy', 'Oman': 'om', 'Palestine': 'ps', 'Pakistan': 'pk', 'Bangladesh': 'bd', 'Népal': 'np', 'Sri Lanka': 'lk', 'Mongolie': 'mn', 'Kirghizistan': 'kg', 'Tadjikistan': 'tj', 'Turkménistan': 'tm', 'Cuba': 'cu', 'Suriname': 'sr', 'Guyana': 'gy', 'Belize': 'bz' };
+  function flagOf(name, big) {                                     // drapeau en image (les émojis de drapeaux ne s'affichent pas sous Windows) ; globe pour les zones (Europe, Monde…)
+    var c = CISO[name];
+    return c ? '<img class="fi' + (big ? ' big' : '') + '" src="https://flagcdn.com/w80/' + c + '.png" alt="" loading="lazy" onerror="this.replaceWith(document.createTextNode(\'🌍\'))">' : '<span class="fg' + (big ? ' big' : '') + '">🌍</span>';
+  }
+  function dshort(d) { var p = d.split('-'); return p[2] + '/' + p[1]; }
+  function dayShort(d) { return ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'][parseD(d).getDay()]; }
+  function addDays(d, n) { return isoDate(new Date(parseD(d).getTime() + n * 864e5 + 36e5 * 0)); }
+  function logoOf(div, fb) { return '<span class="xlg">' + lgIcon(div, fb) + '</span>'; }
+  function mkCalIdx() { if (D.cal && !D.cal._ix) { D.cal.forEach(function (c, i) { c._i = i; }); D.cal._ix = 1; } }
+  function liveOf(c) { return LIVEL.filter(function (v) { return sameTeam(c.home, v.h) && sameTeam(c.away, v.a); })[0] || null; }
+  function xAllMatches(from) {                                     // tous les matchs (modèle + calendrier mondial + résultats récents) depuis la date « from », sans doublon
+    mkCalIdx();
+    var out = [], seen = {}, mine = {};
+    D.fixtures.forEach(function (f) {
+      if (f.date < from) return;
+      var fs = fstate(f), sc = fs === 'soon' ? null : fscore(f), mx = f.fav, hit = fs === 'done' && sc && !sc.live ? mainHit(f) : null;
+      mine[f.date + '|' + normT(f.home)] = 1; mine[f.date + '|' + normT(f.away)] = 1;
+      seen[f.id] = 1;
+      out.push({ k: f.id, f: f, date: f.date, time: f.time, home: f.home, away: f.away, state: fs, sc: sc, p: f.p, mx: mx, conf: f.conf, top: mx >= TOPMIN, hit: hit,
+        g: 'L|' + (f.cp || f.div), gname: cpName(f), gsub: ((f.cc || lmeta(f.div)[0]) || ''), gflag: '', gdiv: f.div, open: 'data-open="' + f.i + '"', kick: +kickoff(f), model: true });
+    });
+    (D.cal || []).forEach(function (c) {
+      if (c.date < from) return;
+      if (mine[c.date + '|' + normT(c.home)] || mine[c.date + '|' + normT(c.away)]) return;
+      var cs = cstate(c), lv = cs === 'live' ? liveOf(c) : null, p = c.p, mx = p ? Math.max.apply(null, p) : 0;
+      out.push({ k: 'c:' + c.date + '|' + c.home + '|' + c.away, c: c, date: c.date, time: c.time, home: c.home, away: c.away, state: cs, sc: c.hs != null ? { h: c.hs, a: c.as_, live: cs === 'live', clock: lv && lv.clock } : lv ? { h: lv.hs, a: lv.as, live: true, clock: lv.clock } : null,
+        p: p, mx: mx, conf: p ? confOf(mx) : '', top: false, approx: !!c.q, g: 'S|' + c.s, gname: c.fr, gsub: c.cfr, gflag: '', gdiv: c.s, open: 'data-calopen="' + c._i + '"', kick: +calKick(c) });
+    });
+    (D.recent || []).forEach(function (m) {
+      if (m.date < from || seen[m.id] || !D.leagues[m.div]) return;
+      if (mine[m.date + '|' + normT(m.home)] || mine[m.date + '|' + normT(m.away)]) return;
+      var sc = (m.res || '').split('-'), safe = m.picks.filter(function (p) { return p.t === 0; }), sw = safe.filter(function (p) { return p.h; }).length;
+      out.push({ k: 'r:' + m.id, date: m.date, time: m.time, home: m.home, away: m.away, state: 'done', sc: { h: +sc[0], a: +sc[1], live: false }, p: null, mx: 0, conf: '', top: false, hit: safe.length ? sw === safe.length : null,
+        note: safe.length ? sw + '/' + safe.length + ' sûrs' : '', g: 'L|' + m.div, gname: D.leagues[m.div].name, gsub: lmeta(m.div)[0], gflag: '', gdiv: m.div, open: '', kick: +kickoff(m) });
+    });
+    return out;
+  }
+  function xFlt(list, o) {
+    var q = (o.q || '').trim();
+    return list.filter(function (m) {
+      if (o.stat && o.stat !== 'all' && m.state !== o.stat) return false;
+      if (o.hc && m.conf !== 'high') return false;
+      if (o.ff === 'fol' && !LF[m.g]) return false;
+      if (o.ff === 'pred' && !m.p) return false;
+      if (q && !fuzzy(q, m.home + ' ' + m.away + ' ' + m.gname + ' ' + m.gsub, null)) return false;
+      return true;
+    });
+  }
+  function xGroups(list) {
+    var g = {}, order = [];
+    list.forEach(function (m) { if (!g[m.g]) { g[m.g] = { k: m.g, name: m.gname, sub: m.gsub, flag: m.gflag, div: m.gdiv, items: [], model: !!m.model }; order.push(m.g); } g[m.g].items.push(m); });
+    var rank = function (x) { return LF[x.k] ? 0 : /^(ligue des champions|champions league|ligue europa|europa league|ligue conférence|conference league|ligue des nations|nations league)/i.test(x.name) ? 1 : x.model ? 2 : 3; };
+    var res = order.map(function (k) { return g[k]; });
+    res.sort(function (a, b) { var d = rank(a) - rank(b); if (d) return d; if (rank(a) === 2) return D.order.indexOf(a.div) - D.order.indexOf(b.div); return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+    res.forEach(function (x) { x.items.sort(X.sort === 'conf' ? function (a, b) { return b.mx - a.mx || a.kick - b.kick; } : function (a, b) { return a.kick - b.kick; }); });
+    return res;
+  }
+  function xTeam(name, score, live) { return '<span class="xtm">' + crest(name) + '<em>' + esc(nm(name)) + '</em>' + (score != null ? '<b class="' + (live ? 'lv' : '') + '">' + score + '</b>' : '') + '</span>'; }
+  function xrow(m) {
+    var on = !!favs[m.k], lv = m.state === 'live', dn = m.state === 'done', sc = m.sc;
+    var left = lv ? '<b class="lv">' + esc(sc && sc.clock ? sc.clock : 'Live') + '</b>' : dn ? '<b>FIN</b>' : '<b>' + esc(m.time || '–') + '</b>';
+    var right;
+    if (lv) right = '<span class="xl lv"><i></i>EN DIRECT</span><span class="xv m">Live' + svg(IC.chev) + '</span>';
+    else if (dn) right = (m.hit === true ? '<span class="xl ok">' + svg(IC.check) + 'Pronostic réussi</span>' : m.hit === false ? '<span class="xl ko">' + svg(IC.x) + 'Raté</span>' : (m.note ? '<span class="xl">' + esc(m.note) + '</span>' : '<span class="xl">Terminé</span>')) + (m.open ? '<span class="xv ' + (m.hit === true ? 'g' : m.hit === false ? 'r' : 'n') + '">Bilan' + svg(IC.chev) + '</span>' : '');
+    else if (m.p && m.top) right = '<span class="xl top"><i></i>Top Pick</span><span class="xv t">' + svg(IC.gem) + 'Voir' + svg(IC.chev) + '</span>';
+    else if (m.p) right = '<span class="xl ' + m.conf + '"><i></i>' + (m.approx ? '≈ ' : '') + '%' + Math.round(m.mx * 100) + ' ' + (m.conf === 'high' ? 'Haute Confiance' : m.conf === 'mid' ? 'Confiance moyenne' : 'Match ouvert') + '</span><span class="xv ' + (m.conf === 'high' ? 'g' : m.conf === 'mid' ? 'a' : 'n') + '">' + (m.conf === 'high' ? svg(IC.flame2) : '') + 'Voir' + svg(IC.chev) + '</span>';
+    else right = m.open ? '<span class="xv n">Voir' + svg(IC.chev) + '</span>' : '';
+    var cls = 'xr' + (lv ? ' live' : dn ? ' done' : '') + (m.p && !lv && !dn ? ' c-' + (m.top ? 'top' : m.conf) : '');
+    return '<div class="' + cls + '" ' + m.open + '><div class="xt">' + left + '<button class="xs' + (on ? ' on' : '') + '" data-xfav="' + esc(m.k) + '" aria-label="Favori">' + svg(IC.fav) + '</button></div>' +
+      '<div class="xm">' + xTeam(m.home, sc ? sc.h : null, lv) + xTeam(m.away, sc ? sc.a : null, lv) + '</div><div class="xa">' + right + '</div></div>';
+  }
+  function xgroupsHTML(groups, opts) {
+    opts = opts || {};
+    return groups.map(function (g) {
+      var shut = !!(X.shut && X.shut[g.k]);
+      return '<section class="xg"><div class="xgh" data-xgc="' + esc(g.k) + '" role="button" aria-expanded="' + !shut + '">' + logoOf(g.div, svg(IC.trophy)) + '<div class="xgn"><b>' + esc(g.name) + '</b><small>' + flagOf(g.sub) + esc(g.sub) + '</small></div>' +
+        '<span class="xcnt">' + g.items.length + '</span><button class="xls' + (LF[g.k] ? ' on' : '') + '" data-xlf="' + esc(g.k) + '" aria-label="Suivre ce championnat">' + svg(IC.fav) + '</button></div>' + (shut ? '' : g.items.map(xrow).join('')) + '</section>';
+    }).join('');
+  }
+  function xAvatar() {
+    var r = Account.on() ? Account.role() : null, inner = Account.on() ? '<span>' + esc(initials()) + '</span>' + (r === 'premium' || r === 'admin' ? '<i>' + (r === 'admin' ? 'ADMIN' : 'PRO') + '</i>' : '') : svg('<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>');
+    return '<button class="xav' + (Account.on() ? ' on' : '') + '" data-xacct aria-label="Mon compte">' + inner + '</button>';
+  }
+  var XLOGO = '<div class="xbrand"><span class="xmark">' + LOGO + '</span><b>Pronos<em>Foot</em></b></div>';
+  /* ---- Découvrir */
+  function xDays() {
+    var T = parisToday(), out = [], i;
+    for (i = 0; i <= 6; i++) out.push(addDays(T, i));
+    return out;
+  }
+  function discHTML() {
+    if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (!st.detail && (st.tab === 'home' || st.tab === 'fav' || st.tab === 'lig' || st.tab === 'combo')) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
+    var T = parisToday(), days = xDays(), yd = addDays(T, -1);
+    if (!X.day) X.day = T;
+    var custom = days.indexOf(X.day) < 0 && X.day !== yd;
+    var h = '<header class="xhd">' + XLOGO.replace('xbrand', 'xbrand lft') + '<span class="xsp"></span><button class="xib" data-xset aria-label="Réglages">' + svg(IC.gear) + '</button><button class="xib" data-xbell aria-label="Alertes">' + svg(IC.bell) + '</button>' + xAvatar() + '</header>';
+    h += '<div class="xdays"><label class="xd cal' + (X.day === yd || custom ? ' on' : '') + '">' + svg(IC.cal) + '<span>' + dshort(custom ? X.day : yd) + '</span><input type="date" data-xdp value="' + esc(X.day) + '" aria-label="Choisir une date"></label>' +
+      days.map(function (d, i) { return '<button class="xd' + (X.day === d ? ' on' : '') + '" data-xday="' + d + '"><small>' + (i === 0 ? 'Aujourd’hui' : WD[parseD(d).getDay()]) + '</small><b>' + dshort(d) + '</b></button>'; }).join('') + '</div>';
+    var all = xAllMatches(addDays(T, -2)).filter(function (m) { return m.date === X.day; });
+    var nPred = all.filter(function (m) { return m.p; }).length, nLive = all.filter(function (m) { return m.state === 'live'; }).length;
+    if (all.some(function (m) { return m.state === 'done'; })) ensureRes();
+    h += '<div class="xban"><i class="bdot"></i><span>Pronostics prêts pour <b>' + nPred + '</b> matchs</span>' + (nLive ? '<button class="xlv' + (X.stat === 'live' ? ' on' : '') + '" data-xst="' + (X.stat === 'live' ? 'all' : 'live') + '"><i></i>EN DIRECT <b>' + nLive + '</b></button>' : '<span class="xlv off">EN DIRECT</span>') + '</div>';
+    h += '<div class="xtools"><div class="xseg">' + [['all', 'Tous'], ['soon', 'À venir'], ['live', '<i class="ld"></i>En direct']].map(function (x) { return '<button class="' + (X.stat === x[0] ? 'on' : '') + '" data-xst="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<button class="xib sm' + (X.fo || X.ff !== 'all' ? ' on' : '') + '" data-xfo aria-label="Filtrer">' + svg(IC.filt) + '</button><button class="xib sm' + (X.srch || X.q ? ' on' : '') + '" data-xsrch aria-label="Chercher">' + svg(IC.search) + '</button>' +
+      '<button class="xib sm' + (X.sort === 'conf' ? ' on' : '') + '" data-xsort aria-label="Trier">' + svg(IC.sortv) + '</button><span class="xdiv"></span><button class="xchip' + (X.hc ? ' on' : '') + '" data-xhc><i></i>Haute Confiance</button></div>';
+    if (X.fo) h += '<div class="xchips">' + [['all', 'Toutes les ligues'], ['fol', '★ Ligues suivies'], ['pred', 'Avec pronostic']].map(function (x) { return '<button class="xchip' + (X.ff === x[0] ? ' on' : '') + '" data-xff="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    if (X.srch || X.q) h += '<label class="xsearch">' + svg(IC.search) + '<input id="xq" type="search" placeholder="Chercher une équipe ou un championnat" autocomplete="off" value="' + esc(X.q) + '"></label>';
+    return h + '<div id="xlist">' + discList(all) + '</div>';
+  }
+  function discList(all) {
+    var list = xFlt(all, { stat: X.stat, hc: X.hc, ff: X.ff, q: X.q });
+    if (!list.length) return '<div class="xempty">' + (isLoaded('cal') ? 'Aucun match pour ce filtre.' : '') + (isLoaded('cal') ? '' : skel(3)) + '</div>';
+    return xgroupsHTML(xGroups(list));
+  }
+  function xRefresh() { if (st.detail || typing()) return; var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+  /* ---- Favoris */
+  function favsV2() {
+    var T = parisToday(), all = xAllMatches(addDays(T, -1)).filter(function (m) { return favs[m.k]; });
+    var n = { all: all.length, live: all.filter(function (m) { return m.state === 'live'; }).length, done: all.filter(function (m) { return m.state === 'done'; }).length };
+    var list = all.filter(function (m) { return X.fs === 'all' || m.state === X.fs; });
+    var h = '<header class="xhd col"><div><h1><span class="xstar">' + svg(IC.fav) + '</span> Mes Favoris</h1><small>' + n.all + ' match' + (n.all > 1 ? 's' : '') + ' suivi' + (n.all > 1 ? 's' : '') + '</small></div><span class="xsp"></span>' + XLOGO + '</header>';
+    h += '<div class="xtools"><div class="xpills">' + [['all', 'Tous', n.all], ['live', 'En direct', n.live], ['done', 'Terminés', n.done]].map(function (x) { return '<button class="xpill' + (X.fs === x[0] ? ' on' : '') + '" data-xfs="' + x[0] + '">' + x[1] + ' · ' + x[2] + '</button>'; }).join('') + '</div><span class="xsp"></span><button class="xib sm' + (X.sort === 'conf' ? ' on' : '') + '" data-xsort aria-label="Trier">' + svg(IC.sortv) + '</button></div>';
+    if (!list.length) h += '<div class="xzero">' + svg(IC.fav) + '<b>Aucun Favori Pour l’instant</b><p>Ajoutez des matchs à vos favoris pour les suivre facilement.</p></div>';
+    else h += xgroupsHTML(xGroups(list));
+    return h + '<details class="xdet"' + (X.alerts ? ' open' : '') + '><summary>' + svg(IC.bell) + 'Alertes 45 min avant le coup d’envoi</summary>' + alertsPanel() + '</details>';
+  }
+  /* ---- Ligues */
+  function ligIndex() {
+    var T = parisToday(), all = xAllMatches(T), C = {};
+    all.forEach(function (m) {
+      var cn = m.gsub || 'Monde', c = C[cn] || (C[cn] = { name: cn, n: 0, L: {} });
+      var l = c.L[m.g] || (c.L[m.g] = { k: m.g, name: m.gname, div: m.gdiv, n: 0, items: [] });
+      l.n++; l.items.push(m); c.n++;
+    });
+    return C;
+  }
+  function ligHTML() {
+    if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (!st.detail && (st.tab === 'home' || st.tab === 'lig' || st.tab === 'fav' || st.tab === 'combo')) xRefresh(); }); }
+    var C = ligIndex(), names = Object.keys(C), nl = 0, nm0 = 0, h;
+    names.forEach(function (k) { nl += Object.keys(C[k].L).length; nm0 += C[k].n; });
+    if (X.lg && C[X.lg.c]) {
+      var c = C[X.lg.c];
+      if (X.lg.l && c.L[X.lg.l]) {
+        var l = c.L[X.lg.l], byDay = {}, days = [];
+        l.items.forEach(function (m) { if (!byDay[m.date]) { byDay[m.date] = []; days.push(m.date); } byDay[m.date].push(m); });
+        days.sort();
+        h = '<header class="xhd col"><button class="xback" data-xlgback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>' + esc(l.name) + '</h1><small>' + flagOf(c.name) + esc(c.name) + ' · ' + l.n + ' match' + (l.n > 1 ? 's' : '') + '</small></div></header>';
+        return h + days.map(function (d) { return '<div class="xdl">' + dayLabel(d) + '</div>' + byDay[d].sort(function (a, b) { return a.kick - b.kick; }).map(xrow).join(''); }).join('');
+      }
+      var ls = Object.keys(c.L).map(function (k) { return c.L[k]; }).sort(function (a, b) { return b.n - a.n || (a.name < b.name ? -1 : 1); });
+      h = '<header class="xhd col"><button class="xback" data-xlgback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>' + flagOf(c.name, true) + esc(c.name) + '</h1><small>' + ls.length + ' ligue' + (ls.length > 1 ? 's' : '') + ' · ' + c.n + ' matchs</small></div></header>';
+      return h + ls.map(function (l) { return '<button class="xcr" data-xlgl="' + esc(l.k) + '">' + logoOf(l.div, svg(IC.trophy)) + '<span class="xcn">' + esc(l.name) + '</span><span class="xcnt">' + l.n + '</span>' + svg(IC.chev) + '</button>'; }).join('');
+    }
+    var q = X.lcq.trim(), list = names.sort(function (a, b) { return a.localeCompare(b, 'fr'); }).filter(function (k) {
+      return !q || fuzzy(q, k + ' ' + Object.keys(C[k].L).map(function (z) { return C[k].L[z].name; }).join(' '), null);
+    });
+    h = '<header class="xhd col"><div><h1>Ligues</h1><small>' + svg(IC.lig) + ' ' + nl + ' ligues · ' + names.length + ' pays · ' + nm0 + ' matchs au total</small></div><span class="xsp"></span>' + XLOGO + '</header>';
+    h += '<label class="xsearch">' + svg(IC.search) + '<input id="xlq" type="search" placeholder="Rechercher un pays ou une ligue..." autocomplete="off" value="' + esc(X.lcq) + '"></label>';
+    if (!isLoaded('cal')) h += skel(3);
+    return h + '<div id="xclist">' + (list.length ? list.map(function (k) { return '<button class="xcr big" data-xlgc="' + esc(k) + '"><span class="xfl">' + flagOf(k, true) + '</span><span class="xcn">' + esc(k) + '</span><span class="xcnt">' + C[k].n + '</span>' + svg(IC.chev) + '</button>'; }).join('') : '<div class="xempty">Aucun résultat.</div>') + '</div>';
+  }
+  /* ---- Combo : sélections du jour proposées par le modèle, à débloquer avec une clé (1 offerte par jour, remboursée si le combo échoue) */
+  var CMB = { n: 1100, list: [], gen: {} };
+  try { var cs0 = JSON.parse(localStorage.getItem('pf-cmb') || 'null'); if (cs0 && Array.isArray(cs0.list)) CMB = { n: cs0.n || 1100, list: cs0.list, gen: cs0.gen || {} }; } catch (e) { /* ignoré */ }
+  function cmbSave() { try { localStorage.setItem('pf-cmb', JSON.stringify(CMB)); } catch (e) { /* ignoré */ } }
+  var KINDS = { safe: ['SAFE', 'shield', 'g'], bold: ['BOLD', 'flame2', 'a'], ext: ['EXTREME', 'bolt', 'r'] };
+  function cmbLeg(r, T) { return { id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg || '', time: r.time || '', d: T, p: r.p }; }
+  function cmbGen() {
+    var T = parisToday();
+    if (CMB.gen[T] || !TODAY.ts) return;
+    var R = todayRows(), pool = R.picks.concat(plCalPicks(T)), more = R.more || [], seen = {}, now = Date.now(), mk = function (kind, legs) { CMB.n++; CMB.list.push({ id: 'C' + CMB.n, kind: kind, d: T, legs: legs, un: 0, res: null, made: now }); };
+    var ok = function (r) { return r.bid && (!r.time || kickoff({ date: T, time: r.time }) > now + 20 * 60000); };
+    pool = pool.filter(ok).sort(function (a, b) { return b.p - a.p; }).filter(function (r) { if (seen[r.match]) return false; seen[r.match] = 1; return true; });
+    var safe = pool.filter(function (r) { return r.p >= 0.72; }), i;
+    for (i = 0; i + 1 < safe.length && i < 6; i += 2) mk('safe', [cmbLeg(safe[i], T), cmbLeg(safe[i + 1], T)]);
+    var used = {}; CMB.list.forEach(function (c) { if (c.d === T) c.legs.forEach(function (l) { used[l.match] = 1; }); });
+    var mid = pool.filter(function (r) { return !used[r.match] && r.p >= 0.5 && r.p < 0.72; });
+    if (mid.length) mk('bold', [cmbLeg(mid[0], T)]);
+    if (mid.length > 2) mk('bold', [cmbLeg(mid[1], T), cmbLeg(mid[2], T)]);
+    var low = more.filter(function (r) { return ok(r) && r.p >= 0.3 && r.p < 0.55 && !used[r.match]; }).sort(function (a, b) { return b.p - a.p; });
+    if (low.length) mk('ext', [cmbLeg(low[0], T)]);
+    CMB.gen[T] = 1;
+    var keep = Date.now() - 45 * 864e5; CMB.list = CMB.list.filter(function (c) { return c.made > keep; });
+    cmbSave();
+  }
+  function cmbClose(c) { return Math.min.apply(null, c.legs.map(function (l) { return l.time ? +kickoff({ date: l.d, time: l.time }) : Infinity; })); }
+  function cmbRes(c) {                                             // true / false / null (en attente) ; mémorisé dès que c'est tranché
+    if (c.res !== null && c.res !== undefined) return c.res;
+    var rs = c.legs.map(function (l) { return plRes(l); }), r = rs.some(function (x) { return x === false; }) ? false : rs.every(function (x) { return x === true; }) ? true : null;
+    if (r !== null) { c.res = r; cmbSave(); }
+    return r;
+  }
+  function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'admin'; }
+  function keysLeft() {
+    if (premium()) return Infinity;
+    var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && isoDate(new Date(c.un)) === T && c.res !== false; }).length;
+    return Math.max(0, 1 - used);
+  }
+  function comboLeg(l, open, un) {
+    var res = plRes(l), sc = plLive(l), tm = plLegTeams(l), ic;
+    if (res === true) ic = '<span class="cx ok">' + svg(IC.okmark) + '</span>'; else if (res === false) ic = '<span class="cx ko">' + svg(IC.xmark) + '</span>'; else ic = '<span class="cx">' + svg(IC.clock) + '</span>';
+    var scr = sc && isFinite(sc.hs) ? '<b class="csc ' + (res === true ? 'ok' : res === false ? 'ko' : '') + '">' + sc.hs + '-' + sc.as + '</b>' : '';
+    if (!un) return '<div class="cbr lk"><span class="cll">' + logoOf(l.id.split('|')[0], svg(IC.trophy)) + '<b>' + esc(l.lg || 'Match') + '</b></span><span class="clk">' + svg(IC.lock) + '<i></i></span></div>';
+    return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(l.s) + '</span></div>' + scr + ic + '</div>';
+  }
+  function cmbCard(c) {
+    var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || premium(), done = res !== null;
+    var nok = c.legs.filter(function (l) { return plRes(l) === true; }).length;
+    var h = '<div class="cmb k-' + K[2] + '"><div class="cmbh"><span class="cmbi">' + svg(IC[K[1]]) + '</span><b class="cmbk">' + K[0] + '</b><span class="cmbid">#' + c.id + '</span></div>' +
+      '<div class="cmbs"><b>' + c.legs.length + ' Pronostic' + (c.legs.length > 1 ? 's' : '') + ' AI</b>' + (done ? '<span>Résultat</span>' : '') + '</div><div class="cmbl">' + c.legs.map(function (l) { return comboLeg(l, true, un); }).join('') + '</div>' +
+      '<div class="cmbd">' + svg(IC.cal) + '<b>' + dshort(c.d).replace(/^(\d+)\/(\d+)$/, '$1/$2') + '</b></div>';
+    if (c.un || (!done && !c.un)) h += '<div class="cmbp">' + svg(IC.shield) + '<span>Protégé · clé remboursée en cas d’échec</span></div>';
+    if (done) h += '<div class="cmbf"><b class="' + (res ? 'ok' : 'ko') + '">' + (res ? 'IA RÉUSSIE' : 'IA ÉCHOUÉE') + '</b><span>' + nok + '/' + c.legs.length + '</span><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
+    else if (un) h += '<div class="cmbf"><div class="cmbw"><small>' + (c.un ? 'Combo Débloqué' : 'Combo fermé') + '</small><b class="ok">EN ATTENTE</b></div><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
+    else h += '<div class="cmbf"><div class="cmbw"><small>' + svg(IC.lock) + ' Le Combo ferme dans</small><b class="cd" data-cd="' + cl + '">' + cdFmt(cl - Date.now()) + '</b></div><button class="cmbu" data-cmbun="' + c.id + '">' + svg(IC.key) + '<span><b>1</b>DÉBLOQUER</span></button></div>';
+    return h + '</div>';
+  }
+  function cdFmt(ms) { ms = Math.max(0, ms); var s = Math.floor(ms / 1000); return ('0' + Math.floor(s / 3600)).slice(-2) + ':' + ('0' + Math.floor(s % 3600 / 60)).slice(-2) + ':' + ('0' + s % 60).slice(-2); }
+  function comboHTML() {
+    if (!TODAY.ts && !TODAY.busy) todayLoad();
+    cmbGen();
+    var T = parisToday(), L = CMB.list.slice().sort(function (a, b) { return b.made - a.made || (a.id < b.id ? 1 : -1); }), kl = keysLeft();
+    L.forEach(cmbRes);
+    var act = L.filter(function (c) { return c.res === null || c.res === undefined; }), fin = L.filter(function (c) { return c.res === true || c.res === false; }), mine = L.filter(function (c) { return c.un; });
+    var h = '<header class="xhd"><span class="xmark gold">' + svg(IC.combo) + '</span><b class="xt1">AI Combo</b><span class="xsp"></span><button class="xpillb" data-xhow>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + 'Comment ça marche ?</button><button class="xkeys" data-xkeys>' + svg(IC.key) + '<b>' + (kl === Infinity ? '∞' : kl) + '</b>' + (kl === Infinity ? '' : svg(IC.plus)) + '</button></header>';
+    h += '<div class="xseg3">' + [['act', 'Actifs', act.length], ['fin', 'Terminés', 0], ['mine', 'Mes Combos', mine.length]].map(function (x) { return '<button class="' + (X.cs === x[0] ? 'on' : '') + '" data-xcs="' + x[0] + '">' + x[1] + (x[2] ? '<i>' + x[2] + '</i>' : '') + '</button>'; }).join('') + '</div>';
+    if (X.msg) h += '<div class="bt-warn xmsg">' + esc(X.msg) + '</div>';
+    var show = X.cs === 'act' ? act : X.cs === 'fin' ? fin : mine;
+    if (!TODAY.ts && !CMB.list.length) h += '<div class="xzero">' + svg(IC.combo) + '<b>Préparation des combos…</b><p>Le modèle regarde tous les matchs du jour.</p></div>' + skel(2);
+    else if (!show.length) h += '<div class="xzero">' + svg(IC.combo) + '<b>' + (X.cs === 'mine' ? 'Aucun combo débloqué' : X.cs === 'fin' ? 'Aucun combo terminé' : 'Pas de combo pour l’instant') + '</b><p>' + (X.cs === 'mine' ? 'Débloque un combo avec ta clé du jour : il apparaîtra ici.' : 'Les combos sont créés chaque jour à partir des pronostics les plus probables.') + '</p></div>';
+    else h += show.map(function (c) { return cmbCard(c) + (X.cs === 'mine' ? '<div class="cmbu2">Débloqué : ' + dshort(isoDate(new Date(c.un))) + ' · ' + new Date(c.un).toTimeString().slice(0, 5) + '<b>' + (c.res === false ? 'clé remboursée' : '−1 ') + (c.res === false ? '' : svg(IC.key)) + '</b></div>' : ''); }).join('');
+    return h + '<p class="xfine">Les combos sont des estimations du modèle, pas des certitudes : aucun gain n’est garanti. Joueurs Info Service : 09 74 75 13 13.</p>';
+  }
+  function comboPage(id) {
+    var c = CMB.list.filter(function (x) { return x.id === id; })[0];
+    if (!c) return '<div class="empty">Combo introuvable.</div>';
+    var K = KINDS[c.kind], cl = cmbClose(c), res = cmbRes(c), un = !!c.un || cl <= Date.now() || premium();
+    var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button></div><div class="cbg k-' + K[2] + '"><div class="cbt"><span class="cmbi big">' + svg(IC[K[1]]) + '</span><h2>AI COMBO #' + c.id + '</h2><b class="cmbk">' + K[0] + '</b>' +
+      '<div class="cpm"><span>' + svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>') + ' ' + c.legs.length + ' Pronostic' + (c.legs.length > 1 ? 's' : '') + ' AI</span><i></i><span>' + svg(IC.cal) + ' ' + dayLabel(c.d).replace('Aujourd’hui · ', '') + '</span></div></div>' +
+      '<div class="cmbp">' + svg(IC.shield) + '<span>Protégé · clé remboursée en cas d’échec</span></div>' +
+      '<div class="cpc"><div class="cpch"><b>' + svg('<path d="M4 7l1.5 1.5L8 6M4 13l1.5 1.5L8 12M11 7h9M11 13h9M4 19h16"/>') + ' Matchs</b><span>(' + (res === null ? (cl <= Date.now() ? 'Fermé' : 'Ouvert') : 'Terminé') + ')</span></div>' +
+      c.legs.map(function (l) {
+        var tm = plLegTeams(l), res2 = plRes(l), sc = plLive(l), icn = res2 === true ? '<span class="cx ok">' + svg(IC.okmark) + '</span>' : res2 === false ? '<span class="cx ko">' + svg(IC.xmark) + '</span>' : '<span class="cx">' + svg(IC.clock) + '</span>';
+        return '<div class="cbl"><div class="cpi"><small>' + esc(l.lg || '') + ' · ' + dshort(l.d) + (l.time ? ' · ' + esc(l.time) : '') + '</small>' + (un ? '<b>' + (tm ? crest(tm[0]) + esc(nm(tm[0])) + ' – ' + esc(nm(tm[1])) + crest(tm[1]) : esc(l.match)) + '</b><span class="cbk">' + esc(l.s) + '</span>' + (sc && isFinite(sc.hs) ? '<em>' + sc.hs + ' - ' + sc.as + (sc.st === 'in' && sc.clock ? ' · ' + esc(sc.clock) : '') + '</em>' : '') : '<span class="clk big">' + svg(IC.lock) + '<i></i></span>') + '</div>' + (un ? icn : '') + '</div>';
+      }).join('') + '</div>' + howCard() + '</div>';
+    var foot = res !== null ? '<small>' + (res ? 'IA RÉUSSIE' : 'IA ÉCHOUÉE') + '</small><b class="' + (res ? 'ok' : 'ko') + '">' + c.legs.filter(function (l) { return plRes(l) === true; }).length + '/' + c.legs.length + '</b>' : un ? '<small>Combo Débloqué</small><b class="ok">EN ATTENTE</b>' : '<small>' + svg(IC.lock) + ' Le Combo ferme dans</small><b class="cd" data-cd="' + cl + '">' + cdFmt(cl - Date.now()) + '</b>';
+    return h + '<div class="cpf"><div>' + foot + '</div>' + (!un ? '<button class="cmbu" data-cmbun="' + c.id + '">' + svg(IC.key) + '<span><b>1</b>DÉBLOQUER</span></button>' : '') + '</div>';
+  }
+  function howCard() {
+    return '<div class="cpc how"><div class="cpch"><b>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + ' Comment ça marche ?</b></div><div class="hw"><div><span class="hwi">' + svg(IC.key) + '</span><b>1. Ouvrez le Combo</b><p>Utilisez 1 clé pour voir toutes les sélections. Une clé est offerte chaque jour.</p></div><span class="ha">→</span><div><span class="hwi b">' + svg('<path d="M4 16l5-6 4 3 7-8"/><path d="M15 5h5v5"/>') + '</span><b>2. Suivi en direct</b><p>Suivez les matchs et voyez les résultats en direct.</p></div><span class="ha">→</span><div><span class="hwi g">' + svg(IC.shield) + '</span><b>3. Résultat et remboursement</b><p>Si le combo échoue, la clé est remboursée.</p></div></div></div>';
+  }
+  function howPage() {
+    return '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div class="who"><span class="lgchip">AI Combo</span></div></div><div class="cbg">' + howCard() +
+      '<div class="cpc"><div class="cpch"><b>Les trois niveaux</b></div><div class="hl3"><p><b class="g">SAFE</b> : 2 pronostics très probables (au moins 72 % chacun d’après le modèle).</p><p><b class="a">BOLD</b> : un pronostic plus risqué, probabilité autour de 50 à 70 %.</p><p><b class="r">EXTREME</b> : un pari à cote élevée, qui passe moins d’une fois sur deux.</p></div></div>' +
+      '<p class="xfine">Les pourcentages sont des estimations du modèle, vérifiées dans l’onglet Fiabilité. Aucun gain n’est garanti.</p></div>';
+  }
+  /* ---- Social : profil, mes paris, plans */
+  function socHead() {
+    var on = Account.on(), r = on ? Account.role() : null, SA = Bets.statsAll(), settled = SA.n, xp = settled * 10 + SA.w * 20, lv = xp < 100 ? ['Débutant', 100] : xp < 400 ? ['Amateur', 400] : xp < 1000 ? ['Confirmé', 1000] : ['Expert', 3000];
+    var rate = settled ? Math.round(SA.w / settled * 100) + '%' : '–', init = PL && PL.on ? (PL.init || PL.start) : 0, dfi = PL && PL.on && PL.goal > init ? Math.max(0, Math.min(100, Math.round((PL.bank - init) / (PL.goal - init) * 100))) + '%' : '–';
+    var name = on ? Account.email().split('@')[0] : 'Invité';
+    X.lastSoc = st.tab === 'today' ? 'today' : 'bets';
+    return '<header class="xhd"><b class="xt1">Social</b><span class="xsp"></span>' + XLOGO + '<span class="xsp"></span><button class="xib" data-xset aria-label="Réglages">' + svg(IC.gear) + '</button><button class="xib" data-xbell aria-label="Alertes">' + svg(IC.bell) + '</button></header>' +
+      '<button class="xprof" data-xacct>' + xAvatar().replace('<button', '<span').replace('</button>', '</span>').replace(' data-xacct', '') + '<div class="xpn"><b>' + esc(name) + '</b><div class="xlvl"><span>' + lv[0] + '</span><i><u style="width:' + Math.min(100, Math.round(xp / lv[1] * 100)) + '%"></u></i></div></div>' +
+      '<div class="xst"><b>' + xp + '</b><small>XP</small></div><div class="xst"><b class="' + (rate === '–' ? '' : 'ok') + '">' + rate + '</b><small>Réussite</small></div><div class="xst"><b>' + dfi + '</b><small>Défi</small></div>' + svg(IC.chev) + '</button>' +
+      '<div class="xtabs"><button class="' + (st.tab === 'bets' ? 'on' : '') + '" data-xsoc="bets">Mes paris</button><button class="' + (st.tab === 'today' ? 'on' : '') + '" data-xsoc="today">Plans</button></div>';
+  }
+  function setHTML() {
+    var h = '<header class="xhd col"><button class="xback" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>Réglages</h1><small>Sport, affichage et outils</small></div></header>';
+    h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
+    var dark = curTheme() === 'dark';
+    h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
+    return h;
+  }
+  function calPage(i) {
+    mkCalIdx();
+    var c = (D.cal || [])[i];
+    if (!c) return '<div class="empty">Match introuvable.</div>';
+    var p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, cs = cstate(c), sc = c.hs != null ? c.hs + ' – ' + c.as_ : '';
+    var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div class="who"><span class="lgchip">' + esc(c.fr) + '</span><small class="dch"><i>📅 ' + dm(c.date) + '</i><i>🕒 ' + esc(c.time) + '</i></small></div></div>' + vsBlock({ div: c.s, home: c.home, away: c.away });
+    if (sc) h += '<div class="main high"><div class="k"><small>' + (cs === 'live' ? 'En direct' : 'Score final') + '</small></div><div class="hero"><div><div class="hn">' + sc + '</div></div></div></div>';
+    if (p) {
+      h += '<div class="main ' + confOf(p[fav]) + '"><div class="k"><small>Probabilités déduites des cotes' + (c.q ? ' (estimation approximative)' : '') + '</small></div><div class="hero"><div><div class="hl">Résultat le plus probable</div><div class="hn">' + esc([c.home, 'Match nul', c.away][fav]) + '</div></div>' + gauge(p[fav], confOf(p[fav])) + '</div>' +
+        '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
+        '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
+    } else h += '<div class="srcnote">Pas de probabilités pour ce match : aucune cote disponible.</div>';
+    var x = extFor(c);
+    if (x && cs === 'soon') h += '<div class="srcnote">API-Football : <b>' + esc([x.home, 'Nul', x.away][x.favIdx]) + ' ' + pct(x.fav) + '</b> <button class="bt-b" data-openext="' + x.i + '">Voir</button></div>';
+    return h + '<div class="srcnote">Ce match est hors de notre modèle : pas de pronostic « sûr ». Les probabilités viennent des cotes des bookmakers (marge retirée).</div>';
+  }
+  /* ---- clics de la nouvelle interface */
+  function xToggleFav(k) {
+    if (favs[k]) delete favs[k]; else favs[k] = 1;
+    saveFavs();
+    if (Alerts.topic()) Alerts.sync(favItems(), true).then(function () { if (st.tab === 'fav' && !st.detail) xRefresh(); });
+  }
+  function xGo(tab) { st.tab = tab; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); }
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    if (!t) return;
+    var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
+    if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xlf')) { e.stopPropagation(); var k = a('data-xlf'); if (LF[k]) delete LF[k]; else LF[k] = 1; saveLF(); render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xgc')) { X.shut = X.shut || {}; X.shut[a('data-xgc')] = !X.shut[a('data-xgc')]; render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xday')) { X.day = a('data-xday'); X.stat = 'all'; render(); return; }
+    if (t.hasAttribute('data-xst')) { X.stat = a('data-xst'); render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xfo')) { X.fo = !X.fo; render(); return; }
+    if (t.hasAttribute('data-xsrch')) { X.srch = !X.srch; if (!X.srch) X.q = ''; render(); if (X.srch) { var qi = document.getElementById('xq'); if (qi) qi.focus(); } return; }
+    if (t.hasAttribute('data-xsort')) { X.sort = X.sort === 'time' ? 'conf' : 'time'; render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xhc')) { X.hc = !X.hc; render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xff')) { X.ff = a('data-xff'); render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xfs')) { X.fs = a('data-xfs'); render(); return; }
+    if (t.hasAttribute('data-xlgc')) { X.lg = { c: a('data-xlgc'), l: null }; X.lcq = ''; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xlgl')) { X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xcs')) { X.cs = a('data-xcs'); X.msg = ''; render(); return; }
+    if (t.hasAttribute('data-cmbopen')) { st.scroll = window.scrollY; st.detail = { cmb: a('data-cmbopen') }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-cmbun')) {
+      var c = CMB.list.filter(function (x) { return x.id === a('data-cmbun'); })[0];
+      if (c && !c.un) { if (keysLeft() > 0) { c.un = Date.now(); cmbSave(); X.msg = ''; } else X.msg = 'Plus de clé aujourd’hui : une nouvelle clé est offerte demain. Les clés en plus arriveront avec l’offre Premium.'; }
+      render(); window.scrollTo(0, st.detail ? 0 : y0); return;
+    }
+    if (t.hasAttribute('data-xhow')) { st.scroll = window.scrollY; st.detail = { how: 1 }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xkeys')) { X.msg = premium() ? 'Avec ton compte, tous les combos sont débloqués.' : 'Tu as ' + keysLeft() + ' clé aujourd’hui (1 offerte par jour, remboursée si le combo échoue). Les clés en plus arriveront avec l’offre Premium.'; render(); return; }
+    if (t.hasAttribute('data-xacct')) { xGo('account'); return; }
+    if (t.hasAttribute('data-xset')) { xGo('set'); return; }
+    if (t.hasAttribute('data-xbell') || t.hasAttribute('data-xalerts')) { X.alerts = true; xGo('fav'); return; }
+    if (t.hasAttribute('data-xsoc')) { xGo(a('data-xsoc')); return; }
+    if (t.hasAttribute('data-xtab')) { xGo(a('data-xtab')); return; }
+    if (t.hasAttribute('data-xback')) { xGo('home'); return; }
+    if (t.hasAttribute('data-calopen')) { st.scroll = window.scrollY; st.detail = { xcal: +a('data-calopen') }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-sport') && st.tab === 'set') { setTimeout(function () { st.tab = 'home'; render(); window.scrollTo(0, 0); }, 0); }
+  });
+  app.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.id === 'xq') { X.q = t.value; var box = document.getElementById('xlist'); if (box) { var all = xAllMatches(addDays(parisToday(), -2)).filter(function (m) { return m.date === X.day; }); box.innerHTML = discList(all); } }
+    else if (t.id === 'xlq') { X.lcq = t.value; var y1 = window.scrollY; var pos = t.selectionStart; render(); var ni = document.getElementById('xlq'); if (ni) { ni.focus(); try { ni.setSelectionRange(pos, pos); } catch (err) { /* ignoré */ } } window.scrollTo(0, y1); }
+  });
+  app.addEventListener('change', function (e) { var t = e.target; if (t.hasAttribute && t.hasAttribute('data-xdp') && t.value) { X.day = t.value; X.stat = 'all'; render(); } });
+  setInterval(function () {                                        // comptes à rebours des combos
+    var els = document.querySelectorAll('[data-cd]');
+    for (var i = 0; i < els.length; i++) { var v = +els[i].getAttribute('data-cd') - Date.now(); els[i].textContent = cdFmt(v); if (v <= 0 && !els[i].getAttribute('data-done')) { els[i].setAttribute('data-done', 1); xRefresh(); } }
+  }, 1000);
+
   /* ------------------------------------------------------------ navigation */
   function navCount(today) {                                  // petite pastille sur l'onglet : matchs de foot du jour / favoris à venir
     var T = parisToday();
@@ -3272,11 +3637,12 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
+  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
-    var items = [['today', 'Plans'], ['home', 'Découvrir'], ['fav', 'Favoris'], ['an', 'Analyser'], ['bets', 'Mes paris'], ['info', 'Fiabilité']];
+    var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
-      var nb = x[0] === 'today' ? navCount(true) : x[0] === 'fav' ? navCount(false) : x[0] === 'ticket' ? ticket.length : 0;
-      return '<button data-tab="' + x[0] + '" class="' + (!st.detail && st.tab === x[0] ? 'on' : '') + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
+      var nb = 0;
+      return '<button data-tab="' + x[0] + '" class="' + (!st.detail && cur === x[0] ? 'on' : (st.detail && cur === x[0] ? 'on' : '')) + '">' + svg(IC[x[0]]) + (nb ? '<i class="nb">' + nb + '</i>' : '') + '<span>' + x[1] + '</span></button>';
     }).join('') + '<i class="ind"></i></div>';
     var inn = nav.querySelector('.in'), on = nav.querySelector('button.on'), ind = nav.querySelector('.ind');
     if (!inn || !ind) return;
@@ -3296,17 +3662,20 @@
   var LASTSIG = '', ANIMT = 0, NAVPOS = null;
   function render() {
     var sig = [st.tab, st.sport, st.detail ? JSON.stringify(st.detail).slice(0, 90) : '', st.dtab, st.ptab, st.day, st.status, st.group, st.filter, st.plSport].join('|');
-    if (st.detail) app.innerHTML = st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
-    else if (st.tab === 'home') app.innerHTML = sportHTML();
-    else if (st.tab === 'today') app.innerHTML = todayHTML();
+    if (st.detail) app.innerHTML = st.detail.cmb ? comboPage(st.detail.cmb) : st.detail.how ? howPage() : st.detail.xcal != null ? calPage(st.detail.xcal) : st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
+    else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? discHTML() : sportHTML();
+    else if (st.tab === 'combo') app.innerHTML = comboHTML();
+    else if (st.tab === 'lig') app.innerHTML = ligHTML();
+    else if (st.tab === 'set') app.innerHTML = setHTML();
+    else if (st.tab === 'today') app.innerHTML = socHead() + todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
-    else if (st.tab === 'fav') app.innerHTML = favsHTML();
+    else if (st.tab === 'fav') app.innerHTML = favsV2();
     else if (st.tab === 'bets') {
-      app.innerHTML = acChip() + planSummaryHTML() + Bets.html();
+      app.innerHTML = socHead() + planSummaryHTML() + Bets.html();
       if (Bets.needsRes() && !isLoaded('res')) loadLazy('res', function () { if (st.tab === 'bets' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
     }
     else if (st.tab === 'ticket') app.innerHTML = ticketHTML();
-    else if (st.tab === 'account') app.innerHTML = accountPageHTML();
+    else if (st.tab === 'account') app.innerHTML = '<button class="xback own" data-xsoc="bets" aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' + accountPageHTML();
     else app.innerHTML = '<div id="info">' + bilanHTML() + document.getElementById('info-html').innerHTML + '</div>';
     app.classList.toggle('dens-compact', DENS === 'compact');
     if (sig !== LASTSIG) { LASTSIG = sig; app.classList.remove('anim'); void app.offsetWidth; app.classList.add('anim'); clearTimeout(ANIMT); ANIMT = setTimeout(function () { app.classList.remove('anim'); }, 1600); }
@@ -3531,7 +3900,9 @@
   nav.addEventListener('click', function (e) {
     var t = e.target.closest('[data-tab]');
     if (!t) return;
-    st.tab = t.getAttribute('data-tab'); st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
+    var tb = t.getAttribute('data-tab');
+    if (tb === 'lig') X.lg = null;
+    st.tab = tb === 'soc' ? X.lastSoc : tb; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
   Bets.resolver = function (id, m, sel) {
     if (!isLoaded('res') || !D.res) return null;
