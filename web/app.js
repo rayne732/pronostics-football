@@ -3552,7 +3552,7 @@
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
     h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button></div>';
-    h += '<div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
   }
   function calPage(i) {
@@ -3579,7 +3579,7 @@
   }
   function xGo(tab) { st.tab = tab; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); }
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3604,7 +3604,8 @@
       render(); window.scrollTo(0, st.detail ? 0 : y0); return;
     }
     if (t.hasAttribute('data-xhow')) { st.scroll = window.scrollY; st.detail = { how: 1 }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
-    if (t.hasAttribute('data-xkeys')) { X.msg = premium() ? 'Avec ton compte, tous les combos sont débloqués.' : 'Tu as ' + keysLeft() + ' clé aujourd’hui (1 offerte par jour, remboursée si le combo échoue). Les clés en plus arriveront avec l’offre Premium.'; render(); return; }
+    if (t.hasAttribute('data-xkeys')) { xGo('prem'); return; }
+    if (t.hasAttribute('data-xper')) { PREM.per = a('data-xper'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xacct')) { xGo('account'); return; }
     if (t.hasAttribute('data-xset')) { xGo('set'); return; }
     if (t.hasAttribute('data-xbell') || t.hasAttribute('data-xalerts')) { X.alerts = true; xGo('fav'); return; }
@@ -3704,6 +3705,7 @@
       var legs = Object.keys(CM.sel).map(function (k) { return CM.cands[k]; });
       if (CM.nick.length < 2) { CM.msg = 'Choisis un pseudo de 2 caractères au moins.'; }
       else if (!legs.length) { CM.msg = 'Choisis au moins une sélection.'; }
+      else if (!premium() && postsToday() >= FREE_POSTS) { CM.msg = 'Limite de ' + FREE_POSTS + ' pronostics partagés par jour en gratuit : Premium la supprime.'; }
       else {
         try { localStorage.setItem('pf-nick', CM.nick); } catch (err) { /* ignoré */ }
         Account.rest('POST', '/rest/v1/pf_posts', { user_id: Account.uid(), author: CM.nick, legs: legs }, 'return=minimal').then(function (r) {
@@ -3725,6 +3727,23 @@
     }
   });
 
+  /* ---- Premium : un seul niveau, trois durées (le paiement n'est pas encore ouvert) */
+  var PREM = { per: 'month' };
+  var PRICES = { week: ['Semaine', '2,99 €', 'par semaine', ''], month: ['Mois', '7,99 €', 'par mois', 'Le plus choisi'], year: ['Année', '59 €', 'par an', '2 mois offerts'] };
+  var PFEAT = [['Combos tous débloqués, sans clé', 1], ['Pronostics partagés illimités dans la communauté', 1], ['Plans de mise avancés et alertes avant les matchs', 1], ['Badge PRO à côté de ton avatar', 1], ['Suivi de tes paris, statistiques et synchronisation', 0], ['Pronostics, favoris et ligues', 0]];
+  function premHTML() {
+    var P = PRICES[PREM.per], r = Account.on() ? Account.role() : null, on = r === 'premium' || r === 'admin';
+    var h = '<button class="xback own" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>' + svg(IC.gem) + ' Premium</h1><small>Un seul niveau, tout débloqué</small></div></header>';
+    if (on) h += '<div class="acok">Tu as déjà l’accès ' + (r === 'admin' ? 'Admin (tout est débloqué)' : 'Premium') + '.</div>';
+    h += '<div class="xseg3">' + ['week', 'month', 'year'].map(function (k) { return '<button class="' + (PREM.per === k ? 'on' : '') + '" data-xper="' + k + '">' + PRICES[k][0] + '</button>'; }).join('') + '</div>';
+    h += '<div class="prc"><b class="prp">' + P[1] + '</b><span>' + P[2] + '</span>' + (P[3] ? '<em>' + P[3] + '</em>' : '') + '<small>3 jours d’essai offerts · résiliable à tout moment</small></div>';
+    h += '<div class="cpc">' + PFEAT.map(function (f) { return '<div class="pfr ' + (f[1] ? 'pm' : '') + '"><span class="cx ' + (f[1] ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + (f[1] ? 'Premium' : 'Gratuit') + '</small></div>'; }).join('') + '</div>';
+    h += '<button class="cmbb prb" disabled>Paiement bientôt disponible</button><p class="xfine">Les prix sont indicatifs et pourront changer avant l’ouverture. Rien n’est débité pour l’instant. Les pronostics restent des estimations : aucun gain n’est garanti.</p>';
+    return h;
+  }
+  var FREE_POSTS = 3;
+  function postsToday() { var T = new Date().toDateString(); return (CM.posts || []).filter(function (p) { return p.user_id === Account.uid() && new Date(p.created_at).toDateString() === T; }).length; }
+
   /* ------------------------------------------------------------ navigation */
   function navCount(today) {                                  // petite pastille sur l'onglet : matchs de foot du jour / favoris à venir
     var T = parisToday();
@@ -3737,7 +3756,7 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -3765,6 +3784,7 @@
     if (st.detail) app.innerHTML = st.detail.cmb ? comboPage(st.detail.cmb) : st.detail.how ? howPage() : st.detail.xcal != null ? calPage(st.detail.xcal) : st.detail.cmp ? cmpPage(st.detail.cmp) : st.detail.sp ? spPage(spOf(st.detail.sp), st.detail) : st.detail.tn != null ? tnPage(st.detail.tn) : st.detail.ext != null ? extPage(st.detail.ext) : detailPage(st.detail);
     else if (st.tab === 'home') app.innerHTML = st.sport === 'foot' ? discHTML() : sportHTML();
     else if (st.tab === 'comm') app.innerHTML = CM.sub2 === 'new' ? cmNewHTML() : commHTML();
+    else if (st.tab === 'prem') app.innerHTML = premHTML();
     else if (st.tab === 'combo') app.innerHTML = comboHTML();
     else if (st.tab === 'lig') app.innerHTML = ligHTML();
     else if (st.tab === 'set') app.innerHTML = setHTML();
