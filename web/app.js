@@ -2192,7 +2192,7 @@
   /* ------------------------------------------------------------ compte : connexion, profil, niveaux d'accès, synchronisation des paris */
   var AUI = { mode: 'login', step: 'email', email: '', pass: '', code: '', msg: '', ok: '', users: null, ask: '' }, SYNC = { timer: 0 }, PROF = null;
   var ROLES = { free: 'Gratuit', premium: 'Premium', admin: 'Admin' };
-  var ACCESS = [['Suivi de tes paris et statistiques', 1, 1, 1], ['Plans de mise et combinés', 1, 1, 1], ['Synchronisation sur tous tes appareils', 1, 1, 1], ['Plans avancés et alertes', 0, 1, 1], ['Gestion des comptes', 0, 0, 1]];
+  var ACCESS = [['Pronostics, favoris et ligues', 1, 1, 1], ['Suivi de tes paris et statistiques', 1, 1, 1], ['Synchronisation sur tous tes appareils', 1, 1, 1], ['Tous les combos débloqués (en gratuit : 1 clé par jour)', 0, 1, 1], ['Partage de pronostics illimité (en gratuit : 3 par jour)', 0, 1, 1], ['Gestion des comptes', 0, 0, 1]];
   function pfChanged() { if (!Account.on()) return; clearTimeout(SYNC.timer); SYNC.timer = setTimeout(function () { pfSync(); }, 2500); }
   window.pfChanged = pfChanged; Bets.onChange = pfChanged;
   function acRefresh() { if ((st.tab === 'account' || st.tab === 'bets') && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } else renderAvatar(); }
@@ -2234,8 +2234,9 @@
     h += acBox('<div class="acid"><div class="acav">' + esc(initials()) + '</div><div><b>' + esc(Account.email()) + '</b><small>Niveau : <span class="acrole ' + r + '">' + esc(ROLES[r] || r) + '</span>' + (since ? ' · membre depuis le ' + since : '') + '</small></div></div>');
     h += acBox('<div class="sub">' + (A.busy ? 'Synchronisation…' : A.last ? 'Dernière synchronisation à ' + new Date(A.last).toTimeString().slice(0, 5) : 'Pas encore synchronisé') + '</div>' + (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') +
       '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button></div>', 'Synchronisation');
-    h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th><th>Admin</th></tr>' + ACCESS.map(function (x) {
-      return '<tr><td>' + esc(x[0]) + '</td>' + [1, 2, 3].map(function (i) { return '<td class="' + (['free', 'premium', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
+    var isAdm = r === 'admin', cols = isAdm ? [1, 2, 3] : [1, 2];
+    h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th>' + (isAdm ? '<th>Admin</th>' : '') + '</tr>' + ACCESS.filter(function (x) { return isAdm || x[3] && (x[1] || x[2]); }).map(function (x) {
+      return '<tr><td>' + esc(x[0]) + '</td>' + cols.map(function (i) { return '<td class="' + (['free', 'premium', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
     }).join('') + '</table>', 'Mon niveau d’accès');
     if (r === 'admin') {
       h += acBox((AUI.users ? '<div class="acusers">' + AUI.users.map(function (u) {
