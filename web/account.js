@@ -5,6 +5,19 @@ var Account = (function () {
   var API = 'https://wmwmuvkxdsvnrtcjqkyf.supabase.co', KEY = 'sb_publishable_1TGUOQGJrpdx3V3N19w0vQ_aO9ajrXO', LS = 'pf-auth';
   var S = null, role = null, last = 0, busy = false, msg = '';
   try { S = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { S = null; }
+  (function fromLink() {                                           // lien reçu par email : la page s'ouvre avec la session dans l'adresse (#access_token=…)
+    try {
+      var h = location.hash || '';
+      if (h.indexOf('access_token=') < 0) return;
+      var q = {}; h.slice(1).split('&').forEach(function (p) { var i = p.indexOf('='); if (i > 0) q[p.slice(0, i)] = decodeURIComponent(p.slice(i + 1)); });
+      if (q.access_token && q.refresh_token) {
+        S = { access: q.access_token, refresh: q.refresh_token, exp: Date.now() + (+q.expires_in || 3600) * 1000, email: '', uid: jwtSub(q.access_token) };
+        try { var pl = JSON.parse(atob(q.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); S.email = pl.email || ''; } catch (e) { /* ignoré */ }
+        localStorage.setItem(LS, JSON.stringify(S));
+      }
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch (e) { /* ignoré */ }
+  })();
   function persist() { try { if (S) localStorage.setItem(LS, JSON.stringify(S)); else localStorage.removeItem(LS); } catch (e) { /* ignoré */ } }
   function jwtSub(t) { try { var p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); return JSON.parse(atob(p + '==='.slice((p.length + 3) % 4))).sub; } catch (e) { return null; } }
   function call(path, opt, token) {
