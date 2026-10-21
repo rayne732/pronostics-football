@@ -18,6 +18,7 @@ var Account = (function () {
       history.replaceState(null, '', location.pathname + location.search);
     } catch (e) { /* ignoré */ }
   })();
+  function back() { try { return '?redirect_to=' + encodeURIComponent(location.origin + location.pathname); } catch (e) { return ''; } }   // adresse où le lien de l'email ramène (le projet est partagé avec un autre site)
   function persist() { try { if (S) localStorage.setItem(LS, JSON.stringify(S)); else localStorage.removeItem(LS); } catch (e) { /* ignoré */ } }
   function jwtSub(t) { try { var p = t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); return JSON.parse(atob(p + '==='.slice((p.length + 3) % 4))).sub; } catch (e) { return null; } }
   function call(path, opt, token) {
@@ -43,7 +44,7 @@ var Account = (function () {
     }).catch(function () { return null; });
   }
   function requestCode(email) {
-    return call('/auth/v1/otp', { method: 'POST', body: { email: email, create_user: true } }).then(function (r) {
+    return call('/auth/v1/otp' + back(), { method: 'POST', body: { email: email, create_user: true } }).then(function (r) {
       if (r.ok) return null;
       if (r.status === 429) return 'Trop de demandes : patiente une minute avant de réessayer.';
       return 'L’envoi du code a échoué. Vérifie l’adresse email et réessaie.';
@@ -68,7 +69,7 @@ var Account = (function () {
     }).catch(function () { return role; });
   }
   function signUp(email, pass) {
-    return call('/auth/v1/signup', { method: 'POST', body: { email: email, password: pass } }).then(function (r) {
+    return call('/auth/v1/signup' + back(), { method: 'POST', body: { email: email, password: pass } }).then(function (r) {
       if (r.ok && r.body && r.body.access_token) { setSession(r.body, email); return { ok: true }; }
       if (r.ok) return { ok: false, info: 'Compte créé : confirme ton adresse avec l’email reçu, puis connecte-toi.' };
       var m = r.body && (r.body.msg || r.body.error_description || r.body.message) || '';
@@ -87,7 +88,7 @@ var Account = (function () {
     }).catch(function () { return 'Pas de connexion : réessaie plus tard.'; });
   }
   function recover(email) {
-    return call('/auth/v1/recover', { method: 'POST', body: { email: email } }).then(function (r) { return r.ok ? null : (r.status === 429 ? 'Trop de demandes : patiente une minute.' : 'Envoi impossible pour l’instant.'); }).catch(function () { return 'Pas de connexion : réessaie plus tard.'; });
+    return call('/auth/v1/recover' + back(), { method: 'POST', body: { email: email } }).then(function (r) { return r.ok ? null : (r.status === 429 ? 'Trop de demandes : patiente une minute.' : 'Envoi impossible pour l’instant.'); }).catch(function () { return 'Pas de connexion : réessaie plus tard.'; });
   }
   function changePassword(pass) {
     return token().then(function (t) { return t ? call('/auth/v1/user', { method: 'PUT', body: { password: pass } }, t) : { ok: false }; }).then(function (r) { return r.ok ? null : 'Mot de passe refusé (8 caractères minimum).'; }).catch(function () { return 'Pas de connexion.'; });
