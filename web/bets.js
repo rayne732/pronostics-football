@@ -27,14 +27,15 @@ var Bets = (function () {
   /* règlement automatique : un pari relié à un pronostic du site est gagné ou perdu dès que le match figure dans le journal des résultats */
   function legRes(l) { return Bets.resolver ? Bets.resolver(l.id, l.m, l.s) : null; }
   function settle() {
-    var changed = false;
+    var changed = false, done = [];
     mem.bets.forEach(function (b) {
       if (b.st !== 'p' || !b.legs || !b.legs.length) return;
       var r = b.legs.map(legRes);
-      if (r.some(function (x) { return x === false; })) { b.st = 'l'; b.auto = true; changed = true; }
-      else if (r.every(function (x) { return x === true; }) && b.legs.length >= (b.nLegs || b.legs.length)) { b.st = 'w'; b.auto = true; changed = true; }
+      if (r.some(function (x) { return x === false; })) { b.st = 'l'; b.auto = true; changed = true; done.push(b); }
+      else if (r.every(function (x) { return x === true; }) && b.legs.length >= (b.nLegs || b.legs.length)) { b.st = 'w'; b.auto = true; changed = true; done.push(b); }
     });
     if (changed) save();
+    if (Bets.onSettle) done.forEach(function (b) { try { Bets.onSettle(b); } catch (e) { /* ignoré */ } });
   }
   function monthInfo() {                                       // pour l'assistant : budget, mises et résultat du mois en cours
     var m = iso(new Date()).slice(0, 7), list = mem.bets.filter(function (b) { return b.d.slice(0, 7) === m; });
@@ -319,5 +320,5 @@ var Bets = (function () {
   }
   function status(id) { var r = null; mem.bets.forEach(function (x) { if (x.id === id) r = x.st; }); return r; }
   function setStatus(id, st) { var ch = false; mem.bets.forEach(function (x) { if (x.id === id && x.st !== st) { x.st = st; x.u = Date.now(); ch = true; } }); if (ch) save(); }
-  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, statsAll: statsAll, dump: dump, merge: merge, onChange: null, resolver: null };
+  return { html: html, attach: attach, needsRes: needsRes, prefill: prefill, monthInfo: monthInfo, add: add, setStatus: setStatus, status: status, statsAll: statsAll, dump: dump, merge: merge, onChange: null, onSettle: null, resolver: null };
 })();

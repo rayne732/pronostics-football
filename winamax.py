@@ -57,14 +57,14 @@ def families(models, home, away, ov=None):
     add("Les deux équipes marquent", [("Oui", b, lambda r: r["fh"] > 0 and r["fa"] > 0),
                                       ("Non", 1 - b, lambda r: not (r["fh"] > 0 and r["fa"] > 0))])
     add("Total buts (plus)", [(f"Plus de {_f(x)} buts", P(T > x), lambda r, x=x: r["fh"] + r["fa"] > x)
-                              for x in (0.5, 1.5, 2.5, 3.5, 4.5)])
+                              for x in (0.5, 1.5, 2.5, 3.5, 4.5)], validated=True)
     add("Total buts (moins)", [(f"Moins de {_f(x)} buts", P(T < x), lambda r, x=x: r["fh"] + r["fa"] < x)
-                               for x in (1.5, 2.5, 3.5, 4.5, 5.5)])
+                               for x in (1.5, 2.5, 3.5, 4.5, 5.5)], validated=True)
     for team, lam, key in ((home, lh, "fh"), (away, la, "fa")):
         add(f"Buts de {team} (plus)", [(f"{team} plus de {_f(x)}", poisson.sf(x, lam), lambda r, x=x, key=key: r[key] > x)
-                                       for x in (0.5, 1.5, 2.5, 3.5)], kind="Buts d'une équipe (plus)")
+                                       for x in (0.5, 1.5, 2.5, 3.5)], validated=True, kind="Buts d'une équipe (plus)")
         add(f"Buts de {team} (moins)", [(f"{team} moins de {_f(x)}", poisson.cdf(x - 0.5, lam), lambda r, x=x, key=key: r[key] < x)
-                                        for x in (1.5, 2.5, 3.5)], kind="Buts d'une équipe (moins)")
+                                        for x in (1.5, 2.5, 3.5)], validated=True, kind="Buts d'une équipe (moins)")
     add("Pair / impair", [("Total pair", P(T % 2 == 0), lambda r: (r["fh"] + r["fa"]) % 2 == 0),
                           ("Total impair", P(T % 2 == 1), lambda r: (r["fh"] + r["fa"]) % 2 == 1)])
     add("Tranche de buts", [("0-1 but", P(T <= 1), lambda r: r["fh"] + r["fa"] <= 1),
@@ -72,7 +72,7 @@ def families(models, home, away, ov=None):
                             ("4 buts ou plus", P(T >= 4), lambda r: r["fh"] + r["fa"] >= 4)])
     add("Handicap -1", [(f"{home} gagne par 2+", P(D >= 2), lambda r: r["fh"] - r["fa"] >= 2),
                         ("Écart d'un but pour le dom.", P(D == 1), lambda r: r["fh"] - r["fa"] == 1),
-                        (f"{away} (+1)", P(D <= 0), lambda r: r["fh"] - r["fa"] <= 0)])
+                        (f"{away} (+1)", P(D <= 0), lambda r: r["fh"] - r["fa"] <= 0)], validated=True)
     add("Victoire sans encaisser", [(f"{home}", P((D > 0) & (AI == 0)), lambda r: r["fh"] > r["fa"] and r["fa"] == 0),
                                     (f"{away}", P((D < 0) & (HI == 0)), lambda r: r["fa"] > r["fh"] and r["fh"] == 0)])
 
@@ -114,7 +114,7 @@ def families(models, home, away, ov=None):
     Dh = np.subtract.outer(g, g)
     names = (home, "Nul", away)
     ht_res = [float(ht[Dh > 0].sum()), float(ht[Dh == 0].sum()), float(ht[Dh < 0].sum())]
-    add("Résultat à la mi-temps", [(names[i], ht_res[i], _ht(lambda r, i=i: _res(r["hh"] - r["ha"]) == i)) for i in range(3)])
+    add("Résultat à la mi-temps", [(names[i], ht_res[i], _ht(lambda r, i=i: _res(r["hh"] - r["ha"]) == i)) for i in range(3)], validated=True)
 
     def diff_dist(grid2):                                   # loi de (buts dom - buts ext) : {écart: proba}
         return {d: float(np.trace(grid2, offset=-d)) for d in range(-(N - 1), N)}

@@ -43,11 +43,23 @@ var Alerts = (function () {
     return post({ topic: t, title: 'Test des alertes', message: 'Si tu lis ceci, les alertes sur tes favoris fonctionneront.', tags: ['white_check_mark'] });
   }
 
+  function notify(key, title, msg, tags) {                     // notification immédiate, une seule fois par événement (combo ou pari réglé)
+    var t = topic();
+    if (!t) return Promise.resolve(false);
+    var DK = 'pf-ntfy-done', done = {};
+    try { done = JSON.parse(localStorage.getItem(DK) || '{}') || {}; } catch (e) { done = {}; }
+    if (done[key]) return Promise.resolve(false);
+    done[key] = Date.now();
+    var lim = Date.now() - 14 * 864e5; Object.keys(done).forEach(function (k) { if (done[k] < lim) delete done[k]; });
+    try { localStorage.setItem(DK, JSON.stringify(done)); } catch (e) { /* ignoré */ }
+    return post({ topic: t, title: title, message: msg, tags: tags || ['bell'], priority: 3, click: location.origin + location.pathname }).then(function () { return true; }, function () { return false; });
+  }
+
   function status() {
     var n = Object.keys(sched()).length;
     return topic() ? (n ? n + ' alerte' + (n > 1 ? 's' : '') + ' programmée' + (n > 1 ? 's' : '') + ' (45 min avant le match).' : 'Aucune alerte programmée pour l’instant.') + (note ? ' ' + note : '') : '';
   }
   function clear() { var s = sched(); Object.keys(s).forEach(function (id) { cancel(s[id].mid); }); saveSched({}); setTopic(''); }
 
-  return { topic: topic, setTopic: setTopic, sync: sync, test: test, status: status, clear: clear };
+  return { topic: topic, setTopic: setTopic, sync: sync, notify: notify, test: test, status: status, clear: clear };
 })();

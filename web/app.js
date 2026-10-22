@@ -1793,6 +1793,7 @@
   function alertsPanel() {
     var t = Alerts.topic();
     return '<div class="sec"><span class="dot a"></span>Alertes sur mes favoris</div><div class="fm"><div class="sub">Reçois une notification <b>45 minutes avant</b> chaque match mis en favori (★). ' +
+      'Tu reçois aussi une notification quand un <b>combo débloqué</b> ou un <b>pari</b> est terminé (gagné ou perdu), tant que l’application est ouverte ou en veille récente. ' +
       'Colle ici le nom de ton sujet ntfy, celui auquel ton téléphone est abonné dans l’appli ntfy : il reste <b>sur cet appareil</b> et n’est jamais publié.</div>' +
       '<div class="bt-line"><input id="al-topic" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Nom du sujet ntfy" value="' + esc(t) + '">' +
       '<button class="bt-b" data-alsave>' + (t ? 'Mettre à jour' : 'Activer') + '</button></div>' +
@@ -2191,6 +2192,11 @@
   var ACCESS = [['Pronostics, favoris et ligues', 1, 1, 1], ['Suivi de tes paris et statistiques', 1, 1, 1], ['Synchronisation sur tous tes appareils', 1, 1, 1], ['Tous les combos débloqués (en gratuit : 1 clé par jour)', 0, 1, 1], ['Partage de pronostics illimité (en gratuit : 3 par jour)', 0, 1, 1], ['Gestion des comptes', 0, 0, 1]];
   function pfChanged() { if (!Account.on()) return; clearTimeout(SYNC.timer); SYNC.timer = setTimeout(function () { pfSync(); }, 2500); }
   window.pfChanged = pfChanged; Bets.onChange = pfChanged;
+  Bets.onSettle = function (b) {                                   // pari réglé tout seul : notification (seulement s'il est récent)
+    if (b.d < isoDate(new Date(Date.now() - 864e5))) return;
+    var w = b.st === 'w';
+    Alerts.notify('bet|' + b.id, w ? 'Pari gagné' : 'Pari perdu', (b.label || 'Pari') + ' · ' + (w ? '+' + eur2(b.stake * (b.odds - 1)) : '−' + eur2(b.stake)), [w ? 'tada' : 'x']);
+  };
   function acRefresh() { if ((st.tab === 'account' || st.tab === 'bets') && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } else renderAvatar(); }
   function pfSync() {                                              // récupère la sauvegarde du compte, la fusionne avec cet appareil, puis renvoie le résultat
     if (!Account.on() || Account.state().busy) return Promise.resolve();
@@ -3466,7 +3472,10 @@
   function cmbRes(c) {                                             // true / false / null (en attente) ; mémorisé dès que c'est tranché
     if (c.res !== null && c.res !== undefined) return c.res;
     var rs = c.legs.map(function (l) { return plRes(l); }), r = rs.some(function (x) { return x === false; }) ? false : rs.every(function (x) { return x === true; }) ? true : null;
-    if (r !== null) { c.res = r; cmbSave(); }
+    if (r !== null) {
+      c.res = r; cmbSave();
+      if (c.un) Alerts.notify('cmb|' + c.id, r ? 'Combo réussi ' + c.id : 'Combo raté ' + c.id, (r ? 'Les ' + c.legs.length + ' sélections sont passées.' : 'Une sélection a échoué : ta clé est remboursée.'), [r ? 'white_check_mark' : 'x']);
+    }
     return r;
   }
   function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'admin'; }

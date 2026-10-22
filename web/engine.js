@@ -48,14 +48,14 @@
     var b = gsum(g, function (i, j) { return i > 0 && j > 0; });
     add('Les deux équipes marquent', [['Oui', b], ['Non', 1 - b]]);
     add('Total buts (plus)', [0.5, 1.5, 2.5, 3.5, 4.5].map(function (x) {
-      return ['Plus de ' + fx(x) + ' buts', gsum(g, function (i, j) { return i + j > x; })]; }));
+      return ['Plus de ' + fx(x) + ' buts', gsum(g, function (i, j) { return i + j > x; })]; }), true);
     add('Total buts (moins)', [1.5, 2.5, 3.5, 4.5, 5.5].map(function (x) {
-      return ['Moins de ' + fx(x) + ' buts', gsum(g, function (i, j) { return i + j < x; })]; }));
+      return ['Moins de ' + fx(x) + ' buts', gsum(g, function (i, j) { return i + j < x; })]; }), true);
     [[home, lh], [away, la]].forEach(function (t) {
       add('Buts de ' + t[0] + ' (plus)', [0.5, 1.5, 2.5, 3.5].map(function (x) { return [t[0] + ' plus de ' + fx(x), sf(x, t[1])]; }),
-        false, false, "Buts d'une équipe (plus)");
+        true, false, "Buts d'une équipe (plus)");
       add('Buts de ' + t[0] + ' (moins)', [1.5, 2.5, 3.5].map(function (x) { return [t[0] + ' moins de ' + fx(x), cdf(x - 0.5, t[1])]; }),
-        false, false, "Buts d'une équipe (moins)");
+        true, false, "Buts d'une équipe (moins)");
     });
     add('Pair / impair', [['Total pair', gsum(g, function (i, j) { return (i + j) % 2 === 0; })],
                           ['Total impair', gsum(g, function (i, j) { return (i + j) % 2 === 1; })]]);
@@ -64,7 +64,7 @@
                             ['4 buts ou plus', gsum(g, function (i, j) { return i + j >= 4; })]]);
     add('Handicap -1', [[home + ' gagne par 2+', gsum(g, function (i, j) { return i - j >= 2; })],
                         ["Écart d'un but pour le dom.", gsum(g, function (i, j) { return i - j === 1; })],
-                        [away + ' (+1)', gsum(g, function (i, j) { return i - j <= 0; })]]);
+                        [away + ' (+1)', gsum(g, function (i, j) { return i - j <= 0; })]], true);
     add('Victoire sans encaisser', [[home, gsum(g, function (i, j) { return i > j && j === 0; })],
                                     [away, gsum(g, function (i, j) { return j > i && i === 0; })]]);
 
@@ -97,7 +97,7 @@
     var s = L.ht, ht = grid(s * lh, s * la), sh = grid((1 - s) * lh, (1 - s) * la), names = [home, 'Nul', away];
     var htres = [gsum(ht, function (i, j) { return i > j; }), gsum(ht, function (i, j) { return i === j; }),
                  gsum(ht, function (i, j) { return i < j; })];
-    add('Résultat à la mi-temps', names.map(function (n, i) { return [n, htres[i]]; }));
+    add('Résultat à la mi-temps', names.map(function (n, i) { return [n, htres[i]]; }), true);
     function res(d) { return d > 0 ? 0 : d === 0 ? 1 : 2; }
     function dd(gr) {
       var o = {};
