@@ -893,8 +893,9 @@
   /* marchés des autres sports : trois onglets internes (Résumé, Sûrs, Moins sûrs) au lieu d'une liste unique interminable */
   function sportTabs(d, safe, less) {
     var wrap = function (r) { return { m: r.m, s: r.s, p: r.p, v: r.v, f: { sels: r.sels } }; }, tab = st.ptab === 'safe' || st.ptab === 'less' ? st.ptab : 'sum';
+    if (d.div === 'TEN') { safe = safe.filter(bkOk); less = less.filter(bkOk); }
     var all = safe.concat(less).sort(function (a, b) { return b.p - a.p; });
-    var bar = '<div class="ptabs">' + [['sum', 'Résumé', 0], ['safe', 'Sûrs', safe.length], ['less', 'Moins sûrs', less.length]].map(function (c) {
+    var bar = (d.div === 'TEN' ? bkBar() : '') + '<div class="ptabs">' + [['sum', 'Résumé', 0], ['safe', 'Sûrs', safe.length], ['less', 'Moins sûrs', less.length]].map(function (c) {
       return '<button data-ptab="' + c[0] + '" class="' + (tab === c[0] ? 'on' : '') + '">' + c[1] + (c[2] ? '<b>' + c[2] + '</b>' : '') + '</button>'; }).join('') + '</div>';
     var h = bar;
     if (tab === 'safe') h += safe.length ? safe.map(wrap).map(mkRow('g', d)).join('') : '<div class="empty">Aucun pronostic n’atteint le seuil de ' + Math.round(SAFE * 100) + ' %.</div>';
@@ -3589,7 +3590,7 @@
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3615,6 +3616,7 @@
     }
     if (t.hasAttribute('data-xhow')) { st.scroll = window.scrollY; st.detail = { how: 1 }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xkeys')) { xGo('prem'); return; }
+    if (t.hasAttribute('data-xbk')) { BK = a('data-xbk'); try { localStorage.setItem('pf-bk', BK); } catch (err) { /* ignoré */ } render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xper')) { PREM.per = a('data-xper'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xacct')) { xGo('account'); return; }
     if (t.hasAttribute('data-xset')) { xGo('set'); return; }
@@ -3775,6 +3777,27 @@
     it.push(['all', 'À venir', nUpc + ' matchs']);
     days.forEach(function (d) { it.push([d, WD[parseD(d).getDay()], dshort(d)]); });
     return it;
+  }
+
+  /* ---- tennis : choix du bookmaker (n'affiche que les paris qu'il propose ; liste établie d'après ses fiches match, à compléter) */
+  var BK = 'all';
+  try { BK = localStorage.getItem('pf-bk') || 'all'; } catch (e) { BK = 'all'; }
+  var BKM = { 'Vainqueur du match': 'wb', 'Handicap sets': 'wb', 'Total sets': 'wb', 'Écart de jeux': 'wb', 'Nombre de jeux de': 'wb', 'Vainqueur du 1er set': 'wb', 'Vainqueur du 2e set': 'wb',
+    'au moins un set': 'wb', 'Résultat après 2 jeux': 'w', 'Résultat après 4 jeux': 'w', 'Résultat après 6 jeux': 'w', 'Premier joueur à réaliser un break': 'w', 'Résultat 1er set / match': 'wb',
+    'Total jeux du match': 'wb', 'Total jeux du 1er set': 'wb', 'Écart de jeux du 1er set': 'wb', 'Tie-break dans le match': 'b', 'Un set à 6-0': 'wb', 'Score exact du 1er set': 'wb',
+    'Nombre exact de sets': 'wb', 'Score en sets': 'wb', 'Les deux joueurs gagnent un set': 'b', 'Vainqueur et les deux joueurs gagnent un set': 'b', 'exactement 1 set': 'b',
+    'Vainqueur et nombre de jeux': 'wb', '1er set - Vainqueur et nombre de jeux': 'b', '1er set - Score exact multi choix': 'b', 'Perd le 1er set et gagne le match': 'b' };
+  function bkKey(m) {
+    if (/ remporte au moins un set$/.test(m)) return 'au moins un set';
+    if (/ gagne exactement 1 set$/.test(m)) return 'exactement 1 set';
+    if (/^Nombre de jeux de /.test(m)) return 'Nombre de jeux de';
+    return m;
+  }
+  function bkOk(r) { if (BK === 'all') return true; var v = BKM[bkKey(r.m)]; return !!v && v.indexOf(BK === 'winamax' ? 'w' : 'b') >= 0; }
+  function bkBar() {
+    return '<div class="xchips bkbar"><span class="bkl">Paris proposés chez</span>' + [['all', 'Tous'], ['winamax', 'Winamax'], ['betclic', 'Betclic']].map(function (x) {
+      return '<button class="xchip' + (BK === x[0] ? ' on' : '') + '" data-xbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      (BK !== 'all' ? '<div class="sub">Liste établie d’après les fiches match de ce bookmaker : elle peut être incomplète, et il peut en changer. Les probabilités ne dépendent pas du bookmaker.</div>' : '');
   }
 
   /* ------------------------------------------------------------ navigation */
