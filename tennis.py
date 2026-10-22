@@ -331,7 +331,10 @@ def families(a, b, p, bo, tour="ATP"):
         F.append((nm, [[n_, v_] for n_, v_ in sels], False, nm == "Score exact du 1er set"))
     ns = sorted({x + y for (x, y) in sc})
     F.append(("Nombre exact de sets", [[f"{n_} sets", tot(lambda x, y, n_=n_: x + y == n_)] for n_ in ns], False, False))
-    cells = sorted(sc.items(), key=lambda kv: -kv[1])[:3]
+    for who in (a, b):
+        pw = tot((lambda x, y: x >= 1) if who == a else (lambda x, y: y >= 1))
+        F.append((f"{who} remporte au moins un set", [["Oui", pw], ["Non", 1 - pw]], False, False))
+    cells = sorted(sc.items(), key=lambda kv: -kv[1])
     F.append(("Score en sets", [[(a if x > y else b) + f" {max(x, y)}-{min(x, y)}", v] for (x, y), v in cells], False, True))
     return F
 
@@ -508,7 +511,7 @@ def build(now, days=5):
     return dict(matches=items, bt=bt, model=model, generated=f"{now:%d/%m/%Y à %H:%M}")
 
 
-UNSETTLED = {"Premier joueur à réaliser un break", "Résultat après 6 jeux"}          # impossibles à vérifier avec le seul score final (pas de données point par point)
+UNSETTLED = {"Premier joueur à réaliser un break", "Résultat après 2 jeux", "Résultat après 4 jeux", "Résultat après 6 jeux"}          # impossibles à vérifier avec le seul score final (pas de données point par point)
 
 
 def _won(rec, raw, F, a_sets, b_sets):
@@ -538,6 +541,13 @@ def _won(rec, raw, F, a_sets, b_sets):
         w1 = a if f0[0] > f0[1] else b
         if rec["m"] == "Vainqueur du 1er set":
             return s == w1
+        if rec["m"] == "Vainqueur du 2e set":
+            return len(sets) > 1 and s == (a if sets[1][0] > sets[1][1] else b)
+        if rec["m"] == "Écart de jeux du 1er set":
+            parts = s.rsplit(" ", 2)
+            val = float(parts[1][1:].replace(",", "."))
+            dd = (f0[0] - f0[1]) if parts[0] == a else (f0[1] - f0[0])
+            return dd > val if parts[1][0] == "-" else dd > -val
         if rec["m"] == "Résultat 1er set / match":
             x, y = s.split(" au 1er set et ")
             return x == w1 and y.removesuffix(" le match") == (a if raw["win"] == 0 else b)
@@ -558,6 +568,9 @@ def _won(rec, raw, F, a_sets, b_sets):
             return bool(m) and m.group(1) == w1 and max(f0) == int(m.group(2)) and min(f0) == int(m.group(3))
     if rec["m"] == "Nombre exact de sets":
         return a_sets + b_sets == int(s.split()[0])
+    if rec["m"].endswith(" remporte au moins un set"):
+        who = rec["m"][: -len(" remporte au moins un set")]
+        return (s == "Oui") == ((a_sets if who == a else b_sets) >= 1)
     if rec["m"] == "Total sets":
         n = a_sets + b_sets
         ln = float(re.search(r"(\d,\d)", s).group(1).replace(",", "."))

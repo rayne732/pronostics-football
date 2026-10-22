@@ -160,12 +160,16 @@ def _first_break(sa, sb):
 
 
 def _after6(sa, sb):
-    """(A devant, égalité, B devant) après 6 jeux du premier set."""
+    return _after_n(sa, sb, 6)
+
+
+def _after_n(sa, sb, N):
+    """(A devant, égalité, B devant) après N jeux du premier set."""
     hold_a, hold_b = _game(sa), _game(sb)
     res = [0.0, 0.0, 0.0]
     for a_first in (True, False):
         cur = {0: 1.0}                                # écart de jeux
-        for n in range(6):
+        for n in range(N):
             a_serves = (n % 2 == 0) == a_first
             pw = hold_a if a_serves else 1 - hold_b
             nxt = {}
@@ -225,7 +229,7 @@ def extras(p, bo, tour):
         lo, hi = (d, hi) if pa < pp else (lo, d)
     d = (lo + hi) / 2
     ga, gb, diff = {}, {}, {}
-    fb, six = [0.0, 0.0], [0.0, 0.0, 0.0]
+    fb, six, two, four = [0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     R = dict(set1={}, tt={}, tb={}, tb1=0.0, bg=0.0, f1m={})
     for z, w in ((-tau, 0.25), (0.0, 0.5), (tau, 0.25)):
         sa, sb = base + d + z, base - d - z
@@ -251,7 +255,10 @@ def extras(p, bo, tour):
         fb = [fb[0] + w * f[0], fb[1] + w * f[1]]
         a6 = _after6(sa, sb)
         six = [six[m] + w * a6[m] for m in range(3)]
-    _EX[k] = dict(diff=diff, ga=ga, gb=gb, fb=tuple(fb), six=tuple(six), **R)
+        a2, a4 = _after_n(sa, sb, 2), _after_n(sa, sb, 4)
+        two = [two[m] + w * a2[m] for m in range(3)]
+        four = [four[m] + w * a4[m] for m in range(3)]
+    _EX[k] = dict(diff=diff, ga=ga, gb=gb, fb=tuple(fb), six=tuple(six), two=tuple(two), four=tuple(four), **R)
     return _EX[k]
 
 
@@ -261,6 +268,8 @@ def extra_families(a, b, p, bo, tour):
     out = []
     out.append(("Écart de jeux", handicap_sels(a, b, p, bo, tour)))
     out.append(("Premier joueur à réaliser un break", [(a, E["fb"][0]), (b, E["fb"][1])]))
+    out.append(("Résultat après 2 jeux", [(a, E["two"][0]), ("Match nul", E["two"][1]), (b, E["two"][2])]))
+    out.append(("Résultat après 4 jeux", [(a, E["four"][0]), ("Match nul", E["four"][1]), (b, E["four"][2])]))
     out.append(("Résultat après 6 jeux", [(a, E["six"][0]), ("Match nul", E["six"][1]), (b, E["six"][2])]))
     for who, G in ((a, E["ga"]), (b, E["gb"])):
         mean = sum(g * v for g, v in G.items())
@@ -275,6 +284,16 @@ def extra_families(a, b, p, bo, tour):
     s1 = E["set1"]
     pa1 = sum(v for (i, j), v in s1.items() if i > j)
     out.append(("Vainqueur du 1er set", [(a, pa1), (b, 1 - pa1)]))
+    out.append(("Vainqueur du 2e set", [(a, pa1), (b, 1 - pa1)]))                  # les sets ont la même loi : le 2e set se gagne comme le 1er
+    d1 = {}
+    for (i, j), v in s1.items():
+        d1[i - j] = d1.get(i - j, 0) + v
+    hs = []
+    for h in (1.5, 2.5, 3.5):
+        t = f"{h:g}".replace(".", ",")
+        hs += [(f"{a} -{t} jeux", sum(v for k, v in d1.items() if k > h)), (f"{b} +{t} jeux", sum(v for k, v in d1.items() if k < h)),
+               (f"{b} -{t} jeux", sum(v for k, v in d1.items() if k < -h)), (f"{a} +{t} jeux", sum(v for k, v in d1.items() if k > -h))]
+    out.append(("Écart de jeux du 1er set", hs))
     out.append(("Résultat 1er set / match", [(f"{x} au 1er set et {y} le match", E["f1m"].get((1 if x == a else 2, 1 if y == a else 2), 0.0)) for x in (a, b) for y in (a, b)]))
     mean = sum(k * v for k, v in E["tt"].items())
     c = math.floor(mean) + 0.5
