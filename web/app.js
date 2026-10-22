@@ -824,24 +824,22 @@
     return countdown({ date: m.date, time: m.time });
   }
   function tnRow(m) {
-    var res = '';
-    if (m.state === 'post') {
-      res = '<div class="tres">' + esc((m.sets || []).join('  ')) + (m.win != null ? ' · <b>' + esc(m.win ? m.b : m.a) + '</b>' : '') + '</div>';
-    }
-    var tag = m.state === 'post' && m.hit != null ? '<span class="cfp ' + (m.hit ? 'high' : 'low') + '">' + svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté') + '</span>' :
-      m.known ? '<span class="cfp ' + m.conf + '">' + pct(m.fav) + ' · ' + esc(last(m.favName)) + '</span>' : '<span class="cfp low">Peu d’historique</span>';
-    return '<div class="mrow ' + m.conf + '"><div class="tm">' + esc(m.time) + '<small>' + (m.state === 'pre' ? dm(m.date) : tnState(m)) + '</small></div>' +
-      '<div class="tt">' + tnPlayer(m.a, m.fa) + tnPlayer(m.b, m.fb) + res + '</div>' +
-      '<div class="act">' + tag + '<button class="voir ' + m.conf + '" data-tnopen="' + m.i + '">Voir' + svg(IC.chev) + '</button></div>' +
-      '<div class="mb"><i class="h" style="width:' + m.p * 100 + '%"></i><i class="a" style="width:' + (1 - m.p) * 100 + '%"></i></div></div>';
+    var post = m.state === 'post', lv = m.state === 'in', o = { open: 'data-tnopen="' + m.i + '"', a: m.a, b: m.b, conf: m.known ? m.conf : '' };
+    o.left = post ? 'FIN' : lv ? 'Live' : m.time; o.sub = post || lv ? m.time : dm(m.date); o.lv = lv; o.dn = post;
+    if (post) o.extra = '<div class="xres">' + esc((m.sets || []).join('  ')) + (m.win != null ? ' · <b>' + esc(m.win ? m.a : m.b) + '</b>' : '') + '</div>';
+    if (post && m.hit != null) { o.tag = svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté'); o.tagCls = m.hit ? 'ok' : 'ko'; o.btn = ['Bilan', m.hit ? 'g' : 'r']; }
+    else if (post) { o.tag = m.retired ? 'Abandon' : 'Terminé'; o.btn = ['Bilan', 'n']; }
+    else if (lv) { o.tag = '<i></i>EN DIRECT'; o.tagCls = 'lv'; o.btn = ['Live', 'm']; }
+    else if (m.known) { o.tag = '<i></i>%' + Math.round(m.fav * 100) + ' ' + xLabel(m); o.tagCls = m.conf; o.btn = xBtn(m); }
+    else { o.tag = 'Peu d’historique'; o.tagCls = 'low'; o.btn = ['Voir', 'n']; }
+    return xgen(o);
   }
   function tnGroups(list) {
     var h = '', seen = {}, order = [];
     list.forEach(function (m) { var k = m.tour + '|' + m.tn; if (!seen[k]) { seen[k] = []; order.push(k); } seen[k].push(m); });
     order.forEach(function (k) {
       var g = seen[k], m0 = g[0];
-      h += '<div class="lgh"><span class="lb" style="--lc:' + (m0.tour === 'ATP' ? '#2f6bdc' : '#d6479a') + '">🎾</span><div class="ln">' + esc(m0.tn) +
-        '<small>' + m0.tour + ' · ' + esc(SURF[m0.surf] || m0.surf) + (m0.city ? ' · ' + esc(m0.city) : '') + '</small></div><span class="cnt">' + g.length + '</span></div>' + g.map(tnRow).join('');
+      h += xgHead('🎾', m0.tn, m0.tour + ' · ' + (SURF[m0.surf] || m0.surf) + (m0.city ? ' · ' + m0.city : ''), g.length) + g.map(tnRow).join('');
     });
     return h;
   }
@@ -862,16 +860,10 @@
     var days = [];
     upc.forEach(function (m) { if (days.indexOf(m.date) < 0) days.push(m.date); });
     var b = tnBilan(known), nHigh = known.filter(function (m) { return m.state !== 'post' && m.conf === 'high'; }).length;
-    h += '<div class="pulse"><div><b>' + known.filter(function (m) { return m.state !== 'post'; }).length + '</b><span>matchs à venir</span></div><div class="hi"><b>' + nHigh +
-      '</b><span>haute confiance</span></div><div><b>' + (b.n ? b.ok + '/' + b.n : '–') + '</b><span>vainqueurs justes</span></div></div>';
-    h += '<div class="chips">';
-    if (res.length) h += '<button class="chip past' + (T.day === 'res' ? ' on' : '') + '" data-tnday="res">Résultats<b>' + svg(IC.check) + ' ' + res.length + '</b></button>';
-    h += '<button class="chip' + (T.day === 'all' ? ' on' : '') + '" data-tnday="all">À venir<b>' + upc.length + ' matchs</b></button>';
-    days.forEach(function (d) { h += '<button class="chip' + (T.day === d ? ' on' : '') + '" data-tnday="' + d + '">' + WD[parseD(d).getDay()] + '<b>' + dm(d) + '</b></button>'; });
-    h += '</div><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher un joueur" autocomplete="off" value="' + esc(st.q) + '"></label></div>';
-    h += '<div class="chips">' + [['all', 'Tous'], ['ATP', 'ATP'], ['WTA', 'WTA']].map(function (x) {
-      return '<button class="chip pill' + (T.tour === x[0] ? ' on' : '') + '" data-tntour="' + x[0] + '">' + x[1] + '</button>'; }).join('') +
-      (nUnk ? '<button class="chip pill' + (T.unk ? ' on' : '') + '" data-tnunk>+ ' + nUnk + ' sans historique</button>' : '') + '</div>';
+    h += xBanner(known.filter(function (m) { return m.state !== 'post'; }).length) + xStrip(xDayItems(days, res.length, upc.length), T.day, 'data-tnday-x');
+    h += xSearch('Chercher un joueur');
+    h += xPills([['all', 'Tous'], ['ATP', 'ATP'], ['WTA', 'WTA']], T.tour, 'data-tntour-x');
+    if (nUnk) h += '<div class="xchips"><button class="xchip' + (T.unk ? ' on' : '') + '" data-tnunk>+ ' + nUnk + ' sans historique</button></div>';
     if (T.day === 'res') {
       h += '<div class="srcnote"><b>Hier et aujourd’hui</b> : ' + (b.n ? 'vainqueur correct ' + b.ok + '/' + b.n + (b.sp ? ' · pronostics sûrs gagnés ' + b.sw + '/' + b.sp : '') + '. ' : '') +
         'Chaque pronostic est calculé avec les données d’avant le match.</div>';
@@ -1035,26 +1027,29 @@
   function spWinner(m) { return m.hs > m.as_ ? m.home : m.as_ > m.hs ? m.away : 'Match nul'; }
   function spState(m) { return m.state === 'post' ? 'Terminé' : m.state === 'in' ? 'En cours' : countdown({ date: m.date, time: m.time }); }
   function spRow(S, m) {
-    var post = m.state === 'post' && (m.hs != null || !!m.res);
-    var res = post ? (m.res ? '<div class="tres"><b>' + esc(m.res) + '</b></div>' : '<div class="tres">' + m.hs + ' – ' + m.as_ + ' · <b>' + esc(spWinner(m)) + '</b>' + (m.ot ? ' (prolong.)' : '') + '</div>') : '';
-    var tag = post && m.hit != null ? '<span class="cfp ' + (m.hit ? 'high' : 'low') + '">' + svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté') + '</span>' :
-      m.known ? '<span class="cfp ' + m.conf + '">' + pct(m.fav) + ' · ' + esc(last(m.favName)) + '</span>' : '<span class="cfp low">' + (m.pre ? 'Présaison' : 'Peu d’historique') + '</span>';
-    return '<div class="mrow ' + m.conf + '"><div class="tm">' + esc(m.time) + '<small>' + (m.state === 'pre' ? dm(m.date) : spState(m)) + '</small></div>' +
-      '<div class="tt">' + tn(m.home) + tn(m.away) + res + '</div>' +
-      '<div class="act">' + tag + '<button class="voir ' + m.conf + '" data-spopen="' + S.sid + '|' + m.i + '">Voir' + svg(IC.chev) + '</button></div>' + miniBar(m.p3) + '</div>';
+    var post = m.state === 'post' && (m.hs != null || !!m.res), lv = m.state === 'in', o = { open: 'data-spopen="' + S.sid + '|' + m.i + '"', a: m.home, b: m.away, conf: m.known ? m.conf : '' };
+    o.left = post ? 'FIN' : lv ? 'Live' : m.time; o.sub = post || lv ? m.time : dm(m.date); o.lv = lv; o.dn = post;
+    if (post && m.hs != null) { o.sa = m.hs; o.sb = m.as_; }
+    if (post && m.res) o.extra = '<div class="xres">' + esc(m.res) + '</div>';
+    if (post && m.hit != null) { o.tag = svg(m.hit ? IC.check : IC.x) + (m.hit ? 'Bien vu' : 'Raté'); o.tagCls = m.hit ? 'ok' : 'ko'; o.btn = ['Bilan', m.hit ? 'g' : 'r']; }
+    else if (post) { o.tag = 'Terminé'; o.btn = ['Bilan', 'n']; }
+    else if (lv) { o.tag = '<i></i>EN DIRECT'; o.tagCls = 'lv'; o.btn = ['Live', 'm']; }
+    else if (m.known) { o.tag = '<i></i>%' + Math.round(m.fav * 100) + ' ' + xLabel(m); o.tagCls = m.conf; o.btn = xBtn(m); }
+    else { o.tag = m.pre ? 'Présaison' : 'Peu d’historique'; o.tagCls = 'low'; o.btn = ['Voir', 'n']; }
+    return xgen(o);
   }
   function spGroups(S, list) {
     var h = '', L = spLeagues(S);
     if (S.cfg.groupKey) {                                   // regroupement par événement (MMA : une soirée = un groupe)
       var seen = {}, order = [];
       list.forEach(function (m) { var k = S.cfg.groupKey(m); if (!seen[k]) { seen[k] = []; order.push(k); } seen[k].push(m); });
-      order.forEach(function (k) { h += '<div class="lgh"><span class="lb" style="--lc:' + Object.values(L)[0][1] + '">' + S.cfg.icon + '</span><div class="ln">' + esc(k) + '<small>' + dm(seen[k][0].date) + '</small></div><span class="cnt">' + seen[k].length + '</span></div>' + seen[k].map(function (m) { return spRow(S, m); }).join(''); });
+      order.forEach(function (k) { h += xgHead(S.cfg.icon, k, dm(seen[k][0].date), seen[k].length) + seen[k].map(function (m) { return spRow(S, m); }).join(''); });
       return h;
     }
     Object.keys(L).forEach(function (lg) {
       var g = list.filter(function (m) { return String(m.lg) === lg; });
       if (!g.length) return;
-      h += '<div class="lgh"><span class="lb" style="--lc:' + L[lg][1] + '">' + S.cfg.icon + '</span><div class="ln">' + esc(L[lg][0]) + '<small>' + esc(g[0].label || '') + '</small></div><span class="cnt">' + g.length + '</span></div>' + g.map(function (m) { return spRow(S, m); }).join('');
+      h += xgHead(S.cfg.icon, L[lg][0], g[0].label || '', g.length) + g.map(function (m) { return spRow(S, m); }).join('');
     });
     return h;
   }
@@ -1082,15 +1077,9 @@
     var done = res.filter(function (m) { return m.hit != null; }), ok = done.filter(function (m) { return m.hit; }).length, sp = 0, sw = 0;
     done.forEach(function (m) { (m.picks || []).forEach(function (p) { if (p.t === 0) { sp++; if (p.h) sw++; } }); });
     var nHigh = upc.filter(function (m) { return m.conf === 'high'; }).length, id = S.sid;
-    h += '<div class="pulse"><div><b>' + upc.length + '</b><span>matchs à venir</span></div><div class="hi"><b>' + nHigh + '</b><span>haute confiance</span></div><div><b>' +
-      (done.length ? ok + '/' + done.length : '–') + '</b><span>vainqueurs justes</span></div></div>';
-    h += '<div class="chips">';
-    if (res.length) h += '<button class="chip past' + (T.day === 'res' ? ' on' : '') + '" data-spday="' + id + '|res">Résultats<b>' + svg(IC.check) + ' ' + res.length + '</b></button>';
-    h += '<button class="chip' + (T.day === 'all' ? ' on' : '') + '" data-spday="' + id + '|all">À venir<b>' + upc.length + ' matchs</b></button>';
-    days.forEach(function (x) { h += '<button class="chip' + (T.day === x ? ' on' : '') + '" data-spday="' + id + '|' + x + '">' + WD[parseD(x).getDay()] + '<b>' + dm(x) + '</b></button>'; });
-    h += '</div><div class="tools"><label class="search">' + svg(IC.search) + '<input id="q" type="search" placeholder="Chercher une équipe" autocomplete="off" value="' + esc(st.q) + '"></label></div>';
-    if (keys.length > 1) h += '<div class="chips">' + [['all', 'Tous']].concat(keys.map(function (k) { return [k, L[k][0]]; })).map(function (x) {
-      return '<button class="chip pill' + (T.lg === x[0] ? ' on' : '') + '" data-splg="' + id + '|' + x[0] + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>';
+    h += xBanner(upc.filter(function (m) { return m.known; }).length) + xStrip(xDayItems(days, res.length, upc.length), T.day, 'data-spday-x');
+    h += xSearch('Chercher une équipe');
+    if (keys.length > 1) h += xPills([['all', 'Tous']].concat(keys.map(function (k) { return [k, L[k][0]]; })), T.lg, 'data-splg-x');
     if (T.day === 'res') {
       h += '<div class="srcnote"><b>Résultats récents</b> : ' + (done.length ? 'vainqueur correct ' + ok + '/' + done.length + (sp ? ' · pronostics sûrs gagnés ' + sw + '/' + sp : '') + '. ' : '') +
         'Chaque pronostic est calculé avec les données d’avant le match.</div>';
@@ -3589,6 +3578,16 @@
     if (Alerts.topic()) Alerts.sync(favItems(), true).then(function () { if (st.tab === 'fav' && !st.detail) xRefresh(); });
   }
   function xGo(tab) { st.tab = tab; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0); }
+  app.addEventListener('click', function (e) {                    // bandeaux des autres sports -> gestionnaires existants
+    var t = e.target.closest('[data-spday-x],[data-splg-x],[data-tnday-x],[data-tntour-x]');
+    if (!t) return;
+    var sid = (st.sport || ''), S0 = spOf(sid);
+    if (t.hasAttribute('data-spday-x')) { S0.ui.day = t.getAttribute('data-spday-x'); }
+    else if (t.hasAttribute('data-splg-x')) { S0.ui.lg = t.getAttribute('data-splg-x'); }
+    else if (t.hasAttribute('data-tnday-x')) { st.tn.day = t.getAttribute('data-tnday-x'); }
+    else if (t.hasAttribute('data-tntour-x')) { st.tn.tour = t.getAttribute('data-tntour-x'); }
+    var y0 = window.scrollY; render(); window.scrollTo(0, y0);
+  });
   app.addEventListener('click', function (e) {
     var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
@@ -3754,6 +3753,29 @@
   }
   var FREE_POSTS = 3;
   function postsToday() { var T = new Date().toDateString(); return (CM.posts || []).filter(function (p) { return p.user_id === Account.uid() && new Date(p.created_at).toDateString() === T; }).length; }
+
+  /* ---- autres sports : mêmes lignes et mêmes bandeaux que le football */
+  function xgen(o) {                                               // o : { left, sub, a, b, sa, sb, lv, dn, conf, tag, tagCls, btn, open, extra }
+    var right = '<span class="xl ' + (o.tagCls || '') + '">' + o.tag + '</span>' + (o.btn ? '<span class="xv ' + o.btn[1] + '">' + o.btn[0] + svg(IC.chev) + '</span>' : '');
+    return '<div class="xr' + (o.lv ? ' live' : o.dn ? ' done' : '') + (o.conf && !o.lv && !o.dn ? ' c-' + o.conf : '') + '" ' + o.open + '><div class="xt"><b class="' + (o.lv ? 'lv' : '') + '">' + esc(o.left) + '</b>' + (o.sub ? '<small>' + esc(o.sub) + '</small>' : '') + '</div>' +
+      '<div class="xm">' + xTeam(o.a, o.sa == null ? null : o.sa, o.lv) + xTeam(o.b, o.sb == null ? null : o.sb, o.lv) + (o.extra || '') + '</div><div class="xa">' + right + '</div></div>';
+  }
+  function xgHead(icon, name, sub, n) { return '<div class="xgh"><span class="xlg"><span class="lbf">' + icon + '</span></span><div class="xgn"><b>' + esc(name) + '</b><small>' + esc(sub) + '</small></div><span class="xcnt">' + n + '</span></div>'; }
+  function xBanner(n) { return '<div class="xban"><i class="bdot"></i><span>Pronostics prêts pour <b>' + n + '</b> matchs</span></div>'; }
+  function xStrip(items, cur, attr) {                              // items : [[valeur, titre, sous-titre]]
+    return '<div class="xdays">' + items.map(function (x) { return '<button class="xd' + (cur === x[0] ? ' on' : '') + '" ' + attr + '="' + esc(x[0]) + '"><small>' + esc(x[1]) + '</small><b>' + esc(x[2]) + '</b></button>'; }).join('') + '</div>';
+  }
+  function xPills(list, cur, attr) { return '<div class="xchips">' + list.map(function (x) { return '<button class="xchip' + (cur === x[0] ? ' on' : '') + '" ' + attr + '="' + esc(x[2] || x[0]) + '">' + esc(x[1]) + '</button>'; }).join('') + '</div>'; }
+  function xSearch(ph) { return '<label class="xsearch">' + svg(IC.search) + '<input id="q" type="search" placeholder="' + ph + '" autocomplete="off" value="' + esc(st.q) + '"></label>'; }
+  function xLabel(m) { return m.conf === 'high' ? 'Haute Confiance' : m.conf === 'mid' ? 'Confiance moyenne' : 'Match ouvert'; }
+  function xBtn(m) { return [m.conf === 'high' ? svg(IC.flame2) + 'Voir' : 'Voir', m.conf === 'high' ? 'g' : m.conf === 'mid' ? 'a' : 'n']; }
+  function xDayItems(days, nRes, nUpc) {
+    var it = [];
+    if (nRes) it.push(['res', 'Résultats', '✓ ' + nRes]);
+    it.push(['all', 'À venir', nUpc + ' matchs']);
+    days.forEach(function (d) { it.push([d, WD[parseD(d).getDay()], dshort(d)]); });
+    return it;
+  }
 
   /* ------------------------------------------------------------ navigation */
   function navCount(today) {                                  // petite pastille sur l'onglet : matchs de foot du jour / favoris à venir

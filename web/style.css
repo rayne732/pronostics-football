@@ -1170,3 +1170,5 @@ button.chip small{display:block}
 .pfr{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line)}.pfr:last-child{border-bottom:0}.pfr span:nth-child(2){flex:1}.pfr small{color:var(--mute);font-weight:700}.pfr.pm small{color:var(--purple)}
 .prb{display:block;width:100%;margin:6px 0;padding:16px;font-size:.95rem;opacity:.55}
 .sports{margin-bottom:12px}.xhd + .sports{margin-top:-2px}
+
+.xt small{font-size:.68rem;color:var(--mute)}.xres{font-size:.82rem;color:var(--mute);padding-left:34px}.xres b{color:var(--ink)}
