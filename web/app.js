@@ -489,12 +489,8 @@
       'Chaque sport demande son propre modèle et son propre test de fiabilité avant d’afficher des pronostics. Je ne publie pas de probabilités non vérifiées. ' +
       'Le <b>tennis</b> est le prochain sur la liste.</div>';
   }
-  function brand() {
-    var dark = curTheme() === 'dark', S = spOf(st.sport), key = S ? S.cfg.key : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'f1' : st.sport === 'golf' ? 'golf' : null;
-    var title = S ? S.cfg.title : st.sport === 'tennis' ? 'tennis' : st.sport === 'f1' ? 'Formule 1' : st.sport === 'golf' ? 'golf' : 'football', gen = key && D[key] && D[key].generated ? D[key].generated : D.generated;
-    return '<div class="brand"><div class="logo">' + LOGO + '</div><div class="bt"><h1>Pronostics ' + title + '</h1><small>Mis à jour le ' + esc(gen) + '</small></div>' +
-      '<button class="ibtn" data-toggle-theme aria-label="Thème : ' + (THEME === 'auto' ? 'automatique (clair de 8 h à 20 h)' : dark ? 'sombre' : 'clair') + '. Toucher pour changer" title="' + (THEME === 'auto' ? 'Thème automatique' : dark ? 'Thème sombre' : 'Thème clair') + '">' + (THEME === 'auto' ? svg(IC.auto) : svg(dark ? IC.sun : IC.moon)) + (THEME === 'auto' ? '<i class="ibadge">A</i>' : '') + '</button></div>' +
-      (st.sport === 'foot' && !S ? Books.bar(st.bkopen) : '');
+  function brand() {                                       // en-tête commun de l'onglet Découvrir (tous sports)
+    return '<header class="xhd">' + XLOGO.replace('xbrand', 'xbrand lft') + '<span class="xsp"></span><button class="xib" data-xset aria-label="Réglages">' + svg(IC.gear) + '</button><button class="xib" data-xbell aria-label="Alertes">' + svg(IC.bell) + '</button>' + xAvatar() + '</header>';
   }
   function pastDates() {                                    // dates des matchs terminés récents (la plus récente d'abord)
     var seen = {}, out = [];
@@ -3376,7 +3372,7 @@
     var T = parisToday(), days = xDays(), yd = addDays(T, -1);
     if (!X.day) X.day = T;
     var custom = days.indexOf(X.day) < 0 && X.day !== yd;
-    var h = '<header class="xhd">' + XLOGO.replace('xbrand', 'xbrand lft') + '<span class="xsp"></span><button class="xib" data-xset aria-label="Réglages">' + svg(IC.gear) + '</button><button class="xib" data-xbell aria-label="Alertes">' + svg(IC.bell) + '</button>' + xAvatar() + '</header>';
+    var h = brand() + sportsBar();
     h += '<div class="xdays"><label class="xd cal' + (X.day === yd || custom ? ' on' : '') + '">' + svg(IC.cal) + '<span>' + dshort(custom ? X.day : yd) + '</span><input type="date" data-xdp value="' + esc(X.day) + '" aria-label="Choisir une date"></label>' +
       days.map(function (d, i) { return '<button class="xd' + (X.day === d ? ' on' : '') + '" data-xday="' + d + '"><small>' + (i === 0 ? 'Aujourd’hui' : WD[parseD(d).getDay()]) + '</small><b>' + dshort(d) + '</b></button>'; }).join('') + '</div>';
     var all = xAllMatches(addDays(T, -2)).filter(function (m) { return m.date === X.day; });
