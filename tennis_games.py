@@ -230,7 +230,7 @@ def extras(p, bo, tour):
     d = (lo + hi) / 2
     ga, gb, diff = {}, {}, {}
     fb, six, two, four = [0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
-    R = dict(set1={}, tt={}, tb={}, tb1=0.0, bg=0.0, f1m={})
+    R = dict(set1={}, tt={}, ttw={}, tb={}, tb1=0.0, bg=0.0, f1m={})
     for z, w in ((-tau, 0.25), (0.0, 0.5), (tau, 0.25)):
         sa, sb = base + d + z, base - d - z
         for (i, j), v in _full_dist(sa, sb, bo).items():
@@ -244,6 +244,8 @@ def extras(p, bo, tour):
                 R["tb1"] += w * v
         for (x, y, k), v in r["tt"].items():
             R["tt"][k] = R["tt"].get(k, 0) + w * v
+            kw = (1 if x > y else 2, k)
+            R["ttw"][kw] = R["ttw"].get(kw, 0) + w * v
         for (x, y, k), v in r["tb"].items():
             R["tb"][k] = R["tb"].get(k, 0) + w * v
         for (x, y, k), v in r["bg"].items():
@@ -304,6 +306,26 @@ def extra_families(a, b, p, bo, tour):
         t = f"{ln:g}".replace(".", ",")
         sels += [(f"Plus de {t} jeux", over), (f"Moins de {t} jeux", 1 - over)]
     out.append(("Total jeux du match", sels))
+    sels = []
+    for k in (-1, 0, 1):
+        ln = c + k
+        t = f"{ln:g}".replace(".", ",")
+        for who, wi in ((a, 1), (b, 2)):
+            over = sum(v for (w_, g), v in E["ttw"].items() if w_ == wi and g > ln)
+            under = sum(v for (w_, g), v in E["ttw"].items() if w_ == wi and g < ln)
+            sels += [(f"{who} & Plus de {t} jeux", over), (f"{who} & Moins de {t} jeux", under)]
+    out.append(("Vainqueur et nombre de jeux", sels))
+    sels = []
+    for ln in (8.5, 9.5, 10.5):
+        t = f"{ln:g}".replace(".", ",")
+        for who, win in ((a, lambda i, j: i > j), (b, lambda i, j: j > i)):
+            sels += [(f"{who} & Plus de {t} jeux", sum(v for (i, j), v in s1.items() if win(i, j) and i + j > ln)),
+                     (f"{who} & Moins de {t} jeux", sum(v for (i, j), v in s1.items() if win(i, j) and i + j < ln))]
+    out.append(("1er set - Vainqueur et nombre de jeux", sels))
+    groups = (("6-0, 6-1, 6-2", lambda m, n: m == 6 and n <= 2), ("6-3, 6-4", lambda m, n: m == 6 and n in (3, 4)), ("7-5, 7-6", lambda m, n: m == 7))
+    out.append(("1er set - Score exact multi choix", [(f"{who} {lab}", sum(v for (i, j), v in s1.items() if (i > j) == (who == a) and f(max(i, j), min(i, j))))
+                                                     for who in (a, b) for lab, f in groups]))
+    out.append(("Perd le 1er set et gagne le match", [(a, E["f1m"].get((2, 1), 0.0)), (b, E["f1m"].get((1, 2), 0.0))]))
     sels = []
     for ln in (8.5, 9.5, 10.5):
         over = sum(v for (i, j), v in s1.items() if i + j > ln)

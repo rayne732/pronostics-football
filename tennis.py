@@ -331,6 +331,12 @@ def families(a, b, p, bo, tour="ATP"):
         F.append((nm, [[n_, v_] for n_, v_ in sels], False, nm == "Score exact du 1er set"))
     ns = sorted({x + y for (x, y) in sc})
     F.append(("Nombre exact de sets", [[f"{n_} sets", tot(lambda x, y, n_=n_: x + y == n_)] for n_ in ns], False, False))
+    p3 = tot(lambda x, y: min(x, y) >= 1)
+    F.append(("Les deux joueurs gagnent un set", [["Oui", p3], ["Non", 1 - p3]], False, False))
+    F.append(("Vainqueur et les deux joueurs gagnent un set", [[a, tot(lambda x, y: x > y and y >= 1)], [b, tot(lambda x, y: y > x and x >= 1)]], False, False))
+    for who in (a, b):
+        pe = tot((lambda x, y: x == 1) if who == a else (lambda x, y: y == 1))
+        F.append((f"{who} gagne exactement 1 set", [["Oui", pe], ["Non", 1 - pe]], False, False))
     for who in (a, b):
         pw = tot((lambda x, y: x >= 1) if who == a else (lambda x, y: y >= 1))
         F.append((f"{who} remporte au moins un set", [["Oui", pw], ["Non", 1 - pw]], False, False))
@@ -568,6 +574,30 @@ def _won(rec, raw, F, a_sets, b_sets):
             return bool(m) and m.group(1) == w1 and max(f0) == int(m.group(2)) and min(f0) == int(m.group(3))
     if rec["m"] == "Nombre exact de sets":
         return a_sets + b_sets == int(s.split()[0])
+    if rec["m"] == "Les deux joueurs gagnent un set":
+        return (s == "Oui") == (min(a_sets, b_sets) >= 1)
+    if rec["m"] == "Vainqueur et les deux joueurs gagnent un set":
+        return s == (a if raw["win"] == 0 else b) and min(a_sets, b_sets) >= 1
+    if rec["m"].endswith(" gagne exactement 1 set"):
+        who = rec["m"][: -len(" gagne exactement 1 set")]
+        return (s == "Oui") == ((a_sets if who == a else b_sets) == 1)
+    if rec["m"] == "Vainqueur et nombre de jeux" and sets:
+        who, rest = s.split(" & ", 1)
+        ln = float(re.search(r"(\d+,\d)", rest).group(1).replace(",", "."))
+        g = sum(x + y for x, y in sets)
+        return who == (a if raw["win"] == 0 else b) and (g > ln if rest.startswith("Plus") else g < ln)
+    if rec["m"] == "1er set - Vainqueur et nombre de jeux" and sets:
+        who, rest = s.split(" & ", 1)
+        ln = float(re.search(r"(\d+,\d)", rest).group(1).replace(",", "."))
+        return who == w1 and (sets[0][0] + sets[0][1] > ln if rest.startswith("Plus") else sets[0][0] + sets[0][1] < ln)
+    if rec["m"] == "1er set - Score exact multi choix" and sets:
+        for lab in ("6-0, 6-1, 6-2", "6-3, 6-4", "7-5, 7-6"):
+            if s.endswith(" " + lab):
+                scores = {tuple(int(v) for v in z.split("-")) for z in lab.split(", ")}
+                return s[: -len(lab) - 1] == w1 and (max(sets[0]), min(sets[0])) in scores
+        return False
+    if rec["m"] == "Perd le 1er set et gagne le match" and sets:
+        return s == (a if raw["win"] == 0 else b) and s != w1
     if rec["m"].endswith(" remporte au moins un set"):
         who = rec["m"][: -len(" remporte au moins un set")]
         return (s == "Oui") == ((a_sets if who == a else b_sets) >= 1)
