@@ -2840,9 +2840,9 @@
       '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
       '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
     h += '<div class="sub">Buts attendus ' + M.lh.toFixed(2) + ' – ' + M.la.toFixed(2) + (M.corners ? ' · corners ~' + M.corners.toFixed(1) : '') +
-      (f && f.ov ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
+      (f && f.ov && !f.cal ? '<br>Buts attendus <b>mélangés avec les cotes du marché</b> (80 % marché, 20 % modèle) : le test montre des probabilités plus justes.' : '') + (f && f.mk ? '<br>Bookmaker (1X2, sans marge) : ' + pct(f.mk[0]) + ' / ' + pct(f.mk[1]) + ' / ' + pct(f.mk[2]) : '') + '</div>';
     var unk = [d.home, d.away].filter(function (t) { return !Engine.known(d.div, t); });
-    if (unk.length) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
+    if (unk.length && !(f && f.cal)) h += '<div class="sub warn">Pas d’historique pour ' + esc(unk.join(', ')) + ' : estimation peu fiable.</div>';
     h += predTabs(M, C, d);
     return h;
   }
@@ -3563,11 +3563,16 @@
     var p = c.p, fav = p ? p.indexOf(Math.max.apply(null, p)) : -1, cs = cstate(c), sc = c.hs != null ? c.hs + ' – ' + c.as_ : '';
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div class="who"><span class="lgchip">' + esc(c.fr) + '</span><small class="dch"><i>📅 ' + dm(c.date) + '</i><i>🕒 ' + esc(c.time) + '</i></small></div></div>' + vsBlock({ div: c.s, home: c.home, away: c.away });
     if (sc) h += '<div class="main high"><div class="k"><small>' + (cs === 'live' ? 'En direct' : 'Score final') + '</small></div><div class="hero"><div><div class="hn">' + sc + '</div></div></div></div>';
-    if (p) {
+    if (p && !(cs === 'soon' && window.Plan)) {
       h += '<div class="main ' + confOf(p[fav]) + '"><div class="k"><small>Probabilités déduites des cotes' + (c.q ? ' (estimation approximative)' : '') + '</small></div><div class="hero"><div><div class="hl">Résultat le plus probable</div><div class="hn">' + esc([c.home, 'Match nul', c.away][fav]) + '</div></div>' + gauge(p[fav], confOf(p[fav])) + '</div>' +
         '<div class="b3"><i class="h" style="width:' + p[0] * 100 + '%"></i><i class="d" style="width:' + p[1] * 100 + '%"></i><i class="a" style="width:' + p[2] * 100 + '%"></i></div>' +
         '<div class="l3"><span class="h">1 · ' + pct(p[0]) + '</span><span class="d">X · ' + pct(p[1]) + '</span><span class="a">2 · ' + pct(p[2]) + '</span></div></div>';
-    } else h += '<div class="srcnote">Pas de probabilités pour ce match : aucune cote disponible.</div>';
+    } else if (!p) h += '<div class="srcnote">Pas de probabilités pour ce match : aucune cote disponible.</div>';
+    if (p && cs === 'soon' && window.Plan) {                              // paris détaillés reconstitués à partir des probabilités 1N2 (hors de notre modèle)
+      if (!D.leagues._c) D.leagues._c = { name: 'Calendrier mondial', teams: [], g: { mu: 0, ha: 0, t: {} }, ht: 0.45 };
+      var ft = Plan.fitLambdas(p[0], p[1], p[2]);
+      h += '<div class="srcnote">Les paris ci-dessous (buts, les deux équipes marquent, etc.) sont <b>reconstitués à partir des cotes</b>, pas calculés par notre modèle : moins précis, à prendre comme une indication.</div>' + predHTML({ div: '_c', home: c.home, away: c.away }, { ov: [ft.lh, ft.la], cal: true });
+    }
     var x = extFor(c);
     if (x && cs === 'soon') h += '<div class="srcnote">API-Football : <b>' + esc([x.home, 'Nul', x.away][x.favIdx]) + ' ' + pct(x.fav) + '</b> <button class="bt-b" data-openext="' + x.i + '">Voir</button></div>';
     return h + '<div class="srcnote">Ce match est hors de notre modèle : pas de pronostic « sûr ». Les probabilités viennent des cotes des bookmakers (marge retirée).</div>';
