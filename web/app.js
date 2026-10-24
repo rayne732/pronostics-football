@@ -2757,7 +2757,7 @@
     return function (x) {
       var rx = Bets.resolver ? Bets.resolver(betRef(d), x.m, x.s) : null;
       return '<details class="mk' + (rx === true ? ' won' : rx === false ? ' lost' : '') + '"><summary><span class="mi ' + cls + '">' + mkIcon(x.m) + '</span><span class="mt">' + esc(x.m) +
-        (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') + Books.tags(x.f) +
+        (x.v ? '' : ' <span class="warn" title="Marché non validé par backtest">⚠</span>') + (x.p >= 0.7 && x.p < 0.95 ? ' <span class="fl" title="Parmi les meilleurs paris">🔥</span>' : '') + Books.tags(x.f) +
         '</span><span class="pk ' + cls + '">' + esc(x.s) + ' · ' + pct(x.p) + (rx === true ? ' ✓' : rx === false ? ' ✗' : '') + '</span></summary><div class="alts">' +
         x.f.sels.map(function (s) { return alt(s, s[0] === x.s, d, x.m, cls); }).join('') + '</div></details>';
     };
@@ -2839,9 +2839,9 @@
     return h;
   }
   /* fiche match : un onglet interne par famille de marchés (plus de page interminable) */
-  var PCATS = [['sum', 'Résumé'], ['res', 'Résultat'], ['goals', 'Buts'], ['ht', 'Mi-temps'], ['stats', 'Stats'], ['combo', 'Combinés']];
+  var PCATS = [['sum', 'Résumé'], ['fire', '🔥 Meilleurs'], ['res', 'Résultat'], ['goals', 'Buts'], ['ht', 'Mi-temps'], ['stats', 'Stats'], ['combo', 'Combinés']];
   function mCat(name) {
-    if (/Résultat et|Combiné|1er but et|multichance|MyMatch/.test(name)) return 'combo';
+    if (/Résultat et|Combiné|1er but et|multichance|MyMatch|^Double chance et|^Score exact/.test(name)) return 'combo';
     if (/mi-temps|Mi-temps/.test(name)) return 'ht';
     if (/Corner|Tirs|tirs|Carton/.test(name)) return 'stats';
     if (/^Résultat du match|^Double chance|Vainqueur|Handicap|Marge|gagne par|Écart|sans (encaisser|concéder)/.test(name)) return 'res';
@@ -2874,15 +2874,36 @@
         '<button class="add bet" data-bet="' + esc(d.home + ' – ' + d.away + ' : ' + x.s[0]) + '" data-bsp="' + betSport(d) + '" data-bp="' + pr.toFixed(4) + '" data-bm="' + esc(x.m) + '" data-bs="' + esc(x.s[0]) + '" data-bref="' + esc(betRef(d)) + '" data-bcat="Pronostic sûr" aria-label="Noter ce pari">€</button></div>';
     }).join('') + '</div>';
   }
+  var WNO = /^(Pair \/ impair|Tranche de buts|Corners|Carton rouge)/;                // marchés absents des fiches Winamax football
+  function bkFoot(fams) { return BK === 'winamax' ? fams.filter(function (f) { return !WNO.test(f.name); }) : fams; }
+  function bestPicks(fams, lo, hi, max) {                          // « flamme » : la meilleure sélection de chaque famille de marchés, du plus probable au moins probable
+    var byKind = {};
+    fams.forEach(function (f) {
+      if (f.lottery) return;
+      var ok = f.sels.filter(function (x) { return x[1] >= lo && x[1] < hi; });
+      if (!ok.length) return;
+      var c = { m: f.name, s: ok.reduce(function (a, b) { return b[1] < a[1] ? b : a; }), v: f.validated, f: f };
+      if (!byKind[f.kind] || c.s[1] < byKind[f.kind].s[1]) byKind[f.kind] = c;
+    });
+    return Object.keys(byKind).map(function (k) { return byKind[k]; }).sort(function (a, b) { return b.s[1] - a.s[1]; }).slice(0, max || 12);
+  }
+  function bkFootBar() {
+    return '<div class="xchips bkbar"><span class="bkl">Paris proposés chez</span>' + [['all', 'Tous'], ['winamax', 'Winamax']].map(function (x) {
+      return '<button class="xchip' + ((BK === 'winamax' ? 'winamax' : 'all') === x[0] ? ' on' : '') + '" data-xbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+  }
   function predTabs(M, C, d) {
-    var tab = st.ptab || 'sum', cats = { res: [], goals: [], ht: [], stats: [], combo: [] };
-    M.fams.forEach(function (fam) { cats[mCat(fam.name)].push(fam); });
+    var tab = st.ptab || 'sum', cats = { fire: [], res: [], goals: [], ht: [], stats: [], combo: [] }, FF = bkFoot(M.fams);
+    FF.forEach(function (fam) { cats[mCat(fam.name)].push(fam); });
+    var bestL = bestPicks(FF, 0.7, 0.95, 14); cats.fire = bestL;
     var n = function (k) { return cats[k] ? cats[k].length : 0; };
     if (tab !== 'sum' && !n(tab)) tab = 'sum';
     var bar = '<div class="ptabs">' + PCATS.filter(function (c) { return c[0] === 'sum' || n(c[0]); }).map(function (c) {
       return '<button data-ptab="' + c[0] + '" class="' + (tab === c[0] ? 'on' : '') + '">' + c[1] + (c[0] !== 'sum' && n(c[0]) ? '<b>' + n(c[0]) + '</b>' : '') + '</button>'; }).join('') + '</div>';
-    var h = bar;
-    if (tab === 'sum') {
+    var h = bkFootBar() + bar;
+    if (tab === 'fire') {
+      h += '<div class="sec"><span class="dot a"></span>🔥 Les meilleurs paris du match <small>les plus probables, un par famille, sans les cotes trop basses</small></div>' +
+        bestL.map(function (c) { return mkRow(c.s[1] >= SAFE ? 'g' : 'a', d)({ m: c.m, s: c.s[0], p: c.s[1], v: c.v, f: c.f }); }).join('');
+    } else if (tab === 'sum') {
       h += hcCards(M, d) + overviewHTML(M, d);
     } else if (tab === 'goals') {
       h += heatHTML(M, d) + '<div class="sec"><span class="dot g"></span>Marchés de buts</div>' + cats.goals.map(famRow(d)).join('');
@@ -3440,10 +3461,23 @@
   function cmbSave() { try { localStorage.setItem('pf-cmb', JSON.stringify(CMB)); } catch (e) { /* ignoré */ } }
   var KINDS = { safe: ['SAFE', 'shield', 'g'], bold: ['BOLD', 'flame2', 'a'], ext: ['EXTREME', 'bolt', 'r'] };
   function cmbLeg(r, T) { return { id: r.bid, m: r.bm, s: r.bs, match: r.match, pick: r.pick, icon: r.icon, lg: r.lg || '', time: r.time || '', d: T, p: r.p }; }
+  var CMB_OK = /^(Résultat du match|Double chance$|Total buts|Les deux équipes marquent|Handicap|Nombre exact de buts$|Marge de victoire|Combiné résultat|Résultat et|Équipe qui marque le 1er but et|Score exact multichance|Victoire sans encaisser|Quelle équipe va marquer|Vainqueur \(remboursé|Nombre de buts \(intervalle\)|Buts de )/;
+  function cmbFootPool(T, low) {                                  // sélections de tous les marchés du football que le site sait régler à la fin du match
+    var out = [];
+    D.fixtures.forEach(function (f) {
+      if (f.date !== T) return;
+      var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (err) { return; }
+      var fams = M.fams.filter(function (x) { return CMB_OK.test(x.name) && !x.lottery; });
+      bestPicks(fams, low ? 0.3 : 0.5, low ? 0.55 : 0.95, 8).forEach(function (c) {
+        out.push({ icon: '⚽', lg: (D.leagues[f.div] || {}).name || '', match: nm(f.home) + ' – ' + nm(f.away), time: f.time, pick: c.m + ' : ' + c.s[0], p: c.s[1], v: c.v, div: f.div, bid: f.id, bm: c.m, bs: c.s[0] });
+      });
+    });
+    return out;
+  }
   function cmbGen() {
     var T = parisToday();
     if (CMB.gen[T] || !TODAY.ts) return;
-    var R = todayRows(), pool = R.picks.concat(plCalPicks(T)), more = R.more || [], seen = {}, now = Date.now(), mk = function (kind, legs) { CMB.n++; CMB.list.push({ id: 'C' + CMB.n, kind: kind, d: T, legs: legs, un: 0, res: null, made: now }); };
+var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T)), more = (R.more || []).concat(cmbFootPool(T, true)), seen = {}, now = Date.now(), mk = function (kind, legs) { CMB.n++; CMB.list.push({ id: 'C' + CMB.n, kind: kind, d: T, legs: legs, un: 0, res: null, made: now }); };
     var ok = function (r) { return r.bid && (!r.time || kickoff({ date: T, time: r.time }) > now + 20 * 60000); };
     pool = pool.filter(ok).sort(function (a, b) { return b.p - a.p; }).filter(function (r) { if (seen[r.match]) return false; seen[r.match] = 1; return true; });
     var safe = pool.filter(function (r) { return r.p >= 0.72; }), i;
