@@ -2840,6 +2840,21 @@
   }
   /* fiche match : un onglet interne par famille de marchés (plus de page interminable) */
   var PCATS = [['sum', 'Résumé'], ['fire', '🔥 Meilleurs'], ['res', 'Résultat'], ['goals', 'Buts'], ['ht', 'Mi-temps'], ['stats', 'Stats'], ['combo', 'Combinés']];
+  var BPCATS = [['sum', 'Résumé'], ['fire', '🔥 Le top'], ['res', 'Résultats'], ['goals', 'Buts'], ['score', 'Score exact'], ['stats', 'Stats équipes']];
+  var BCNO = /^(Pair \/ impair|Tranche de buts|Combiné résultat)|[Cc]orner|[Cc]arton/;           // pas chez Betclic
+  function bcCat(name) {
+    if (/Score exact|multichoix|multichance/.test(name)) return 'score';
+    if (/Tirs|tirs/.test(name)) return 'stats';
+    if (/^Résultat du match|^Double chance$|Vainqueur|Handicap|Marge|gagne par|Écart|sans (encaisser|concéder)|gagne (une des|les deux) mi-temps|^Mi-temps - (Double chance$|Handicap)|^Résultat à la mi-temps|^Mi-temps \/ Fin/.test(name)) return 'res';
+    return 'goals';
+  }
+  function bcSub(name) {                                    // sous-titres de l'onglet Buts, comme chez Betclic
+    if (/^Minute du|^Buts sur la période/.test(name)) return 'Buts par périodes';
+    if (/^Mi-temps|mi-temps|1re MT|2de MT/.test(name)) return 'Buts par mi-temps';
+    if (/équipes marquent|Quelle équipe va marquer|Chaque équipe|Résultat et les deux|Double chance et les deux/.test(name)) return 'Deux équipes';
+    if (/^Buts de |Nombre exact de buts de|Intervalle de buts de|cage inviolée|sans concéder|Premier but|Dernier but|Équipe qui marque|marque dans les deux/.test(name)) return 'Buts par équipes';
+    return 'Total de buts';
+  }
   function mCat(name) {
     if (/Résultat et|Combiné|1er but et|multichance|MyMatch|^Double chance et|^Score exact/.test(name)) return 'combo';
     if (/mi-temps|Mi-temps/.test(name)) return 'ht';
@@ -2875,7 +2890,7 @@
     }).join('') + '</div>';
   }
   var WNO = /^(Pair \/ impair|Tranche de buts|Corners|Carton rouge)/;                // marchés absents des fiches Winamax football
-  function bkFoot(fams) { return BK === 'winamax' ? fams.filter(function (f) { return !WNO.test(f.name); }) : fams; }
+  function bkFoot(fams) { return BK === 'winamax' ? fams.filter(function (f) { return !WNO.test(f.name); }) : BK === 'betclic' ? fams.filter(function (f) { return !BCNO.test(f.name); }) : fams; }
   function bestPicks(fams, lo, hi, max) {                          // « flamme » : la meilleure sélection de chaque famille de marchés, du plus probable au moins probable
     var byKind = {};
     fams.forEach(function (f) {
@@ -2888,16 +2903,17 @@
     return Object.keys(byKind).map(function (k) { return byKind[k]; }).sort(function (a, b) { return b.s[1] - a.s[1]; }).slice(0, max || 12);
   }
   function bkFootBar() {
-    return '<div class="xchips bkbar"><span class="bkl">Paris proposés chez</span>' + [['all', 'Tous'], ['winamax', 'Winamax']].map(function (x) {
-      return '<button class="xchip' + ((BK === 'winamax' ? 'winamax' : 'all') === x[0] ? ' on' : '') + '" data-xbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    return '<div class="xchips bkbar"><span class="bkl">Paris proposés chez</span>' + [['all', 'Tous'], ['winamax', 'Winamax'], ['betclic', 'Betclic']].map(function (x) {
+      return '<button class="xchip' + (BK === x[0] ? ' on' : '') + '" data-xbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      (BK === 'betclic' ? '<div class="sub">Catégories comme chez Betclic. Non calculables, donc absents : SuperSub, tous les paris sur joueurs (buteur, passeur, tirs), penalty, buts de la tête et coups francs, car nous n’avons pas de statistiques par joueur ni par type de but.</div>' : '');
   }
   function predTabs(M, C, d) {
-    var tab = st.ptab || 'sum', cats = { fire: [], res: [], goals: [], ht: [], stats: [], combo: [] }, FF = bkFoot(M.fams);
-    FF.forEach(function (fam) { cats[mCat(fam.name)].push(fam); });
+    var BC = BK === 'betclic', PC = BC ? BPCATS : PCATS, tab = st.ptab || 'sum', cats = { fire: [], res: [], goals: [], ht: [], stats: [], combo: [], score: [] }, FF = bkFoot(M.fams);
+    FF.forEach(function (fam) { cats[BC ? bcCat(fam.name) : mCat(fam.name)].push(fam); });
     var bestL = bestPicks(FF, 0.7, 0.95, 14); cats.fire = bestL;
     var n = function (k) { return cats[k] ? cats[k].length : 0; };
     if (tab !== 'sum' && !n(tab)) tab = 'sum';
-    var bar = '<div class="ptabs">' + PCATS.filter(function (c) { return c[0] === 'sum' || n(c[0]); }).map(function (c) {
+    var bar = '<div class="ptabs">' + PC.filter(function (c) { return c[0] === 'sum' || n(c[0]); }).map(function (c) {
       return '<button data-ptab="' + c[0] + '" class="' + (tab === c[0] ? 'on' : '') + '">' + c[1] + (c[0] !== 'sum' && n(c[0]) ? '<b>' + n(c[0]) + '</b>' : '') + '</button>'; }).join('') + '</div>';
     var h = bkFootBar() + bar;
     if (tab === 'fire') {
@@ -2905,10 +2921,18 @@
         bestL.map(function (c) { return mkRow(c.s[1] >= SAFE ? 'g' : 'a', d)({ m: c.m, s: c.s[0], p: c.s[1], v: c.v, f: c.f }); }).join('');
     } else if (tab === 'sum') {
       h += hcCards(M, d) + overviewHTML(M, d);
+    } else if (tab === 'goals' && BC) {
+      var subs = {}, order = [];
+      cats.goals.forEach(function (f) { var k = bcSub(f.name); if (!subs[k]) { subs[k] = []; order.push(k); } subs[k].push(f); });
+      ['Total de buts', 'Deux équipes', 'Buts par équipes', 'Buts par mi-temps', 'Buts par périodes'].forEach(function (k) {
+        if (subs[k]) h += '<div class="sec"><span class="dot g"></span>' + k + '</div>' + subs[k].map(famRow(d)).join('');
+      });
     } else if (tab === 'goals') {
       h += heatHTML(M, d) + '<div class="sec"><span class="dot g"></span>Marchés de buts</div>' + cats.goals.map(famRow(d)).join('');
     } else if (tab === 'ht') {
       h += htftHTML(M, d) + '<div class="sec"><span class="dot a"></span>Mi-temps</div>' + cats.ht.map(famRow(d)).join('');
+    } else if (tab === 'score') {
+      h += '<div class="sec"><span class="dot a"></span>Score exact</div>' + heatHTML(M, d) + cats.score.map(famRow(d)).join('');
     } else if (tab === 'res') {
       h += '<div class="sec"><span class="dot g"></span>Résultat, handicaps et écarts</div>' + cats.res.map(famRow(d)).join('') + compareHTML(M, d);
     } else {

@@ -254,6 +254,39 @@
     exs('Minute du 1er but (10 min)', minutes(b10));
     exs('Minute du 1er but (15 min)', minutes(b15));
 
+    // --- marchés façon Betclic (buts) : mêmes grilles, mi-temps indépendantes
+    var po25 = gsum(g, function (i, j) { return (i > 0 && j > 0) || i + j > 2.5; });
+    exs('Les 2 équipes marquent ou + de 2,5 buts', [['Oui', po25], ['Non', 1 - po25]]);
+    var e2 = gsum(g, function (i, j) { return i >= 2 && j >= 2; });
+    exs('Chaque équipe marque 2 buts ou +', [['Oui', e2], ['Non', 1 - e2]]);
+    var bt = function (yes, over) { return gsum(g, function (i, j) { return ((i > 0 && j > 0) === yes) && ((i + j > 2.5) === over); }); };
+    exs('Les 2 équipes marquent et total de buts', [['Oui et plus de 2,5', bt(true, true)], ['Oui et moins de 2,5', bt(true, false)], ['Non et plus de 2,5', bt(false, true)], ['Non et moins de 2,5', bt(false, false)]]);
+    var bh2 = gsum(sh, function (i, j) { return i > 0 && j > 0; });
+    exs('Mi-temps - Les 2 équipes marquent (1re MT / 2de MT)', [['Oui / Oui', bhy * bh2], ['Oui / Non', bhy * (1 - bh2)], ['Non / Oui', (1 - bhy) * bh2], ['Non / Non', (1 - bhy) * (1 - bh2)]]);
+    var hl1 = s * l, hl2 = (1 - s) * l;
+    exs('Plus de 0,5 but dans chaque mi-temps', [['Oui', sf(0.5, hl1) * sf(0.5, hl2)], ['Non', 1 - sf(0.5, hl1) * sf(0.5, hl2)]]);
+    exs('Plus de 1,5 buts dans chaque mi-temps', [['Oui', sf(1.5, hl1) * sf(1.5, hl2)], ['Non', 1 - sf(1.5, hl1) * sf(1.5, hl2)]]);
+    exs('Moins de 1,5 buts dans chaque mi-temps', [['Oui', cdf(1.5, hl1) * cdf(1.5, hl2)], ['Non', 1 - cdf(1.5, hl1) * cdf(1.5, hl2)]]);
+    [['1re MT', s], ['2de MT', 1 - s]].forEach(function (hp) {
+      var lt = hp[1] * l, p0 = Math.exp(-lt);
+      exs('Première équipe à marquer - ' + hp[0] + ' (seule)', [[home, lh / l * (1 - p0)], ['Pas de but', p0], [away, la / l * (1 - p0)]]);
+    });
+    [[home, lh], [away, la]].forEach(function (t) {
+      var q1 = pmfArr(s * t[1], N), q2 = pmfArr((1 - s) * t[1], N), ma = 0, me = 0, mb = 0, u, w;
+      for (u = 0; u < N; u++) for (w = 0; w < N; w++) { var vv = q1[u] * q2[w]; if (u > w) ma += vv; else if (u === w) me += vv; else mb += vv; }
+      exs('Mi-temps avec le + de buts - ' + t[0], [['1re mi-temps', ma], ['Égalité', me], ['2de mi-temps', mb]]);
+    });
+    [[0, 15], [15, 30], [30, 45], [45, 60], [60, 75], [75, 90]].forEach(function (ab) {      // buts répartis régulièrement dans chaque mi-temps : estimation
+      var lp = lamCum(ab[1]) - lamCum(ab[0]);
+      exs('Buts sur la période ' + ab[0] + '-' + ab[1] + ' min', [['Plus de 0,5 but', sf(0.5, lp)], ['Moins de 0,5 but', cdf(0.5, lp)], ['Plus de 1,5 buts', sf(1.5, lp)]]);
+    });
+    var mcg = [[' : 4-0, 5-0 ou 6-0', [[4, 0], [5, 0], [6, 0]], home], [' : 2-1, 3-1 ou 4-1', [[2, 1], [3, 1], [4, 1]], home], [' : 3-2, 4-2 ou 4-3', [[3, 2], [4, 2], [4, 3]], home]], mci = [];
+    mcg.forEach(function (m3) {
+      mci.push([home + m3[0], m3[1].reduce(function (a2, c2) { return a2 + g[c2[0]][c2[1]]; }, 0)]);
+      mci.push([away + m3[0].replace(/(\d)-(\d)/g, function (x, a3, b3) { return b3 + '-' + a3; }), m3[1].reduce(function (a2, c2) { return a2 + g[c2[1]][c2[0]]; }, 0)]);
+    });
+    add('Score exact multichoix', mci, false, true);
+
 
     // --- tirs et tirs cadrés (championnats qui ont ces statistiques) : loi binomiale négative, équipes indépendantes
     function nbArr(mu, r) {
