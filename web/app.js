@@ -3295,7 +3295,7 @@
   }
 
   /* ------------------------------------------------------------ interface en 5 onglets : Découvrir · Favoris · Combo · Ligues · Social */
-  var X = { day: '', stat: 'all', hc: false, srch: false, q: '', sort: 'time', ff: 'all', fo: false, fs: 'all', cq: '', lg: null, cs: 'act', msg: '', lastSoc: 'comm', lcq: '' };
+  var X = { day: '', stat: 'all', hc: false, srch: false, q: '', sort: 'time', ff: 'all', fo: false, fs: 'all', cq: '', lg: null, cs: 'act', cfs: 'all', cfb: 'all', msg: '', lastSoc: 'comm', lcq: '' };
   var LF = {};                                                     // championnats suivis (étoile à droite du nom)
   try { LF = JSON.parse(localStorage.getItem('pf-lfav') || '{}') || {}; } catch (e) { LF = {}; }
   function saveLF() { try { localStorage.setItem('pf-lfav', JSON.stringify(LF)); } catch (e) { /* ignoré */ } }
@@ -3552,14 +3552,32 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     return h + '</div>';
   }
   function cdFmt(ms) { ms = Math.max(0, ms); var s = Math.floor(ms / 1000); return ('0' + Math.floor(s / 3600)).slice(-2) + ':' + ('0' + Math.floor(s % 3600 / 60)).slice(-2) + ':' + ('0' + s % 60).slice(-2); }
+  function legBk(l, bk) {                                         // la sélection existe-t-elle chez ce bookmaker ? (listes d'après les fiches match, approximatives)
+    if (bk === 'all' || !l.m) return true;
+    if (l.icon === '🎾') { var v = BKM[bkKey(l.m)]; return !!v && v.indexOf(bk === 'winamax' ? 'w' : 'b') >= 0; }
+    if (l.icon === '⚽') return bk === 'winamax' ? !WNO.test(l.m) : !BCNO.test(l.m);
+    return true;
+  }
+  var SPN = { '⚽': 'Football', '🎾': 'Tennis', '🏀': 'Basket', '🏉': 'Rugby', '🏒': 'Hockey', '⚾': 'Baseball', '🏈': 'NFL', '🤾': 'Handball', '🏐': 'Volley', '🥋': 'MMA' };
+  function cmbFilters(icons) {
+    var h = '<div class="xchips bkbar"><span class="bkl">Sport</span>' + [['all', 'Tous']].concat(icons.map(function (i) { return [i, i + ' ' + (SPN[i] || '')]; })).map(function (x) {
+      return '<button class="xchip' + (X.cfs === x[0] ? ' on' : '') + '" data-xcsp="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    h += '<div class="xchips bkbar"><span class="bkl">Paris proposés chez</span>' + [['all', 'Tous'], ['winamax', 'Winamax'], ['betclic', 'Betclic']].map(function (x) {
+      return '<button class="xchip' + (X.cfb === x[0] ? ' on' : '') + '" data-xcbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>';
+    return h + (X.cfb !== 'all' ? '<div class="sub">Un combo n’apparaît que si toutes ses sélections existent chez ce bookmaker. Liste établie d’après ses fiches match : elle peut être incomplète.</div>' : '');
+  }
   function comboHTML() {
     if (!TODAY.ts && !TODAY.busy) todayLoad();
     cmbGen();
     var T = parisToday(), L = CMB.list.slice().sort(function (a, b) { return b.made - a.made || (a.id < b.id ? 1 : -1); }), kl = keysLeft();
     L.forEach(cmbRes);
+    var icons = [];
+    L.forEach(function (c) { c.legs.forEach(function (l) { if (l.icon && icons.indexOf(l.icon) < 0) icons.push(l.icon); }); });
+    L = L.filter(function (c) { return c.legs.every(function (l) { return (X.cfs === 'all' || l.icon === X.cfs) && legBk(l, X.cfb); }); });
     var act = L.filter(function (c) { return c.res === null || c.res === undefined; }), fin = L.filter(function (c) { return c.res === true || c.res === false; }), mine = L.filter(function (c) { return c.un; });
     var h = '<header class="xhd"><span class="xmark gold">' + svg(IC.combo) + '</span><b class="xt1">AI Combo</b><span class="xsp"></span><button class="xpillb" data-xhow>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + '<span class="pl">Comment ça marche ?</span><span class="ps">Aide</span></button><button class="xkeys" data-xkeys>' + svg(IC.key) + '<b>' + (kl === Infinity ? '∞' : kl) + '</b>' + (kl === Infinity ? '' : svg(IC.plus)) + '</button></header>';
     h += '<div class="xseg3">' + [['act', 'Actifs', act.length], ['fin', 'Terminés', 0], ['mine', 'Mes Combos', mine.length]].map(function (x) { return '<button class="' + (X.cs === x[0] ? 'on' : '') + '" data-xcs="' + x[0] + '">' + x[1] + (x[2] ? '<i>' + x[2] + '</i>' : '') + '</button>'; }).join('') + '</div>';
+    h += cmbFilters(icons);
     if (X.msg) h += '<div class="bt-warn xmsg">' + esc(X.msg) + '</div>';
     var show = X.cs === 'act' ? act : X.cs === 'fin' ? fin : mine;
     if (!TODAY.ts && !CMB.list.length) h += '<div class="xzero">' + svg(IC.combo) + '<b>Préparation des combos…</b><p>Le modèle regarde tous les matchs du jour.</p></div>' + skel(2);
@@ -3648,7 +3666,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3665,6 +3683,8 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     if (t.hasAttribute('data-xlgc')) { X.lg = { c: a('data-xlgc'), l: null }; X.lcq = ''; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgl')) { X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xcsp')) { X.cfs = a('data-xcsp'); render(); return; }
+    if (t.hasAttribute('data-xcbk')) { X.cfb = a('data-xcbk'); render(); return; }
     if (t.hasAttribute('data-xcs')) { X.cs = a('data-xcs'); X.msg = ''; render(); return; }
     if (t.hasAttribute('data-cmbopen')) { st.scroll = window.scrollY; st.detail = { cmb: a('data-cmbopen') }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-cmbun')) {
