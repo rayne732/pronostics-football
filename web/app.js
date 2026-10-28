@@ -3532,12 +3532,16 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && isoDate(new Date(c.un)) === T && c.res !== false; }).length;
     return Math.max(0, 1 - used);
   }
+  function legTxt(l) {                                            // « Non » seul ne veut rien dire : on ajoute le nom du pari
+    if (!/^(Oui|Non)$/.test(l.s)) return l.s;
+    return l.m ? l.m + ' : ' + l.s : (l.pick || l.s);
+  }
   function comboLeg(l, open, un) {
     var res = plRes(l), sc = plLive(l), tm = plLegTeams(l), ic;
     if (res === true) ic = '<span class="cx ok">' + svg(IC.okmark) + '</span>'; else if (res === false) ic = '<span class="cx ko">' + svg(IC.xmark) + '</span>'; else ic = '<span class="cx">' + svg(IC.clock) + '</span>';
     var scr = sc && isFinite(sc.hs) ? '<b class="csc ' + (res === true ? 'ok' : res === false ? 'ko' : '') + '">' + sc.hs + '-' + sc.as + '</b>' : '';
     if (!un) return '<div class="cbr lk"><span class="cll">' + logoOf(l.id.split('|')[0], svg(IC.trophy)) + '<b>' + esc(l.lg || 'Match') + '</b></span><span class="clk">' + svg(IC.lock) + '<i></i></span></div>';
-    return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(l.s) + '</span></div>' + scr + ic + '</div>';
+    return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(legTxt(l)) + '</span></div>' + scr + ic + '</div>';
   }
   function cmbCard(c) {
     var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || premium(), done = res !== null;
@@ -3595,7 +3599,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       '<div class="cpc"><div class="cpch"><b>' + svg('<path d="M4 7l1.5 1.5L8 6M4 13l1.5 1.5L8 12M11 7h9M11 13h9M4 19h16"/>') + ' Matchs</b><span>(' + (res === null ? (cl <= Date.now() ? 'Fermé' : 'Ouvert') : 'Terminé') + ')</span></div>' +
       c.legs.map(function (l) {
         var tm = plLegTeams(l), res2 = plRes(l), sc = plLive(l), icn = res2 === true ? '<span class="cx ok">' + svg(IC.okmark) + '</span>' : res2 === false ? '<span class="cx ko">' + svg(IC.xmark) + '</span>' : '<span class="cx">' + svg(IC.clock) + '</span>';
-        return '<div class="cbl"><div class="cpi"><small>' + esc(l.lg || '') + ' · ' + dshort(l.d) + (l.time ? ' · ' + esc(l.time) : '') + '</small>' + (un ? '<b>' + (tm ? crest(tm[0]) + esc(nm(tm[0])) + ' – ' + esc(nm(tm[1])) + crest(tm[1]) : esc(l.match)) + '</b><span class="cbk">' + esc(l.s) + '</span>' + (sc && isFinite(sc.hs) ? '<em>' + sc.hs + ' - ' + sc.as + (sc.st === 'in' && sc.clock ? ' · ' + esc(sc.clock) : '') + '</em>' : '') : '<span class="clk big">' + svg(IC.lock) + '<i></i></span>') + '</div>' + (un ? icn : '') + '</div>';
+        return '<div class="cbl"><div class="cpi"><small>' + esc(l.lg || '') + ' · ' + dshort(l.d) + (l.time ? ' · ' + esc(l.time) : '') + '</small>' + (un ? '<b>' + (tm ? crest(tm[0]) + esc(nm(tm[0])) + ' – ' + esc(nm(tm[1])) + crest(tm[1]) : esc(l.match)) + '</b><span class="cbk">' + esc(legTxt(l)) + '</span>' + (sc && isFinite(sc.hs) ? '<em>' + sc.hs + ' - ' + sc.as + (sc.st === 'in' && sc.clock ? ' · ' + esc(sc.clock) : '') + '</em>' : '') : '<span class="clk big">' + svg(IC.lock) + '<i></i></span>') + '</div>' + (un ? icn : '') + '</div>';
       }).join('') + '</div>' + howCard() + '</div>';
     var foot = res !== null ? '<small>' + (res ? 'IA RÉUSSIE' : 'IA ÉCHOUÉE') + '</small><b class="' + (res ? 'ok' : 'ko') + '">' + c.legs.filter(function (l) { return plRes(l) === true; }).length + '/' + c.legs.length + '</b>' : un ? '<small>Combo Débloqué</small><b class="ok">EN ATTENTE</b>' : '<small>' + svg(IC.lock) + ' Le Combo ferme dans</small><b class="cd" data-cd="' + cl + '">' + cdFmt(cl - Date.now()) + '</b>';
     return h + '<div class="cpf"><div>' + foot + '</div>' + (!un ? '<button class="cmbu" data-cmbun="' + c.id + '">' + svg(IC.key) + '<span><b>1</b>DÉBLOQUER</span></button>' : '') + '</div>';
