@@ -266,7 +266,7 @@ def daily_stats(days=120):
     for m in data["matches"].values():
         if not m["settled"]:
             continue
-        d = by.setdefault(m["date"], dict(date=m["date"], ms=0, sn=0, sw=0, ln=0, lw=0))
+        d = by.setdefault(m["date"], dict(date=m["date"], ms=0, sn=0, sw=0, ln=0, lw=0, pr=0.0))
         d["ms"] += 1
         for p in m["picks"]:
             if p.get("hit") is None:
@@ -274,6 +274,7 @@ def daily_stats(days=120):
             if p["tier"] == 0:
                 d["sn"] += 1
                 d["sw"] += int(p["hit"])
+                d["pr"] = round(d["pr"] + ((0.93 / p["p"] - 1) if p["hit"] else -1), 3)     # 1 € à la cote d'un bookmaker moyen (marge 7 %)
             else:
                 d["ln"] += 1
                 d["lw"] += int(p["hit"])

@@ -3638,12 +3638,47 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       '<div class="xst"><b>' + xp + '</b><small>XP</small></div><div class="xst"><b class="' + (rate === '–' ? '' : 'ok') + '">' + rate + '</b><small>Réussite</small></div><div class="xst"><b>' + dfi + '</b><small>Défi</small></div>' + svg(IC.chev) + '</button>' +
       '<div class="xtabs"><button class="' + (st.tab === 'comm' ? 'on' : '') + '" data-xsoc="comm">Communauté</button><button class="' + (st.tab === 'bets' ? 'on' : '') + '" data-xsoc="bets">Mes paris</button><button class="' + (st.tab === 'today' ? 'on' : '') + '" data-xsoc="today">Plans</button></div>';
   }
+  /* ---- transparence : ce que le modèle annonce, ce qu'il réussit vraiment, et ce que ça donnerait en pariant */
+  function calBars(b) {
+    return '<div class="cal-leg"><span><i class="lg-real"></i>part gagnée</span><span><i class="lg-said"></i>probabilité annoncée</span></div>' + b.map(function (x) {
+      var cls = x[4] >= x[3] - 0.03 ? 'ok' : 'bad';
+      return '<div class="cal-r"><span class="cl">' + Math.round(x[0] * 100) + '–' + Math.round(x[1] * 100) + ' %<small>' + x[2].toLocaleString('fr-FR') + ' pronostics</small></span><div class="cal-b"><i class="real ' + cls + '" style="width:' + (x[4] * 100).toFixed(1) + '%"></i><b class="said" style="left:' + (x[3] * 100).toFixed(1) + '%"></b></div><span class="cal-v ' + cls + '">' + Math.round(x[4] * 100) + ' %<em>annoncé ' + Math.round(x[3] * 100) + ' %</em></span></div>';
+    }).join('');
+  }
+  function profitChart(days) {
+    var cum = 0, pts = days.map(function (r) { cum += r.pr; return cum; }), W = 320, H = 130, L = 6, R = 6, T = 10, B = 10;
+    var lo = Math.min(0, Math.min.apply(null, pts)), hi = Math.max(0, Math.max.apply(null, pts)); if (hi - lo < 1) hi = lo + 1;
+    var X = function (i) { return L + (W - L - R) * (pts.length < 2 ? 0 : i / (pts.length - 1)); }, Y = function (v) { return T + (H - T - B) * (1 - (v - lo) / (hi - lo)); };
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" class="chart" role="img" aria-label="Bénéfice simulé cumulé"><line x1="' + L + '" x2="' + (W - R) + '" y1="' + Y(0).toFixed(1) + '" y2="' + Y(0).toFixed(1) + '" stroke="var(--line)" stroke-dasharray="4 4"/>' +
+      '<polyline points="' + pts.map(function (v, i) { return X(i).toFixed(1) + ',' + Y(v).toFixed(1); }).join(' ') + '" fill="none" stroke="' + (cum >= 0 ? 'var(--green)' : 'var(--amber)') + '" stroke-width="2.6" stroke-linejoin="round"/></svg>';
+  }
+  function proofHTML() {
+    var R = D.rel || {}, L = R.live, Bt = R.bt, days = (D.daily || []).filter(function (r) { return r.pr != null; });
+    var h = '<button class="xback own" data-xtab="set" aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>Résultats du modèle</h1><small>Ce qu’il annonce, ce qu’il réussit vraiment</small></div></header><div id="info">';
+    if (!L && !Bt) return h + '<div class="empty">Les résultats apparaîtront après quelques jours de suivi.</div></div>';
+    if (L) {
+      var s = L.safe, since = R.since ? R.since.slice(8) + '/' + R.since.slice(5, 7) + '/' + R.since.slice(0, 4) : '';
+      h += '<div class="main ' + (s[2] >= s[1] - 0.03 ? 'high' : 'mid') + '"><div class="k"><small>Suivi réel' + (since ? ' depuis le ' + since : '') + ' · pronostics sûrs (70 % et plus)</small></div><div class="hero"><div><div class="hl">Réellement gagnés</div><div class="hn">' + pct(s[2]) + '</div></div>' + gauge(s[2], s[2] >= s[1] - 0.03 ? 'high' : 'mid') + '</div>' +
+        line('Annoncé par le modèle', pct(s[1])) + line('Pronostics vérifiés', s[0].toLocaleString('fr-FR')) + line('Moins sûrs : annoncé / gagné', pct(L.less[1]) + ' / ' + pct(L.less[2])) + '</div>';
+      h += '<div class="srcnote">Ces chiffres viennent du suivi du site : chaque pronostic affiché est enregistré <b>avant</b> le match, puis comparé au résultat. Rien n’est modifié après coup.</div>';
+      if (L.b.length) h += '<div class="sec"><span class="dot g"></span>Quand on annonce X %, que se passe-t-il ?</div><div class="fm">' + calBars(L.b) + '</div><div class="sub">La barre est ce qui s’est réellement passé, le trait noir ce que le modèle annonçait. Si la barre dépasse le trait, le modèle tient sa promesse.</div>';
+    }
+    if (days.length > 2) {
+      var n = 0, pr = 0; days.forEach(function (r) { n += r.sn; pr += r.pr; });
+      h += '<div class="sec"><span class="dot a"></span>Et si on avait parié ? <small>simulation</small></div><div class="main"><div class="k"><small>1 € sur chaque pronostic sûr · ' + days.length + ' jours</small></div><div class="hero"><div><div class="hl">Résultat simulé</div><div class="hn ' + (pr >= 0 ? 'ok' : 'ko') + '">' + (pr >= 0 ? '+' : '−') + Math.abs(pr).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €</div></div></div>' +
+        line('Mises', n.toLocaleString('fr-FR') + ' €') + line('Rendement', (pr / n >= 0 ? '+' : '−') + Math.abs(pr / n * 100).toFixed(1) + ' %') + profitChart(days) + '</div>';
+      h += '<div class="srcnote"><b>Comment lire ça.</b> On suppose la cote d’un bookmaker moyen : (1 − 7 % de marge) ÷ probabilité. Un modèle parfaitement calibré perdrait donc environ 7 % de ses mises, car la marge du bookmaker est déjà dans la cote. Un résultat nettement meilleur voudrait dire que le modèle bat réellement le marché. Nos tests sur de vraies cotes passées (section « Peut-on gagner de l’argent ?» de la page Fiabilité) <b>ne l’ont pas montré</b> : les pronostics servent à comprendre un match, pas à garantir un gain.</div>';
+    }
+    if (Bt && Bt.b.length) h += '<details class="rel-d"><summary>Le même test sur le passé (backtest ' + (R.seasons || []).map(function (x) { return x.slice(0, 2) + '/' + x.slice(2); }).join(' et ') + ')</summary>' + calBars(Bt.b) + '<div class="sub">Pronostics rejoués semaine par semaine, le modèle ne connaissant que le passé.</div></details>';
+    h += '<button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Tout le détail : bilan par sport, par compétition, par marché</span>' + svg(IC.chev) + '</button>';
+    return h + '<p class="xfine">Aucun gain n’est garanti. Les paris comportent des risques : jouez avec modération. Joueurs Info Service : 09 74 75 13 13.</p></div>';
+  }
   function setHTML() {
     var h = '<header class="xhd col"><button class="xback" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>Réglages</h1><small>Sport, affichage et outils</small></div></header>';
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
     h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button></div>';
-    h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
   }
   function calPage(i) {
@@ -3847,6 +3882,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     h += '<div class="xseg3">' + ['week', 'month', 'year'].map(function (k) { return '<button class="' + (PREM.per === k ? 'on' : '') + '" data-xper="' + k + '">' + PRICES[k][0] + '</button>'; }).join('') + '</div>';
     h += '<div class="prc"><b class="prp">' + P[1] + '</b><span>' + P[2] + '</span>' + (P[3] ? '<em>' + P[3] + '</em>' : '') + '<small>3 jours d’essai offerts · résiliable à tout moment</small></div>';
     h += '<div class="cpc">' + PFEAT.map(function (f) { return '<div class="pfr ' + (f[1] ? 'pm' : '') + '"><span class="cx ' + (f[1] ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + (f[1] ? 'Premium' : 'Gratuit') + '</small></div>'; }).join('') + '</div>';
+    h += '<button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Voir les résultats réels du modèle</span>' + svg(IC.chev) + '</button>';
     h += '<button class="cmbb prb" disabled>Paiement bientôt disponible</button><p class="xfine">Les prix sont indicatifs et pourront changer avant l’ouverture. Rien n’est débité pour l’instant. Les pronostics restent des estimations : aucun gain n’est garanti.</p>';
     return h;
   }
@@ -3909,7 +3945,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', proof: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -3941,6 +3977,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     else if (st.tab === 'combo') app.innerHTML = comboHTML();
     else if (st.tab === 'lig') app.innerHTML = ligHTML();
     else if (st.tab === 'set') app.innerHTML = setHTML();
+    else if (st.tab === 'proof') app.innerHTML = proofHTML();
     else if (st.tab === 'today') app.innerHTML = socHead() + todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsV2();

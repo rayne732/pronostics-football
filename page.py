@@ -229,6 +229,13 @@ LAZY = ("hist", "tennis", "basket", "rugby", "handball", "hockey", "baseball", "
 def build_page(models, fixtures, market_probs, generated_at, days, leagues, reliability=None, history=None, external=None, tennis=None, basket=None, rugby=None, handball=None, hockey=None, f1=None, baseball=None, nfl=None, mma=None, golf=None, volley=None, artifact=False, lazy_dir=None, res=None, cal=None, xacc=None, logos=None, form=None, full=None):
     d = build_data(models, fixtures, market_probs, leagues, history, generated_at, (reliability or {}).get("recent"), (reliability or {}).get("daily"), external, tennis, basket, rugby, handball, hockey, f1, baseball, nfl, mma, golf, volley, res, cal, logos, form, _gaps((reliability or {}).get("lgs")), full)
     d["mk"] = (reliability or {}).get("mk", [])
+
+    def _rs(s):
+        if not s:
+            return None
+        return dict(safe=[s["safe"]["n"], round(s["safe"]["p"], 4), round(s["safe"]["hit"], 4)], less=[s["less"]["n"], round(s["less"]["p"], 4), round(s["less"]["hit"], 4)],
+                    b=[[round(b["lo"], 2), round(min(b["hi"], 1.0), 2), b["n"], round(b["p"], 3), round(b["hit"], 3)] for b in s["buckets"] if b["n"] >= 20])
+    d["rel"] = dict(live=_rs((reliability or {}).get("live")), bt=_rs((reliability or {}).get("bt")), since=(reliability or {}).get("since"), seasons=(reliability or {}).get("seasons"))
     d["xacc"] = xacc or []
     d["cmp"] = competition_rows(leagues, (reliability or {}).get("lgs"), basket, rugby, handball, hockey, baseball, nfl, mma, volley)
     if lazy_dir and not artifact:
