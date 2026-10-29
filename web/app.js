@@ -245,7 +245,8 @@
     if (LIVE_BUSY) return;
     LIVE_BUSY = true;
     var T = parisToday(), days = [T], now = new Date();
-    if (now.getHours() < 9) days.push(isoDate(new Date(parseD(T).getTime() - 864e5)));       // ESPN classe les matchs par jour américain : la nuit, ceux d'hier soir sont encore en cours
+    if (now.getHours() < 9) days.push(isoDate(new Date(parseD(T).getTime() - 864e5)));
+    cmbPending().forEach(function (c) { c.legs.forEach(function (l) { if (l.d && l.d < T && days.indexOf(l.d) < 0 && parseD(T) - parseD(l.d) < 4 * 864e5) days.push(l.d); }); });       // ESPN classe les matchs par jour américain : la nuit, ceux d'hier soir sont encore en cours
     Promise.all(days.map(function (d) {
       return fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?limit=1000&dates=' + d.replace(/-/g, '')).then(function (r) { return r.json(); }).catch(function () { return { events: [] }; });
     })).then(function (rs) {
@@ -273,6 +274,7 @@
   function liveWanted() {                                   // y a-t-il un match de foot en cours ou sur le point de commencer ?
     var T = parisToday(), nowMs = Date.now();
     if (window.plLiveWanted && plLiveWanted()) return true;
+    if (cmbLiveWanted()) return true;
     return D.fixtures.some(function (f) { if (f.date !== T && f.date !== isoDate(new Date(parseD(T).getTime() - 864e5))) return false; var d = nowMs - kickoff(f); return d > -10 * 60000 && d < 3.5 * 3600000 || (LIVE[f.id] && LIVE[f.id].st === 'in'); });
   }
   function liveTick() {
@@ -280,6 +282,7 @@
     liveFoot(function () {
       var ae = document.activeElement;
       if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;      // on ne redessine pas pendant une saisie
+      CMB.list.forEach(cmbRes);                                          // règle (et notifie) les combos dès que le score est final
       var y0 = window.scrollY; render(); window.scrollTo(0, y0);
     });
   }
@@ -3516,6 +3519,16 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var keep = Date.now() - 45 * 864e5; CMB.list = CMB.list.filter(function (c) { return c.made > keep; });
     cmbSave();
   }
+  function cmbPending() { return CMB.list.filter(function (c) { return (c.res === null || c.res === undefined) && !c.exp; }); }
+  function cmbLiveWanted() {                                        // un combo en attente a un match en cours, ou déjà passé (résultat à aller chercher)
+    var now = Date.now(), T = parisToday();
+    return cmbPending().some(function (c) { return c.legs.some(function (l) {
+      if (!l.time) return false;
+      var d = now - kickoff({ date: l.d, time: l.time });
+      return (d > -10 * 60000 && d < 4 * 3600000) || (l.d < T && d > 0);
+    }); });
+  }
+  function cmbEnd(c) { return Math.max.apply(null, c.legs.map(function (l) { return l.time ? +kickoff({ date: l.d, time: l.time }) : 0; })); }
   function cmbClose(c) { return Math.min.apply(null, c.legs.map(function (l) { return l.time ? +kickoff({ date: l.d, time: l.time }) : Infinity; })); }
   function cmbRes(c) {                                             // true / false / null (en attente) ; mémorisé dès que c'est tranché
     if (c.res !== null && c.res !== undefined) return c.res;
@@ -3524,12 +3537,13 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       c.res = r; cmbSave();
       if (c.un) Alerts.notify('cmb|' + c.id, r ? 'Combo réussi ' + c.id : 'Combo raté ' + c.id, (r ? 'Les ' + c.legs.length + ' sélections sont passées.' : 'Une sélection a échoué : ta clé est remboursée.'), [r ? 'white_check_mark' : 'x']);
     }
+    else if (!c.exp && cmbEnd(c) && Date.now() > cmbEnd(c) + 30 * 3600000) { c.exp = 1; cmbSave(); }          // résultat introuvable 30 h après le dernier match : on le range dans « Terminés »
     return r;
   }
   function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'admin'; }
   function keysLeft() {
     if (premium()) return Infinity;
-    var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && isoDate(new Date(c.un)) === T && c.res !== false; }).length;
+    var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && isoDate(new Date(c.un)) === T && c.res !== false && !c.exp; }).length;
     return Math.max(0, 1 - used);
   }
   function legTxt(l) {                                            // « Non » seul ne veut rien dire : on ajoute le nom du pari
@@ -3544,13 +3558,14 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(legTxt(l)) + '</span></div>' + scr + ic + '</div>';
   }
   function cmbCard(c) {
-    var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || premium(), done = res !== null;
+    var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || premium(), done = res !== null || !!c.exp;
     var nok = c.legs.filter(function (l) { return plRes(l) === true; }).length;
     var h = '<div class="cmb k-' + K[2] + '"><div class="cmbh"><span class="cmbi">' + svg(IC[K[1]]) + '</span><b class="cmbk">' + K[0] + '</b><span class="cmbid">#' + c.id + '</span></div>' +
       '<div class="cmbs"><b>' + c.legs.length + ' Pronostic' + (c.legs.length > 1 ? 's' : '') + ' AI</b>' + (done ? '<span>Résultat</span>' : '') + '</div><div class="cmbl">' + c.legs.map(function (l) { return comboLeg(l, true, un); }).join('') + '</div>' +
       '<div class="cmbd">' + svg(IC.cal) + '<b>' + dshort(c.d).replace(/^(\d+)\/(\d+)$/, '$1/$2') + '</b></div>';
     if (c.un || (!done && !c.un)) h += '<div class="cmbp">' + svg(IC.shield) + '<span>Protégé · clé remboursée en cas d’échec</span></div>';
-    if (done) h += '<div class="cmbf"><b class="' + (res ? 'ok' : 'ko') + '">' + (res ? 'IA RÉUSSIE' : 'IA ÉCHOUÉE') + '</b><span>' + nok + '/' + c.legs.length + '</span><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
+    if (c.exp && res === null) h += '<div class="cmbf"><div class="cmbw"><small>Résultat introuvable · clé remboursée</small><b>NON VÉRIFIÉ</b></div><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
+    else if (done) h += '<div class="cmbf"><b class="' + (res ? 'ok' : 'ko') + '">' + (res ? 'IA RÉUSSIE' : 'IA ÉCHOUÉE') + '</b><span>' + nok + '/' + c.legs.length + '</span><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
     else if (un) h += '<div class="cmbf"><div class="cmbw"><small>' + (c.un ? 'Combo Débloqué' : 'Combo fermé') + '</small><b class="ok">EN ATTENTE</b></div><button class="cmbb" data-cmbopen="' + c.id + '">VOIR LES SÉLECTIONS</button></div>';
     else h += '<div class="cmbf"><div class="cmbw"><small>' + svg(IC.lock) + ' Le Combo ferme dans</small><b class="cd" data-cd="' + cl + '">' + cdFmt(cl - Date.now()) + '</b></div><button class="cmbu" data-cmbun="' + c.id + '">' + svg(IC.key) + '<span><b>1</b>DÉBLOQUER</span></button></div>';
     return h + '</div>';
@@ -3578,9 +3593,9 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var icons = [];
     L.forEach(function (c) { c.legs.forEach(function (l) { if (l.icon && icons.indexOf(l.icon) < 0) icons.push(l.icon); }); });
     L = L.filter(function (c) { return c.legs.every(function (l) { return (X.cfs === 'all' || l.icon === X.cfs) && legBk(l, X.cfb); }); });
-    var act = L.filter(function (c) { return c.res === null || c.res === undefined; }), fin = L.filter(function (c) { return c.res === true || c.res === false; }), mine = L.filter(function (c) { return c.un; });
+    var act = L.filter(function (c) { return (c.res === null || c.res === undefined) && !c.exp; }), fin = L.filter(function (c) { return c.res === true || c.res === false || c.exp; }), mine = L.filter(function (c) { return c.un; });
     var h = '<header class="xhd"><span class="xmark gold">' + svg(IC.combo) + '</span><b class="xt1">AI Combo</b><span class="xsp"></span><button class="xpillb" data-xhow>' + svg('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.5"/>') + '<span class="pl">Comment ça marche ?</span><span class="ps">Aide</span></button><button class="xkeys" data-xkeys>' + svg(IC.key) + '<b>' + (kl === Infinity ? '∞' : kl) + '</b>' + (kl === Infinity ? '' : svg(IC.plus)) + '</button></header>';
-    h += '<div class="xseg3">' + [['act', 'Actifs', act.length], ['fin', 'Terminés', 0], ['mine', 'Mes Combos', mine.length]].map(function (x) { return '<button class="' + (X.cs === x[0] ? 'on' : '') + '" data-xcs="' + x[0] + '">' + x[1] + (x[2] ? '<i>' + x[2] + '</i>' : '') + '</button>'; }).join('') + '</div>';
+    h += '<div class="xseg3">' + [['act', 'Actifs', act.length], ['fin', 'Terminés', fin.length], ['mine', 'Mes Combos', mine.length]].map(function (x) { return '<button class="' + (X.cs === x[0] ? 'on' : '') + '" data-xcs="' + x[0] + '">' + x[1] + (x[2] ? '<i>' + x[2] + '</i>' : '') + '</button>'; }).join('') + '</div>';
     h += cmbFilters(icons);
     if (X.msg) h += '<div class="bt-warn xmsg">' + esc(X.msg) + '</div>';
     var show = X.cs === 'act' ? act : X.cs === 'fin' ? fin : mine;
@@ -4191,6 +4206,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
   function plansTick() {
     if (document.visibilityState !== 'visible') return;
     if (st.tab === 'today' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+    if (st.tab === 'combo' && !st.detail && !typing() && cmbLiveWanted()) todayLoad();          // fin de match : combos réglés sans attendre
     checkNewData(false);
   }
   setInterval(plansTick, 60000);
