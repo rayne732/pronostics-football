@@ -2914,6 +2914,36 @@
       return '<button class="xchip' + (BK === x[0] ? ' on' : '') + '" data-xbk="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       (BK === 'betclic' ? '<div class="sub">Catégories comme chez Betclic. Non calculables, donc absents : SuperSub, tous les paris sur joueurs (buteur, passeur, tirs), penalty, buts de la tête et coups francs, car nous n’avons pas de statistiques par joueur ni par type de but.</div>' : '');
   }
+  /* ---- comparer avec la cote d'un bookmaker : marge, probabilités sans marge, gain moyen de chaque issue d'après notre modèle */
+  var OXV = {}, OXCUR = null;
+  function oxKey(d) { return d.div + '|' + d.home + '|' + d.away; }
+  function oxNum(v) { var x = parseFloat(String(v || '').replace(',', '.')); return x > 1 ? x : 0; }
+  function oxResult(M, d) {
+    var o = (OXV[oxKey(d)] || ['', '', '']).map(oxNum), names = [d.home, 'Match nul', d.away];
+    if (o.some(function (x) { return !x; })) return '<div class="sub">Saisis les trois cotes pour voir la marge et la comparaison.</div>';
+    var q = o.map(function (x) { return 1 / x; }), S = q[0] + q[1] + q[2], p = M.p1x2, big = false;
+    var h = '<div class="oxr oxh"><span></span><span>Marché</span><span>Notre modèle</span><span>Gain moyen</span></div>';
+    names.forEach(function (n, i) {
+      var ev = p[i] * o[i] - 1; if (ev > 0.25) big = true;
+      h += '<div class="oxr"><span class="oxn">' + esc(nm(n)) + '</span><span>' + pct(q[i] / S) + '</span><span>' + pct(p[i]) + '</span><span class="' + (ev > 0.05 ? 'ok' : ev < -0.05 ? 'ko' : '') + '">' + (ev >= 0 ? '+' : '−') + Math.abs(ev * 100).toFixed(0) + ' %</span></div>';
+    });
+    h += '<div class="sub">Marge du bookmaker sur ce résultat : <b>' + ((S - 1) * 100).toFixed(1).replace('.', ',') + ' %</b>. « Marché » = probabilité déduite des cotes une fois la marge retirée. « Gain moyen » = ce que rapporterait 1 € misé à cette cote si notre modèle a raison (positif = la cote est supérieure à la cote juste du modèle).</div>';
+    if (big) h += '<div class="bt-warn">Un écart aussi grand vient le plus souvent d’une <b>erreur de notre estimation</b> (blessés, compositions, forme récente) plutôt que d’une cote oubliée par le bookmaker. Vérifie avant de jouer.</div>';
+    return h;
+  }
+  function oddsBoxHTML(M, d) {
+    OXCUR = { M: M, d: d };
+    var v = OXV[oxKey(d)] || ['', '', ''], names = ['1', 'N', '2'];
+    return '<div class="sec"><span class="dot a"></span>Comparer avec la cote du bookmaker</div><div class="oxb"><div class="sub">Tape les cotes que tu vois chez Winamax, Betclic ou un autre pour savoir si elles valent le risque.</div><div class="oxi">' +
+      names.map(function (n, i) { return '<label>' + n + '<input data-ox="' + i + '" inputmode="decimal" placeholder="ex. 2,10" value="' + esc(v[i]) + '"></label>'; }).join('') + '</div><div id="oxres">' + oxResult(M, d) + '</div></div>';
+  }
+  document.addEventListener('input', function (e) {
+    var t = e.target;
+    if (!t.hasAttribute || !t.hasAttribute('data-ox') || !OXCUR) return;
+    var k = oxKey(OXCUR.d), arr = OXV[k] || (OXV[k] = ['', '', '']);
+    arr[+t.getAttribute('data-ox')] = t.value;
+    var box = document.getElementById('oxres'); if (box) box.innerHTML = oxResult(OXCUR.M, OXCUR.d);
+  });
   function predTabs(M, C, d) {
     var BC = BK === 'betclic', PC = BC ? BPCATS : PCATS, tab = st.ptab || 'sum', cats = { fire: [], res: [], goals: [], ht: [], stats: [], combo: [], score: [] }, FF = bkFoot(M.fams);
     FF.forEach(function (fam) { cats[BC ? bcCat(fam.name) : mCat(fam.name)].push(fam); });
@@ -2941,7 +2971,7 @@
     } else if (tab === 'score') {
       h += '<div class="sec"><span class="dot a"></span>Score exact</div>' + heatHTML(M, d) + cats.score.map(famRow(d)).join('');
     } else if (tab === 'res') {
-      h += '<div class="sec"><span class="dot g"></span>Résultat, handicaps et écarts</div>' + cats.res.map(famRow(d)).join('') + compareHTML(M, d);
+      h += '<div class="sec"><span class="dot g"></span>Résultat, handicaps et écarts</div>' + cats.res.map(famRow(d)).join('') + oddsBoxHTML(M, d) + compareHTML(M, d);
     } else {
       h += '<div class="sec"><span class="dot ' + (tab === 'stats' ? 'b' : 'a') + '"></span>' + (tab === 'stats' ? 'Corners, tirs et cartons' : 'Combinés et scores') + '</div>' +
         (cats[tab].length ? cats[tab].map(famRow(d)).join('') : '<div class="empty">Aucun marché dans cette catégorie pour ce match.</div>');
