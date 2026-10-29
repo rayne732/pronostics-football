@@ -35,6 +35,17 @@ def yesterday_summary(day):
     return len(ms), len(picks), sum(1 for p in picks if p["hit"])
 
 
+def week_summary(today):
+    """Bilan des 7 derniers jours (le lundi) : (jours avec résultats, matchs, pronostics sûrs vérifiés, gagnés) ou None."""
+    days = n_m = n_p = n_w = 0
+    for k in range(1, 8):
+        y = yesterday_summary(f"{today - timedelta(days=k):%Y-%m-%d}")
+        if y:
+            days += 1
+            n_m += y[0]; n_p += y[1]; n_w += y[2]
+    return (days, n_m, n_p, n_w) if n_p else None
+
+
 def _pct(x):
     return f"{x:.0%}"
 
@@ -65,7 +76,7 @@ def _plural(n, word):
 
 
 # ---------------------------------------------------------------- texte brut
-def _text(rows, now, high, y, bt):
+def _text(rows, now, high, y, bt, w=None):
     lines = ["Bonjour,", "", f"Aujourd'hui : {_plural(len(rows), 'match')} analysé{'s' if len(rows) > 1 else ''}, "
                                     f"{high} à haute confiance. Du plus au moins confiant :", ""]
     for i, x in enumerate(rows[:MAX_MATCHES], 1):
@@ -79,6 +90,8 @@ def _text(rows, now, high, y, bt):
         lines += [f"... et {len(rows) - MAX_MATCHES} autre(s) match(s) sur la page.", ""]
     if y:
         lines += [f"Bilan d'hier : {y[2]} pronostics sûrs gagnés sur {y[1]} ({y[2] / y[1]:.0%}), {y[0]} match(s) terminé(s).", ""]
+    if w:
+        lines += [f"Bilan de la semaine : {w[3]} pronostics sûrs gagnés sur {w[2]} ({w[3] / w[2]:.0%}), {w[1]} matchs sur {w[0]} jours.", ""]
     if bt:
         n = f"{bt['total']['n']:,}".replace(",", " ")
         lines += [f"Repère (backtest sur {n} pronostics) : les pronostics « sûrs » (≥ {SAFE_MIN:.0%}) ont été gagnés "
@@ -131,7 +144,7 @@ def _info_box(text):
             f'border-radius:10px;padding:12px 14px">{text}</div></td></tr>')
 
 
-def _html(rows, now, high, y, bt):
+def _html(rows, now, high, y, bt, w=None):
     date = f"{DAYS[now.weekday()].capitalize()} {now.day} {MONTHS[now.month - 1]}"
     cards = "".join(_card(i, x) for i, x in enumerate(rows[:MAX_MATCHES], 1))
     more = (f'<tr><td style="background:#ffffff;padding:4px 24px 18px;{FONT};font-size:13px;color:#6b7590;border-top:1px solid #e3e7f1">'
@@ -139,6 +152,8 @@ def _html(rows, now, high, y, bt):
     boxes = ""
     if y:
         boxes += _info_box(f"<b>Bilan d&rsquo;hier</b> : {y[2]} pronostics s&ucirc;rs gagn&eacute;s sur {y[1]} ({y[2] / y[1]:.0%}), {y[0]} match(s) termin&eacute;(s).")
+    if w:
+        boxes += _info_box(f"<b>Bilan de la semaine</b> : {w[3]} pronostics s&ucirc;rs gagn&eacute;s sur {w[2]} ({w[3] / w[2]:.0%}), {w[1]} matchs sur {w[0]} jours.")
     if bt:
         n = f"{bt['total']['n']:,}".replace(",", "&nbsp;")
         boxes += _info_box(f"<b>Rep&egrave;re</b> : sur {n} pronostics test&eacute;s dans le pass&eacute;, ceux class&eacute;s &laquo;&nbsp;s&ucirc;rs&nbsp;&raquo; "
@@ -171,4 +186,5 @@ def build_digest(models, fixtures, now, leagues, reliability=None):
     subject = f"Pronostics du {now:%d/%m} : {_plural(len(rows), 'match')}, {high} à haute confiance"
     y = yesterday_summary(f"{today - timedelta(days=1):%Y-%m-%d}")
     bt = reliability["bt"] if reliability and reliability.get("bt") else None
-    return subject, _text(rows, now, high, y, bt), _html(rows, now, high, y, bt)
+    w = week_summary(today) if now.weekday() == 0 else None          # le lundi : bilan de la semaine écoulée
+    return subject, _text(rows, now, high, y, bt, w), _html(rows, now, high, y, bt, w)
