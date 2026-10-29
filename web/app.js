@@ -25,6 +25,10 @@
     if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
   }
   applyTheme();
+  var TXT = 'n';                                          // taille du texte : « n » normale, « l » grande, « xl » très grande (accessibilité)
+  try { TXT = localStorage.getItem('pf-txt') || 'n'; } catch (e) { /* ignoré */ }
+  function applyTxt() { document.documentElement.style.fontSize = TXT === 'xl' ? '125%' : TXT === 'l' ? '112.5%' : ''; }
+  applyTxt();
   setInterval(function () { if (THEME === 'auto') applyTheme(); }, 5 * 60 * 1000);
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -3677,7 +3681,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var h = '<header class="xhd col"><button class="xback" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>Réglages</h1><small>Sport, affichage et outils</small></div></header>';
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
-    h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button><button class="xcr" data-toggle-txt><span class="xcn">Taille du texte : ' + (TXT === 'xl' ? 'très grande' : TXT === 'l' ? 'grande' : 'normale') + '</span>' + svg(IC.chev) + '</button></div>';
     h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
   }
@@ -4014,7 +4018,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
   function closeDetail() { st.ptab = 'sum'; st.detail = null; render(); window.scrollTo(0, st.scroll); }
 
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-ptab],[data-tkm],[data-tkadd],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
+    var t = e.target.closest('[data-open],[data-openext],[data-bilan],[data-spopen],[data-spday],[data-splg],[data-tnopen],[data-tnday],[data-tntour],[data-tnunk],[data-sport],[data-day],[data-filter],[data-status],[data-ptab],[data-tkm],[data-tkadd],[data-bf],[data-plsp],[data-plsort],[data-ocg],[data-jump],[data-lgc],[data-fav],[data-back],[data-dtab],[data-sort],[data-toggle-theme],[data-toggle-txt],[data-bk],[data-bkopen],[data-bkk],[data-share],[data-add],[data-rm],[data-clear],[data-bcomb],[data-gosport],[data-bcombo],[data-as],[data-cmp],[data-dens],[data-shareimg],[data-alsave],[data-altest],[data-aloff]');
     if (!t) return;
     if (t.hasAttribute('data-bilan')) {
       bilanRefreshAll(function () { if (st.tab === 'info' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
@@ -4070,6 +4074,11 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     else if (t.hasAttribute('data-bk')) { Books.toggle(t.getAttribute('data-bk')); var yb = window.scrollY; render(); window.scrollTo(0, yb); }
     else if (t.hasAttribute('data-bkopen')) { st.bkopen = !st.bkopen; var yo = window.scrollY; render(); window.scrollTo(0, yo); }
     else if (t.hasAttribute('data-bkk')) { var bk = t.getAttribute('data-bkk').split('|'); Books.toggleKind(bk[0], bk.slice(1).join('|')); var yk = window.scrollY; render(); window.scrollTo(0, yk); }
+    else if (t.hasAttribute('data-toggle-txt')) {
+      TXT = TXT === 'n' ? 'l' : TXT === 'l' ? 'xl' : 'n'; applyTxt();
+      try { localStorage.setItem('pf-txt', TXT); } catch (err) { /* ignoré */ }
+      render();
+    }
     else if (t.hasAttribute('data-toggle-theme')) {
       THEME = THEME === 'dark' ? 'light' : THEME === 'light' ? 'auto' : curTheme() === 'dark' && THEME !== 'auto' ? 'light' : 'dark';
       applyTheme();

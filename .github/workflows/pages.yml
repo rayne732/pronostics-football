@@ -32,6 +32,16 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Tests du moteur de marchés (probabilités valides, totaux à 100 %)
+        id: tests
+        run: node tests/engine_test.js
+        continue-on-error: true       # avertit sans bloquer le déploiement
+      - name: Prévenir si les tests du moteur échouent
+        if: steps.tests.outcome == 'failure'
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          if [ -n "$NTFY_TOPIC" ]; then curl -s -H "Title: Pronostics : test du moteur en échec" -H "Tags: warning" -d "Un calcul de probabilités est incohérent. Voir l'onglet Actions de GitHub." "https://ntfy.sh/$NTFY_TOPIC" > /dev/null || true; fi
       - name: Générer le site (et notifier si exécution quotidienne)
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
