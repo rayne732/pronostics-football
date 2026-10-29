@@ -3415,6 +3415,45 @@
     for (i = 0; i <= 6; i++) out.push(addDays(T, i));
     return out;
   }
+  /* ---- à la une : pronostic du jour et sélection du week-end (paris validés par backtest, 72 à 90 %, équipes connues du modèle) */
+  var POTD = [];
+  function topPicks(d, max) {
+    var out = [], now = Date.now();
+    D.fixtures.forEach(function (f) {
+      if (f.date !== d || (f.time && kickoff(f) < now + 15 * 60000)) return;
+      if (!Engine.known(f.div, f.home) || !Engine.known(f.div, f.away)) return;
+      var M; try { M = Engine.families(f.div, f.home, f.away, f.ov); } catch (err) { return; }
+      var best = null;
+      M.fams.forEach(function (fam) {
+        if (!fam.validated || fam.lottery) return;
+        if (!/^(Résultat du match|Double chance|Total buts)/.test(fam.name)) return;           // paris parlants : résultat, double chance, totaux (pas les « moins de 3,5 » évidents)
+        fam.sels.forEach(function (x) { if (x[1] >= 0.72 && x[1] < 0.9 && !/0,5|4,5|5,5/.test(x[0]) && (!best || x[1] > best.p)) best = { m: fam.name, s: x[0], p: x[1] }; });
+      });
+      if (best) out.push({ f: f, m: best.m, s: best.s, p: best.p });
+    });
+    return out.sort(function (a, b) { return b.p - a.p; }).slice(0, max);
+  }
+  function potdRow(x) {
+    POTD.push(x);
+    return '<div class="pr2"><button class="pr2m" data-open="' + x.f.i + '"><b>' + esc(nm(x.f.home)) + ' – ' + esc(nm(x.f.away)) + '</b><small>' + esc(cpName(x.f)) + ' · ' + (x.f.time || '') + '</small><span class="pr2p">' + esc(x.s) + ' <em>' + pct(x.p) + '</em></span></button>' +
+      '<button class="pr2s" data-xpotd="' + (POTD.length - 1) + '" aria-label="Partager ce pronostic">' + svg(IC.share) + '</button></div>';
+  }
+  function potdHTML(T) {
+    POTD = [];
+    var one = topPicks(T, 1)[0], h = '';
+    if (one) h += '<div class="potd"><div class="pth">🎯 Pronostic du jour</div>' + potdRow(one) + '</div>';
+    var wd = parseD(T).getDay();
+    if (wd >= 3 && wd <= 6) {                                                           // du mercredi au samedi : on prépare le week-end
+      var sat = addDays(T, 6 - wd), sun = addDays(T, 7 - wd), parts = '';
+      [sat, sun].forEach(function (d) {
+        if (d < T) return;
+        var tp = topPicks(d, 3);
+        if (tp.length) parts += '<div class="xdl">' + dayLabel(d) + '</div>' + tp.map(potdRow).join('');
+      });
+      if (parts) h += '<div class="potd we"><div class="pth">🗓 Les pronostics du week-end</div>' + parts + '</div>';
+    }
+    return h;
+  }
   function discHTML() {
     if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (!st.detail && (st.tab === 'home' || st.tab === 'fav' || st.tab === 'lig' || st.tab === 'combo')) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
     var T = parisToday(), days = xDays(), yd = addDays(T, -1);
@@ -3427,6 +3466,7 @@
     var nPred = all.filter(function (m) { return m.p; }).length, nLive = all.filter(function (m) { return m.state === 'live'; }).length;
     if (all.some(function (m) { return m.state === 'done'; })) ensureRes();
     h += '<div class="xban"><i class="bdot"></i><span>Pronostics prêts pour <b>' + nPred + '</b> matchs</span>' + (nLive ? '<button class="xlv' + (X.stat === 'live' ? ' on' : '') + '" data-xst="' + (X.stat === 'live' ? 'all' : 'live') + '"><i></i>EN DIRECT <b>' + nLive + '</b></button>' : '<span class="xlv off">EN DIRECT</span>') + '</div>';
+    if (X.day === T && !X.q) h += potdHTML(T);
     h += '<div class="xtools"><div class="xseg">' + [['all', 'Tous'], ['soon', 'À venir'], ['live', '<i class="ld"></i>En direct']].map(function (x) { return '<button class="' + (X.stat === x[0] ? 'on' : '') + '" data-xst="' + x[0] + '">' + x[1] + '</button>'; }).join('') + '</div>' +
       '<button class="xib sm' + (X.fo || X.ff !== 'all' ? ' on' : '') + '" data-xfo aria-label="Filtrer">' + svg(IC.filt) + '</button><button class="xib sm' + (X.srch || X.q ? ' on' : '') + '" data-xsrch aria-label="Chercher">' + svg(IC.search) + '</button>' +
       '<button class="xib sm' + (X.sort === 'conf' ? ' on' : '') + '" data-xsort aria-label="Trier">' + svg(IC.sortv) + '</button><span class="xdiv"></span><button class="xchip' + (X.hc ? ' on' : '') + '" data-xhc><i></i>Haute Confiance</button></div>';
@@ -3794,7 +3834,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3809,6 +3849,15 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     if (t.hasAttribute('data-xff')) { X.ff = a('data-xff'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xfs')) { X.fs = a('data-xfs'); render(); return; }
     if (t.hasAttribute('data-xlgc')) { X.lg = { c: a('data-xlgc'), l: null }; X.lcq = ''; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xpotd')) {
+      var px = POTD[+a('data-xpotd')];
+      if (px) {
+        var txt = 'Pronostic : ' + nm(px.f.home) + ' – ' + nm(px.f.away) + ' (' + dm(px.f.date) + (px.f.time ? ' · ' + px.f.time : '') + ')\n' + px.s + ' · ' + pct(px.p) + ' selon le modèle\nEstimation statistique, pas un conseil de pari. 18+';
+        if (navigator.share) navigator.share({ text: txt, url: location.href.split('#')[0].split('?')[0] }).catch(function () { /* partage annulé */ });
+        else if (navigator.clipboard) navigator.clipboard.writeText(txt + '\n' + location.href.split('#')[0]).then(function () { toast('Pronostic copié'); });
+      }
+      return;
+    }
     if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
     if (t.hasAttribute('data-xlgl')) { X.lv = 'm'; X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
