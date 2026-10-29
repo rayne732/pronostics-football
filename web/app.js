@@ -3471,7 +3471,10 @@
         var l = c.L[X.lg.l], byDay = {}, days = [];
         l.items.forEach(function (m) { if (!byDay[m.date]) { byDay[m.date] = []; days.push(m.date); } byDay[m.date].push(m); });
         days.sort();
+        var simOk = !!(l.div && D.leagues[l.div] && D.leagues[l.div].g && D.leagues[l.div].g.t);
         h = '<header class="xhd col"><button class="xback" data-xlgback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><div><h1>' + esc(l.name) + '</h1><small>' + flagOf(c.name) + esc(c.name) + ' · ' + l.n + ' match' + (l.n > 1 ? 's' : '') + '</small></div></header>';
+        if (simOk) h += '<div class="xseg3 two"><button class="' + (X.lv !== 't' ? 'on' : '') + '" data-xlv="m">Matchs</button><button class="' + (X.lv === 't' ? 'on' : '') + '" data-xlv="t">Titre et classement</button></div>';
+        if (simOk && X.lv === 't') return h + seasonHTML(l.div);
         return h + days.map(function (d) { return '<div class="xdl">' + dayLabel(d) + '</div>' + byDay[d].sort(function (a, b) { return a.kick - b.kick; }).map(xrow).join(''); }).join('');
       }
       var ls = Object.keys(c.L).map(function (k) { return c.L[k]; }).sort(function (a, b) { return b.n - a.n || (a.name < b.name ? -1 : 1); });
@@ -3485,6 +3488,73 @@
     h += '<label class="xsearch">' + svg(IC.search) + '<input id="xlq" type="search" placeholder="Rechercher un pays ou une ligue..." autocomplete="off" value="' + esc(X.lcq) + '"></label>';
     if (!isLoaded('cal')) h += skel(3);
     return h + '<div id="xclist">' + (list.length ? list.map(function (k) { return '<button class="xcr big" data-xlgc="' + esc(k) + '"><span class="xfl">' + flagOf(k, true) + '</span><span class="xcn">' + esc(k) + '</span><span class="xcnt">' + C[k].n + '</span>' + svg(IC.chev) + '</button>'; }).join('') : '<div class="xempty">Aucun résultat.</div>') + '</div>';
+  }
+  /* ---- probabilités de titre, de qualification et de descente : on rejoue la fin de la saison 3 000 fois (matchs restants = tous les aller-retours pas encore joués) */
+  var SIMC = {};
+  function pois(l) { var e = Math.exp(-l), k = 0, p = 1; do { k++; p *= Math.random(); } while (p > e); return k - 1; }
+  function seasonSim(div) {
+    var rows = D.hist.filter(function (r) { return r[0] === div; }).sort(function (a, b) { return a[1] - b[1]; });
+    if (!rows.length) return null;
+    var key = div + '|' + rows.length;
+    if (SIMC[key]) return SIMC[key];
+    var i0 = 0, i;
+    for (i = rows.length - 1; i > 0; i--) if (dayN(rows[i][1]) - dayN(rows[i - 1][1]) > 45) { i0 = i; break; }
+    var T = {}, played = {};
+    function team(n) { return T[n] || (T[n] = { n: n, j: 0, pts: 0, gd: 0, gf: 0 }); }
+    rows.slice(i0).forEach(function (r) {
+      var x = +r[4], y = +r[5];
+      if (isNaN(x) || isNaN(y)) return;
+      var a = team(r[2]), b = team(r[3]);
+      a.j++; b.j++; a.gf += x; b.gf += y; a.gd += x - y; b.gd += y - x; played[r[2] + '|' + r[3]] = 1;
+      if (x > y) a.pts += 3; else if (x < y) b.pts += 3; else { a.pts++; b.pts++; }
+    });
+    var names = Object.keys(T), n = names.length, out = { err: '' };
+    if (n < 8) out.err = 'Pas assez d’équipes dans les résultats connus.';
+    else if (names.some(function (k) { return T[k].j > 2 * (n - 1); })) out.err = 'Ce championnat a un calendrier particulier (phases, poules) : la simulation ne s’applique pas.';
+    var G = D.leagues[div].g, rest = [];
+    if (!out.err) {
+      names.forEach(function (a) { names.forEach(function (b) {
+        if (a === b || played[a + '|' + b]) return;
+        var ta = G.t[a] || [0, 0], tb = G.t[b] || [0, 0];
+        rest.push([a, b, Math.exp(G.mu + G.ha + ta[0] - tb[1]), Math.exp(G.mu + tb[0] - ta[1])]);
+      }); });
+      if (names.some(function (k) { return T[k].j + rest.filter(function (m) { return m[0] === k || m[1] === k; }).length !== 2 * (n - 1); })) out.err = 'Le calendrier restant n’est pas complet dans nos données : simulation impossible.';
+    }
+    if (out.err) return (SIMC[key] = out);
+    var R = 3000, top = n >= 18 ? 4 : 3, low = n >= 18 ? 3 : 2, cnt = {}, pos = {}, sim, m, k, ord;
+    names.forEach(function (k2) { cnt[k2] = [0, 0, 0]; pos[k2] = 0; });
+    for (sim = 0; sim < R; sim++) {
+      var P = {};
+      names.forEach(function (k2) { P[k2] = [T[k2].pts, T[k2].gd, T[k2].gf]; });
+      for (m = 0; m < rest.length; m++) {
+        var x = pois(rest[m][2]), y = pois(rest[m][3]), A = P[rest[m][0]], B = P[rest[m][1]];
+        A[1] += x - y; B[1] += y - x; A[2] += x; B[2] += y;
+        if (x > y) A[0] += 3; else if (x < y) B[0] += 3; else { A[0]++; B[0]++; }
+      }
+      ord = names.slice().sort(function (a, b) { return P[b][0] - P[a][0] || P[b][1] - P[a][1] || P[b][2] - P[a][2] || Math.random() - 0.5; });
+      for (k = 0; k < n; k++) { if (k === 0) cnt[ord[k]][0]++; if (k < top) cnt[ord[k]][1]++; if (k >= n - low) cnt[ord[k]][2]++; pos[ord[k]] += k + 1; }
+    }
+    out.rows = names.map(function (k2) { return { n: k2, j: T[k2].j, pts: T[k2].pts, gd: T[k2].gd, t: cnt[k2][0] / R, h: cnt[k2][1] / R, d: cnt[k2][2] / R, pos: pos[k2] / R }; })
+      .sort(function (a, b) { return b.pts - a.pts || b.gd - a.gd; });
+    out.top = top; out.low = low; out.left = 2 * rest.length / n;
+    return (SIMC[key] = out);
+  }
+  function seasonHTML(div) {
+    if (!isLoaded('hist')) {
+      loadLazy('hist', function () { if (st.tab === 'lig' && !st.detail) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+      return skel(6);
+    }
+    var S = seasonSim(div);
+    if (!S) return '<div class="empty">Pas de résultats pour ce championnat.</div>';
+    if (S.err) return '<div class="empty">' + esc(S.err) + '</div>';
+    var pc = function (v) { return v >= 0.995 ? '100' : v < 0.005 ? '–' : v < 0.1 ? (v * 100).toFixed(1).replace('.', ',') : String(Math.round(v * 100)); };
+    var h = '<div class="sim"><div class="sr sh"><span>#</span><span>Équipe</span><span>J</span><span>Pts</span><span>Titre</span><span>Top ' + S.top + '</span><span>Bas</span></div>';
+    S.rows.forEach(function (r, i) {
+      h += '<div class="sr"><span>' + (i + 1) + '</span><span class="tn">' + crest(r.n) + '<em>' + esc(nm(r.n)) + '</em></span><span>' + r.j + '</span><span class="pt">' + r.pts + '</span>' +
+        '<span class="' + (r.t >= 0.5 ? 'ok' : '') + '">' + pc(r.t) + '</span><span class="' + (r.h >= 0.5 ? 'ok' : '') + '">' + pc(r.h) + '</span><span class="' + (r.d >= 0.3 ? 'ko' : '') + '">' + pc(r.d) + '</span></div>';
+    });
+    return h + '</div><div class="srcnote">Pourcentages de chances d’après <b>3 000 simulations</b> des ' + Math.round(S.left) + ' matchs restants par équipe, avec la force de chaque équipe estimée par notre modèle. <b>Titre</b> = finir premier, <b>Top ' + S.top + '</b> = places européennes (zone indicative, elle varie selon le pays), <b>Bas</b> = les ' + S.low + ' derniers (descente directe, sans les barrages). ' +
+      'Les points retirés, les forfaits et les blessures ne sont pas pris en compte. Ce sont des estimations, pas des certitudes.</div>';
   }
   /* ---- Combo : sélections du jour proposées par le modèle, à débloquer avec une clé (1 offerte par jour, remboursée si le combo échoue) */
   var CMB = { n: 1100, list: [], gen: {} };
@@ -3724,7 +3794,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3739,7 +3809,8 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     if (t.hasAttribute('data-xff')) { X.ff = a('data-xff'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xfs')) { X.fs = a('data-xfs'); render(); return; }
     if (t.hasAttribute('data-xlgc')) { X.lg = { c: a('data-xlgc'), l: null }; X.lcq = ''; render(); window.scrollTo(0, 0); return; }
-    if (t.hasAttribute('data-xlgl')) { X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
+    if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
+    if (t.hasAttribute('data-xlgl')) { X.lv = 'm'; X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xcsp')) { X.cfs = a('data-xcsp'); render(); return; }
     if (t.hasAttribute('data-xcbk')) { X.cfb = a('data-xcbk'); render(); return; }

@@ -1174,3 +1174,10 @@ button.chip small{display:block}
 .xt small{font-size:.68rem;color:var(--mute)}.xres{font-size:.82rem;color:var(--mute);padding-left:34px}.xres b{color:var(--ink)}
 .bkbar{align-items:center;flex-wrap:wrap}.bkl{color:var(--mute);font-size:.8rem;margin-right:2px}
 .fl{font-size:.8rem}
+
+.xseg3.two{grid-template-columns:1fr 1fr}
+.sim{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:6px 10px;margin:8px 0}
+.sim .sr{display:grid;grid-template-columns:24px 1fr 28px 34px 40px 40px 40px;gap:4px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:.82rem;font-variant-numeric:tabular-nums;text-align:right}
+.sim .sr.sh{border-top:0;color:var(--mute);font-size:.68rem;font-weight:700}
+.sim .sr span:first-child,.sim .sr span.tn{text-align:left}.sim .tn{display:flex;align-items:center;gap:6px;min-width:0}.sim .tn em{font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sim .pt{font-weight:800}.sim .ok{color:var(--green);font-weight:800}.sim .ko{color:var(--red,#f4665e);font-weight:800}
