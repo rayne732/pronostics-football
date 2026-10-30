@@ -55,6 +55,12 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
         run: python send_digest.py
+      - name: Sauvegarde hebdomadaire du suivi par mail (le dimanche, hors de GitHub)
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python backup_mail.py
       - name: Contrôle du site généré
         run: python selfcheck.py
         continue-on-error: true       # avertit sans bloquer le déploiement

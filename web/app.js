@@ -3484,12 +3484,19 @@
     }
     return h;
   }
+  function staleHTML() {                                          // données trop anciennes (mise à jour automatique en panne) : on le dit au lieu d'afficher de vieux pronostics sans prévenir
+    var m = /(\d+)\/(\d+)\/(\d+) à (\d+):(\d+)/.exec(D.generated || '');
+    if (!m) return '';
+    var nowP = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })), gen = new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]), hrs = (nowP - gen) / 36e5;
+    if (!(hrs > 9)) return '';
+    return '<div class="bt-warn stale">Les données datent d’il y a <b>' + (hrs >= 48 ? Math.round(hrs / 24) + ' jours' : Math.round(hrs) + ' h') + '</b> (' + esc(D.generated) + '). La mise à jour automatique a peut-être du retard : vérifie les horaires avant de te fier aux pronostics. <button class="bt-b" data-xreload>Actualiser</button></div>';
+  }
   function discHTML() {
     if (!isLoaded('cal') && !CAL_REQ) { CAL_REQ = true; loadLazy('cal', function () { if (!st.detail && (st.tab === 'home' || st.tab === 'fav' || st.tab === 'lig' || st.tab === 'combo')) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }); }
     var T = parisToday(), days = xDays(), yd = addDays(T, -1);
     if (!X.day) X.day = T;
     var custom = days.indexOf(X.day) < 0 && X.day !== yd;
-    var h = brand() + sportsBar();
+    var h = brand() + sportsBar() + staleHTML();
     h += '<div class="xdays"><label class="xd cal' + (X.day === yd || custom ? ' on' : '') + '">' + svg(IC.cal) + '<span>' + dshort(custom ? X.day : yd) + '</span><input type="date" data-xdp value="' + esc(X.day) + '" aria-label="Choisir une date"></label>' +
       days.map(function (d, i) { return '<button class="xd' + (X.day === d ? ' on' : '') + '" data-xday="' + d + '"><small>' + (i === 0 ? 'Aujourd’hui' : WD[parseD(d).getDay()]) + '</small><b>' + dshort(d) + '</b></button>'; }).join('') + '</div>';
     var all = xAllMatches(addDays(T, -2)).filter(function (m) { return m.date === X.day; });
@@ -3864,7 +3871,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3888,6 +3895,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       }
       return;
     }
+    if (t.hasAttribute('data-xreload')) { location.reload(); return; }
     if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
     if (t.hasAttribute('data-xlgl')) { X.lv = 'm'; X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
