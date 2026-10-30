@@ -1604,7 +1604,12 @@
   var INTL = /^(fifa|uefa|concacaf|conmebol|caf|afc|global|club)\./;
   var CAL_REQ = false;
   function normT(x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function sameTeam(a, b) { a = normT(a); b = normT(b); return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0); }
+  var TSPEC = /women|woman|ladies|f[ée]minin|femenin|femminile|frauen|\(w\)|\bw$|\bu-?(1[5-9]|2[0-3])\b|\bii\b|reserves|youth|academy/i;
+  function sameTeam(a, b) {                                        // même équipe ? (« Inter » = « Internazionale »), mais jamais l'équipe masculine avec sa section féminine, ses jeunes ou sa réserve
+    if (TSPEC.test(String(a || '')) !== TSPEC.test(String(b || ''))) return false;
+    a = normT(a); b = normT(b);
+    return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
+  }
   function extFor(c) {           // prédiction API-Football du même match (même jour, une équipe en commun)
     var hit = D.ext.filter(function (e) { return e.date === c.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); });
     return hit.length ? hit[0] : null;
@@ -3680,6 +3685,16 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     }); });
   }
   function cmbEnd(c) { return Math.max.apply(null, c.legs.map(function (l) { return l.time ? +kickoff({ date: l.d, time: l.time }) : 0; })); }
+  function cmbPurge() {                                            // ménage automatique : terminés gardés 7 jours, « non vérifiés » 2 jours
+    var now = Date.now(), n0 = CMB.list.length;
+    CMB.list = CMB.list.filter(function (c) {
+      var t = cmbEnd(c) || c.made;
+      if (c.res === true || c.res === false) return now - t < 7 * 864e5;
+      if (c.exp) return now - t < 2 * 864e5;
+      return true;
+    });
+    if (CMB.list.length !== n0) cmbSave();
+  }
   function cmbClose(c) { return Math.min.apply(null, c.legs.map(function (l) { return l.time ? +kickoff({ date: l.d, time: l.time }) : Infinity; })); }
   function cmbRes(c) {                                             // true / false / null (en attente) ; mémorisé dès que c'est tranché
     if (c.res !== null && c.res !== undefined) return c.res;
@@ -3688,7 +3703,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
       c.res = r; cmbSave();
       if (c.un) Alerts.notify('cmb|' + c.id, r ? 'Combo réussi ' + c.id : 'Combo raté ' + c.id, (r ? 'Les ' + c.legs.length + ' sélections sont passées.' : 'Une sélection a échoué : ta clé est remboursée.'), [r ? 'white_check_mark' : 'x']);
     }
-    else if (!c.exp && cmbEnd(c) && Date.now() > cmbEnd(c) + 30 * 3600000) { c.exp = 1; cmbSave(); }          // résultat introuvable 30 h après le dernier match : on le range dans « Terminés »
+    else if (!c.exp && cmbEnd(c) && Date.now() > cmbEnd(c) + 10 * 3600000) { c.exp = 1; cmbSave(); }          // résultat introuvable 10 h après le dernier match : on le range dans « Terminés »
     return r;
   }
   function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'admin'; }
@@ -3739,6 +3754,7 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
   function comboHTML() {
     if (!TODAY.ts && !TODAY.busy) todayLoad();
     cmbGen();
+    CMB.list.forEach(cmbRes); cmbPurge();
     var T = parisToday(), L = CMB.list.slice().sort(function (a, b) { return b.made - a.made || (a.id < b.id ? 1 : -1); }), kl = keysLeft();
     L.forEach(cmbRes);
     var icons = [];

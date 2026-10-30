@@ -36,12 +36,16 @@ jobs:
         id: tests
         run: node tests/engine_test.js
         continue-on-error: true       # avertit sans bloquer le déploiement
-      - name: Prévenir si les tests du moteur échouent
-        if: steps.tests.outcome == 'failure'
+      - name: Contrôle du règlement des pronostics (recalcul indépendant à partir des scores)
+        id: audit
+        run: python tests/settlement_audit.py
+        continue-on-error: true
+      - name: Prévenir si un test échoue
+        if: steps.tests.outcome == 'failure' || steps.audit.outcome == 'failure'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
-          if [ -n "$NTFY_TOPIC" ]; then curl -s -H "Title: Pronostics : test du moteur en échec" -H "Tags: warning" -d "Un calcul de probabilités est incohérent. Voir l'onglet Actions de GitHub." "https://ntfy.sh/$NTFY_TOPIC" > /dev/null || true; fi
+          if [ -n "$NTFY_TOPIC" ]; then curl -s -H "Title: Pronostics : un contrôle automatique a échoué" -H "Tags: warning" -d "Un calcul ou un règlement de pronostic est incohérent. Voir l'onglet Actions de GitHub." "https://ntfy.sh/$NTFY_TOPIC" > /dev/null || true; fi
       - name: Générer le site (et notifier si exécution quotidienne)
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
