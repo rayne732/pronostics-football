@@ -2204,8 +2204,54 @@
   }
   /* ------------------------------------------------------------ compte : connexion, profil, niveaux d'accès, synchronisation des paris */
   var AUI = { mode: 'login', step: 'email', email: '', pass: '', code: '', msg: '', ok: '', users: null, ask: '' }, SYNC = { timer: 0 }, PROF = null;
-  var ROLES = { free: 'Gratuit', premium: 'Premium', admin: 'Admin' };
-  var ACCESS = [['Pronostics, favoris et ligues', 1, 1, 1], ['Suivi de tes paris et statistiques', 1, 1, 1], ['Synchronisation sur tous tes appareils', 1, 1, 1], ['Tous les combos débloqués (en gratuit : 1 clé par jour)', 0, 1, 1], ['Partage de pronostics illimité (en gratuit : 3 par jour)', 0, 1, 1], ['Gestion des comptes', 0, 0, 1]];
+  var ROLES = { free: 'Gratuit', premium: 'Premium', supreme: 'Suprême', admin: 'Admin' };
+  var ACCESS = [['Pronostics, favoris, ligues et liste de tous les matchs', 1, 1, 1, 1], ['Suivi de tes paris, statistiques, synchronisation', 1, 1, 1, 1], ['1 clé combo par jour (+ clés de parrainage)', 1, 1, 1, 1], ['Fiche détaillée de tous les matchs (gratuit : 1 par jour)', 0, 1, 1, 1], ['Partage de pronostics illimité (gratuit : 3 par jour)', 0, 1, 1, 1], ['Clés combo illimitées', 0, 0, 1, 1], ['Gestion des comptes', 0, 0, 0, 1]];
+  /* ---- parrainage : ton lien, 3 clés bonus par ami qui crée un compte (10 amis au plus), 1 clé bonus pour l'ami */
+  var REF = { n: 0, by: false, used: 0, busy: false, msg: '', last: 0 };
+  try { REF.used = +localStorage.getItem('pf-bonus-used') || 0; var rc0 = JSON.parse(localStorage.getItem('pf-refc') || 'null'); if (rc0) { REF.n = rc0.n || 0; REF.by = !!rc0.by; } } catch (e) { /* ignoré */ }
+  try {                                                             // arrivée par un lien d'invitation : on garde le code jusqu'à la création du compte
+    var rq = new URLSearchParams(location.search).get('ref');
+    if (rq && /^[0-9a-f]{8}$/i.test(rq)) { localStorage.setItem('pf-ref', rq.toLowerCase()); history.replaceState(null, '', location.pathname + location.hash); }
+  } catch (e) { /* ignoré */ }
+  function refCode() { var u = Account.uid(); return u ? u.replace(/-/g, '').slice(0, 8) : ''; }
+  function refLink() { return location.origin + location.pathname + '?ref=' + refCode(); }
+  function refSaveUsed() { try { localStorage.setItem('pf-bonus-used', String(REF.used)); } catch (e) { /* ignoré */ } if (window.pfChanged) pfChanged(); }
+  function bonusKeys() { if (!Account.on()) return 0; return Math.max(0, Math.min(REF.n, 10) * 3 + (REF.by ? 1 : 0) - REF.used); }
+  function refSync() {                                              // valide un code reçu, puis recompte les amis parrainés
+    if (!Account.on() || REF.busy || Date.now() - REF.last < 60000) return;          // au plus une fois par minute (sinon l'écran se redessine en boucle)
+    REF.busy = true; REF.last = Date.now();
+    var pending = null, done = false;
+    try { pending = localStorage.getItem('pf-ref'); done = !!localStorage.getItem('pf-ref-done'); } catch (e) { /* ignoré */ }
+    var claim = pending && !done ? Account.rpc('pf_claim_referral', { p_code: pending }).then(function (res) {
+      try { localStorage.setItem('pf-ref-done', String(res)); } catch (e) { /* ignoré */ }
+      REF.msg = res === 'ok' ? 'Parrainage validé : 1 clé bonus pour toi.' : res === 'already' ? 'Ce compte a déjà un parrain.' : res === 'old' ? 'Le parrainage ne marche que pour un compte créé il y a moins de 7 jours.' : res === 'self' ? 'Tu ne peux pas te parrainer toi-même.' : res === 'full' ? 'Ce parrain a atteint sa limite de 10 amis.' : 'Code de parrainage inconnu.';
+      if (res === 'ok') toast('+1 clé bonus : parrainage validé');
+    }).catch(function () { /* réseau ou table absente : on réessaiera */ }) : Promise.resolve();
+    claim.then(function () { return Account.rest('GET', '/rest/v1/pf_referrals?select=referrer,referred'); }).then(function (r) {
+      if (r && r.ok && Array.isArray(r.body)) {
+        var me = Account.uid();
+        REF.n = r.body.filter(function (x) { return x.referrer === me; }).length; REF.by = r.body.some(function (x) { return x.referred === me; });
+        try { localStorage.setItem('pf-refc', JSON.stringify({ n: REF.n, by: REF.by })); } catch (e) { /* ignoré */ }
+      }
+    }).catch(function () { /* ignoré */ }).then(function () { REF.busy = false; if ((st.tab === 'ref' || st.tab === 'combo') && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+  }
+  function refHTML() {
+    var h = '<button class="xback own" data-xtab="prem" aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>🎁 Parrainage</h1><small>Invite un ami, gagne des clés</small></div></header>';
+    var invited = ''; try { invited = localStorage.getItem('pf-ref') || ''; } catch (e) { /* ignoré */ }
+    if (!Account.on()) {
+      h += '<div class="cpc"><div class="hl3"><p>Pour avoir ton lien de parrainage, <b>crée un compte</b> (gratuit).</p>' + (invited ? '<p>Tu as été invité : en créant ton compte dans les 7 jours, tu recevras <b>1 clé bonus</b> et ton ami en gagnera 3.</p>' : '') + '</div><button class="voir mid wide" data-xacct>Créer mon compte</button></div>';
+      return h;
+    }
+    refSync();
+    var link = refLink();
+    h += '<div class="cpc"><div class="hl3"><p><b>3 clés</b> pour toi à chaque ami qui crée un compte avec ton lien, et <b>1 clé</b> pour lui. Une clé débloque un combo.</p></div>' +
+      '<div class="refbox"><small>Ton lien</small><b id="reflink">' + esc(link) + '</b></div>' +
+      '<div class="plbtns"><button class="voir mid" data-xrefcopy>Copier le lien</button><button class="voir low" data-xrefshare>Partager</button></div></div>';
+    h += '<div class="cpc"><div class="refst"><div><b>' + REF.n + '</b><small>ami' + (REF.n > 1 ? 's' : '') + ' parrainé' + (REF.n > 1 ? 's' : '') + '</small></div><div><b>' + (unlimitedKeys() ? '∞' : bonusKeys()) + '</b><small>clé' + (bonusKeys() > 1 ? 's' : '') + ' bonus</small></div></div>' +
+      (REF.by ? '<div class="sub">Tu as toi-même été parrainé : 1 clé bonus incluse.</div>' : '') + (REF.msg ? '<div class="acok">' + esc(REF.msg) + '</div>' : '') + '</div>';
+    h += '<div class="srcnote"><b>Règles.</b> Le parrainage compte quand l’ami crée un compte (moins de 7 jours avant) avec ton lien. 10 amis au maximum par personne, soit 30 clés. Les clés bonus ne périment pas et sont remboursées si le combo échoue. Un compte ne peut être parrainé qu’une fois. Les clés en plus de celle du jour servent après elle. Aucun gain d’argent n’est lié au parrainage.</div>';
+    return h;
+  }
   function pfChanged() { if (!Account.on()) return; clearTimeout(SYNC.timer); SYNC.timer = setTimeout(function () { pfSync(); }, 2500); }
   window.pfChanged = pfChanged; Bets.onChange = pfChanged;
   Bets.onSettle = function (b) {                                   // pari réglé tout seul : notification (seulement s'il est récent)
@@ -2221,8 +2267,9 @@
       var d = (remote && remote.data) || {};
       if (d.bets) Bets.merge(d.bets);
       if (d.plan && (!PL || (d.plan.u || 0) > (PL.u || 0))) { PL = d.plan; try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } }
-      return Account.push({ v: 1, bets: Bets.dump(), plan: PL });
-    }).then(function () { Account.set({ last: Date.now(), msg: '' }); }).catch(function (e) {
+      if (typeof d.rk === 'number' && d.rk > REF.used) { REF.used = d.rk; try { localStorage.setItem('pf-bonus-used', String(REF.used)); } catch (e) { /* ignoré */ } }
+      return Account.push({ v: 1, bets: Bets.dump(), plan: PL, rk: REF.used });
+    }).then(function () { Account.set({ last: Date.now(), msg: '' }); refSync(); }).catch(function (e) {
       Account.set({ msg: String(e && e.message) === 'auth' ? 'Session expirée : reconnecte-toi.' : 'Synchronisation impossible pour l’instant (tes données restent sur cet appareil).' });
     }).then(function () { Account.set({ busy: false }); acRefresh(); });
   }
@@ -2252,14 +2299,14 @@
     h += acBox('<div class="acid"><div class="acav">' + esc(initials()) + '</div><div><b>' + esc(Account.email()) + '</b><small>Niveau : <span class="acrole ' + r + '">' + esc(ROLES[r] || r) + '</span>' + (since ? ' · membre depuis le ' + since : '') + '</small></div></div>');
     h += acBox('<div class="sub">' + (A.busy ? 'Synchronisation…' : A.last ? 'Dernière synchronisation à ' + new Date(A.last).toTimeString().slice(0, 5) : 'Pas encore synchronisé') + '</div>' + (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') +
       '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button></div>', 'Synchronisation');
-    var isAdm = r === 'admin', cols = isAdm ? [1, 2, 3] : [1, 2];
-    h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th>' + (isAdm ? '<th>Admin</th>' : '') + '</tr>' + ACCESS.filter(function (x) { return isAdm || x[3] && (x[1] || x[2]); }).map(function (x) {
-      return '<tr><td>' + esc(x[0]) + '</td>' + cols.map(function (i) { return '<td class="' + (['free', 'premium', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
+    var isAdm = r === 'admin', cols = isAdm ? [1, 2, 3, 4] : [1, 2, 3];
+    h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th><th>Suprême</th>' + (isAdm ? '<th>Admin</th>' : '') + '</tr>' + ACCESS.filter(function (x) { return isAdm || x[1] || x[2] || x[3]; }).map(function (x) {
+      return '<tr><td>' + esc(x[0]) + '</td>' + cols.map(function (i) { return '<td class="' + (['free', 'premium', 'supreme', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
     }).join('') + '</table>', 'Mon niveau d’accès');
     if (r === 'admin') {
       h += acBox((AUI.users ? '<div class="acusers">' + AUI.users.map(function (u) {
         return '<div class="acu"><span><b>' + esc(u.email || '?') + '</b><small>inscrit le ' + new Date(u.created_at).toLocaleDateString('fr-FR') + (u.last_sign_in ? ' · vu le ' + new Date(u.last_sign_in).toLocaleDateString('fr-FR') : '') + '</small></span>' +
-          '<select data-acrole="' + esc(u.user_id) + '">' + ['free', 'premium', 'admin'].map(function (k) { return '<option value="' + k + '"' + (u.role === k ? ' selected' : '') + '>' + ROLES[k] + '</option>'; }).join('') + '</select></div>';
+          '<select data-acrole="' + esc(u.user_id) + '">' + ['free', 'premium', 'supreme', 'admin'].map(function (k) { return '<option value="' + k + '"' + (u.role === k ? ' selected' : '') + '>' + ROLES[k] + '</option>'; }).join('') + '</select></div>';
       }).join('') + '</div>' : '<div class="sub">Chargement…</div>') + '<div class="plbtns"><button class="voir low" data-acusers>Actualiser</button></div>', 'Gestion des comptes');
     }
     h += acBox(acMsg() + '<label class="acf">Nouveau mot de passe<input data-acnew type="password" autocomplete="new-password" placeholder="8 caractères minimum"></label><div class="plbtns"><button class="voir low" data-acpw>Changer le mot de passe</button></div>', 'Sécurité');
@@ -3454,7 +3501,7 @@
     }).join('');
   }
   function xAvatar() {
-    var r = Account.on() ? Account.role() : null, inner = Account.on() ? '<span>' + esc(initials()) + '</span>' + (r === 'premium' || r === 'admin' ? '<i>' + (r === 'admin' ? 'ADMIN' : 'PRO') + '</i>' : '') : svg('<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>');
+    var r = Account.on() ? Account.role() : null, inner = Account.on() ? '<span>' + esc(initials()) + '</span>' + (r === 'premium' || r === 'supreme' || r === 'admin' ? '<i>' + (r === 'admin' ? 'ADMIN' : r === 'supreme' ? 'MAX' : 'PRO') + '</i>' : '') : svg('<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>');
     return '<button class="xav' + (Account.on() ? ' on' : '') + '" data-xacct aria-label="Mon compte">' + inner + '</button>';
   }
   var XLOGO = '<div class="xbrand"><span class="xmark">' + LOGO + '</span><b>Pronos<em>Foot</em></b></div>';
@@ -3503,6 +3550,38 @@
     }
     return h;
   }
+  var FREE_VIEWS = 1;                                               // fiches match ouvertes gratuitement par jour (mettre un grand nombre pour lever la limite)
+  var VIEW = {};
+  try { VIEW = JSON.parse(localStorage.getItem('pf-view') || '{}') || {}; } catch (e) { VIEW = {}; }
+  function viewPaid() { if (!Account.on()) return false; var r = Account.role(); return !r || r === 'premium' || r === 'supreme' || r === 'admin'; }          // rôle pas encore chargé : on ne bloque pas
+  function viewToday() { var T = parisToday(); if (VIEW.d !== T) VIEW = { d: T, ids: [] }; return VIEW; }
+  function viewAllowed(id) {                                        // gratuit : une seule fiche match détaillée par jour (la même peut être rouverte)
+    if (viewPaid()) return true;
+    var V = viewToday();
+    if (V.ids.indexOf(id) >= 0) return true;
+    if (V.ids.length < FREE_VIEWS) { V.ids.push(id); try { localStorage.setItem('pf-view', JSON.stringify(V)); } catch (e) { /* ignoré */ } return true; }
+    return false;
+  }
+  function paywall() {
+    var el = document.getElementById('pw'); if (el) el.remove();
+    el = document.createElement('div'); el.id = 'pw'; el.className = 'pw';
+    el.innerHTML = '<div class="pwb"><h3>Ton match gratuit du jour est utilisé</h3><p>En version gratuite, tu ouvres <b>' + FREE_VIEWS + ' fiche' + (FREE_VIEWS > 1 ? 's' : '') + ' match par jour</b> (la liste de tous les matchs reste visible). <b>Premium</b> ouvre tous les matchs ; <b>Suprême</b> y ajoute des clés combo illimitées.</p><button class="voir mid wide" data-pwgo>Voir les offres</button><button class="lnk" data-pwx>Plus tard</button></div>';
+    document.body.appendChild(el);
+  }
+  document.addEventListener('click', function (e) {                // en phase de capture : avant les autres gestionnaires
+    var t = e.target.closest && e.target.closest('[data-pwgo],[data-pwx],[data-open],[data-calopen],[data-openext]');
+    if (!t) return;
+    var pw = document.getElementById('pw');
+    if (t.hasAttribute('data-pwx') || t.hasAttribute('data-pwgo')) { e.stopPropagation(); if (pw) pw.remove(); if (t.hasAttribute('data-pwgo')) xGo('prem'); return; }
+    if (e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-bet]')) return;
+    var id = t.hasAttribute('data-open') ? 'o' + t.getAttribute('data-open') : t.hasAttribute('data-calopen') ? 'c' + t.getAttribute('data-calopen') : 'e' + t.getAttribute('data-openext');
+    if (!viewAllowed(id)) { e.stopPropagation(); e.preventDefault(); paywall(); }
+  }, true);
+  function quotaHTML() {
+    if (viewPaid()) return '';
+    var used = viewToday().ids.length;
+    return '<div class="xq">' + (used ? '🔒 Match gratuit du jour utilisé' : '🔓 1 fiche match gratuite aujourd’hui') + ' · <button class="lnk" data-xtab="prem">Voir Premium</button></div>';
+  }
   function staleHTML() {                                          // données trop anciennes (mise à jour automatique en panne) : on le dit au lieu d'afficher de vieux pronostics sans prévenir
     var m = /(\d+)\/(\d+)\/(\d+) à (\d+):(\d+)/.exec(D.generated || '');
     if (!m) return '';
@@ -3515,7 +3594,7 @@
     var T = parisToday(), days = xDays(), yd = addDays(T, -1);
     if (!X.day) X.day = T;
     var custom = days.indexOf(X.day) < 0 && X.day !== yd;
-    var h = brand() + sportsBar() + staleHTML();
+    var h = brand() + sportsBar() + staleHTML() + quotaHTML();
     h += '<div class="xdays"><label class="xd cal' + (X.day === yd || custom ? ' on' : '') + '">' + svg(IC.cal) + '<span>' + dshort(custom ? X.day : yd) + '</span><input type="date" data-xdp value="' + esc(X.day) + '" aria-label="Choisir une date"></label>' +
       days.map(function (d, i) { return '<button class="xd' + (X.day === d ? ' on' : '') + '" data-xday="' + d + '"><small>' + (i === 0 ? 'Aujourd’hui' : WD[parseD(d).getDay()]) + '</small><b>' + dshort(d) + '</b></button>'; }).join('') + '</div>';
     var all = xAllMatches(addDays(T, -2)).filter(function (m) { return m.date === X.day; });
@@ -3719,13 +3798,18 @@
       c.res = r; cmbSave();
       if (c.un) Alerts.notify('cmb|' + c.id, r ? 'Combo réussi ' + c.id : 'Combo raté ' + c.id, (r ? 'Les ' + c.legs.length + ' sélections sont passées.' : 'Une sélection a échoué : ta clé est remboursée.'), [r ? 'white_check_mark' : 'x']);
     }
-    else if (!c.exp && cmbEnd(c) && Date.now() > cmbEnd(c) + 10 * 3600000) { c.exp = 1; cmbSave(); }          // résultat introuvable 10 h après le dernier match : on le range dans « Terminés »
+    else if (!c.exp && cmbEnd(c) && Date.now() > cmbEnd(c) + 10 * 3600000) { c.exp = 1; cmbSave(); }
+    if (c.bk && !c.bkr && (r === false || c.exp)) { c.bkr = 1; REF.used = Math.max(0, REF.used - 1); refSaveUsed(); cmbSave(); }          // clé bonus remboursée          // résultat introuvable 10 h après le dernier match : on le range dans « Terminés »
     return r;
   }
-  function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'admin'; }
+  function premium() { var r = Account.on() ? Account.role() : null; return r === 'premium' || r === 'supreme' || r === 'admin'; }          // accès payant : tous les matchs, partage illimité
+  function unlimitedKeys() { var r = Account.on() ? Account.role() : null; return r === 'supreme' || r === 'admin'; }                      // clés combo illimitées
   function keysLeft() {
-    if (premium()) return Infinity;
-    var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && isoDate(new Date(c.un)) === T && c.res !== false && !c.exp; }).length;
+    if (unlimitedKeys()) return Infinity;
+    return freeKeys() + bonusKeys();
+  }
+  function freeKeys() {
+    var T = parisToday(), used = CMB.list.filter(function (c) { return c.un && !c.bk && isoDate(new Date(c.un)) === T && c.res !== false && !c.exp; }).length;
     return Math.max(0, 1 - used);
   }
   function legTxt(l) {                                            // « Non » seul ne veut rien dire : on ajoute le nom du pari
@@ -3742,7 +3826,7 @@
     return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(legTxt(l)) + '</span></div>' + scr + ic + '</div>';
   }
   function cmbCard(c) {
-    var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || premium(), done = res !== null || !!c.exp;
+    var K = KINDS[c.kind], cl = cmbClose(c), closed = cl <= Date.now(), res = cmbRes(c), un = !!c.un || closed || unlimitedKeys(), done = res !== null || !!c.exp;
     var nok = c.legs.filter(function (l) { return plRes(l) === true; }).length;
     var h = '<div class="cmb k-' + K[2] + '"><div class="cmbh"><span class="cmbi">' + svg(IC[K[1]]) + '</span><b class="cmbk">' + K[0] + '</b><span class="cmbid">#' + c.id + '</span></div>' +
       '<div class="cmbs"><b>' + c.legs.length + ' Pronostic' + (c.legs.length > 1 ? 's' : '') + ' AI</b>' + (done ? '<span>Résultat</span>' : '') + '</div><div class="cmbl">' + c.legs.map(function (l) { return comboLeg(l, true, un); }).join('') + '</div>' +
@@ -3792,7 +3876,7 @@
   function comboPage(id) {
     var c = CMB.list.filter(function (x) { return x.id === id; })[0];
     if (!c) return '<div class="empty">Combo introuvable.</div>';
-    var K = KINDS[c.kind], cl = cmbClose(c), res = cmbRes(c), un = !!c.un || cl <= Date.now() || premium();
+    var K = KINDS[c.kind], cl = cmbClose(c), res = cmbRes(c), un = !!c.un || cl <= Date.now() || unlimitedKeys();
     var h = '<div class="dhead"><button class="back" data-back aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button></div><div class="cbg k-' + K[2] + '"><div class="cbt"><span class="cmbi big">' + svg(IC[K[1]]) + '</span><h2>AI COMBO #' + c.id + '</h2><b class="cmbk">' + K[0] + '</b>' +
       '<div class="cpm"><span>' + svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/>') + ' ' + c.legs.length + ' Pronostic' + (c.legs.length > 1 ? 's' : '') + ' AI</span><i></i><span>' + svg(IC.cal) + ' ' + dayLabel(c.d).replace('Aujourd’hui · ', '') + '</span></div></div>' +
       '<div class="cmbp">' + svg(IC.shield) + '<span>Protégé · clé remboursée en cas d’échec</span></div>' +
@@ -3863,7 +3947,7 @@
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
     h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button><button class="xcr" data-toggle-txt><span class="xcn">Taille du texte : ' + (TXT === 'xl' ? 'très grande' : TXT === 'l' ? 'grande' : 'normale') + '</span>' + svg(IC.chev) + '</button></div>';
-    h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
   }
   function calPage(i) {
@@ -3905,7 +3989,7 @@
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xtier],[data-xrefcopy],[data-xrefshare],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -3930,6 +4014,12 @@
       return;
     }
     if (t.hasAttribute('data-xreload')) { location.reload(); return; }
+    if (t.hasAttribute('data-xrefcopy') || t.hasAttribute('data-xrefshare')) {
+      var rl = refLink();
+      if (t.hasAttribute('data-xrefshare') && navigator.share) navigator.share({ title: 'Pronostics', text: 'Rejoins-moi sur Pronostics : on gagne des clés tous les deux avec ce lien.', url: rl }).catch(function () { /* partage annulé */ });
+      else if (navigator.clipboard) navigator.clipboard.writeText(rl).then(function () { toast('Lien copié'); });
+      return;
+    }
     if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
     if (t.hasAttribute('data-xlgl')) { X.lv = 'm'; X.lg = { c: X.lg.c, l: a('data-xlgl') }; render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xlgback')) { X.lg = X.lg && X.lg.l ? { c: X.lg.c, l: null } : null; render(); window.scrollTo(0, 0); return; }
@@ -3939,12 +4029,17 @@
     if (t.hasAttribute('data-cmbopen')) { st.scroll = window.scrollY; st.detail = { cmb: a('data-cmbopen') }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-cmbun')) {
       var c = CMB.list.filter(function (x) { return x.id === a('data-cmbun'); })[0];
-      if (c && !c.un) { if (keysLeft() > 0) { c.un = Date.now(); cmbSave(); X.msg = ''; } else X.msg = 'Plus de clé aujourd’hui : une nouvelle clé est offerte demain. Les clés en plus arriveront avec l’offre Premium.'; }
+      if (c && !c.un) {
+        if (unlimitedKeys() || freeKeys() > 0) { c.un = Date.now(); cmbSave(); X.msg = ''; }
+        else if (bonusKeys() > 0) { c.un = Date.now(); c.bk = 1; REF.used++; refSaveUsed(); cmbSave(); X.msg = ''; }
+        else X.msg = 'Plus de clé aujourd’hui : une nouvelle clé est offerte demain. Invite un ami (Parrainage) pour gagner 3 clés, ou passe Premium.';
+      }
       render(); window.scrollTo(0, st.detail ? 0 : y0); return;
     }
     if (t.hasAttribute('data-xhow')) { st.scroll = window.scrollY; st.detail = { how: 1 }; try { history.pushState({ d: 1 }, ''); st.pushed = true; } catch (err) { st.pushed = false; } render(); window.scrollTo(0, 0); return; }
     if (t.hasAttribute('data-xkeys')) { xGo('prem'); return; }
     if (t.hasAttribute('data-xbk')) { BK = a('data-xbk'); try { localStorage.setItem('pf-bk', BK); } catch (err) { /* ignoré */ } render(); window.scrollTo(0, y0); return; }
+    if (t.hasAttribute('data-xtier')) { PREM.tier = a('data-xtier'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xper')) { PREM.per = a('data-xper'); render(); window.scrollTo(0, y0); return; }
     if (t.hasAttribute('data-xacct')) { xGo('account'); return; }
     if (t.hasAttribute('data-xset')) { xGo('set'); return; }
@@ -4068,16 +4163,21 @@
   });
 
   /* ---- Premium : un seul niveau, trois durées (le paiement n'est pas encore ouvert) */
-  var PREM = { per: 'month' };
-  var PRICES = { week: ['Semaine', '2,99 €', 'par semaine', ''], month: ['Mois', '7,99 €', 'par mois', 'Le plus choisi'], year: ['Année', '59 €', 'par an', '2 mois offerts'] };
-  var PFEAT = [['Combos tous débloqués, sans clé', 1], ['Pronostics partagés illimités dans la communauté', 1], ['Plans de mise avancés et alertes avant les matchs', 1], ['Badge PRO à côté de ton avatar', 1], ['Suivi de tes paris, statistiques et synchronisation', 0], ['Pronostics, favoris et ligues', 0]];
+  var PREM = { per: 'month', tier: 'premium' };
+  var PRICES = { premium: { week: ['Semaine', '2,99 €', 'par semaine', ''], month: ['Mois', '7,99 €', 'par mois', 'Le plus choisi'], year: ['Année', '59 €', 'par an', '2 mois offerts'] },
+    supreme: { week: ['Semaine', '4,99 €', 'par semaine', ''], month: ['Mois', '12,99 €', 'par mois', 'Tout illimité'], year: ['Année', '99 €', 'par an', '2 mois offerts'] } };
+  var PFEAT = [['Pronostics, favoris et ligues', 0], ['Suivi de tes paris, statistiques et synchronisation', 0], ['1 clé combo par jour (+ clés de parrainage)', 0], ['Fiche détaillée de tous les matchs (gratuit : 1 par jour)', 1],
+    ['Pronostics partagés illimités dans la communauté', 1], ['Plans de mise avancés et alertes avant les matchs', 1], ['Badge PRO à côté de ton avatar', 1], ['Clés combo illimitées : tous les combos débloqués', 2], ['Badge MAX à côté de ton avatar', 2]];
+  var LEVELN = ['Gratuit', 'Premium', 'Suprême'];
   function premHTML() {
-    var P = PRICES[PREM.per], r = Account.on() ? Account.role() : null, on = r === 'premium' || r === 'admin';
-    var h = '<button class="xback own" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>' + svg(IC.gem) + ' Premium</h1><small>Un seul niveau, tout débloqué</small></div></header>';
-    if (on) h += '<div class="acok">Tu as déjà l’accès ' + (r === 'admin' ? 'Admin (tout est débloqué)' : 'Premium') + '.</div>';
-    h += '<div class="xseg3">' + ['week', 'month', 'year'].map(function (k) { return '<button class="' + (PREM.per === k ? 'on' : '') + '" data-xper="' + k + '">' + PRICES[k][0] + '</button>'; }).join('') + '</div>';
+    var T = PREM.tier === 'supreme' ? 2 : 1, P = PRICES[PREM.tier][PREM.per], r = Account.on() ? Account.role() : null, on = r === 'premium' || r === 'supreme' || r === 'admin';
+    var h = '<button class="xback own" data-xback aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>' + svg(IC.gem) + ' Offres</h1><small>Premium : tous les matchs · Suprême : en plus, clés combo illimitées</small></div></header>';
+    if (on) h += '<div class="acok">Tu as déjà l’accès ' + (r === 'admin' ? 'Admin (tout est débloqué)' : r === 'supreme' ? 'Suprême' : 'Premium') + '.</div>';
+    h += '<div class="xseg3">' + [['premium', 'Premium'], ['supreme', 'Suprême']].map(function (k) { return '<button class="' + (PREM.tier === k[0] ? 'on' : '') + '" data-xtier="' + k[0] + '">' + k[1] + '</button>'; }).join('') + '</div>';
+    h += '<div class="xseg3">' + ['week', 'month', 'year'].map(function (k) { return '<button class="' + (PREM.per === k ? 'on' : '') + '" data-xper="' + k + '">' + PRICES[PREM.tier][k][0] + '</button>'; }).join('') + '</div>';
     h += '<div class="prc"><b class="prp">' + P[1] + '</b><span>' + P[2] + '</span>' + (P[3] ? '<em>' + P[3] + '</em>' : '') + '<small>3 jours d’essai offerts · résiliable à tout moment</small></div>';
-    h += '<div class="cpc">' + PFEAT.map(function (f) { return '<div class="pfr ' + (f[1] ? 'pm' : '') + '"><span class="cx ' + (f[1] ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + (f[1] ? 'Premium' : 'Gratuit') + '</small></div>'; }).join('') + '</div>';
+    h += '<div class="cpc">' + PFEAT.map(function (f) { var inc = f[1] <= T; return '<div class="pfr ' + (inc && f[1] ? 'pm' : '') + '"><span class="cx ' + (inc ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + LEVELN[f[1]] + '</small></div>'; }).join('') + '</div>';
+    h += '<button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button>';
     h += '<button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Voir les résultats réels du modèle</span>' + svg(IC.chev) + '</button>';
     h += '<button class="cmbb prb" disabled>Paiement bientôt disponible</button><p class="xfine">Les prix sont indicatifs et pourront changer avant l’ouverture. Rien n’est débité pour l’instant. Les pronostics restent des estimations : aucun gain n’est garanti.</p>';
     return h;
@@ -4141,7 +4241,7 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', proof: 'home', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', proof: 'home', ref: 'soc', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -4174,6 +4274,7 @@
     else if (st.tab === 'lig') app.innerHTML = ligHTML();
     else if (st.tab === 'set') app.innerHTML = setHTML();
     else if (st.tab === 'proof') app.innerHTML = proofHTML();
+    else if (st.tab === 'ref') app.innerHTML = refHTML();
     else if (st.tab === 'today') app.innerHTML = socHead() + todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsV2();
@@ -4416,6 +4517,7 @@
     if (tb === 'lig') X.lg = null;
     st.tab = tb === 'soc' ? X.lastSoc : tb; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
+  setTimeout(refSync, 3000);
   Bets.resolver = function (id, m, sel) {
     if (!isLoaded('res') || !D.res) return null;
     var r = D.res.m && D.res.m[id], i;
