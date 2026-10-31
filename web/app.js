@@ -1607,8 +1607,22 @@
   var TSPEC = /women|woman|ladies|f[ée]minin|femenin|femminile|frauen|\(w\)|\bw$|\bu-?(1[5-9]|2[0-3])\b|\bii\b|reserves|youth|academy/i;
   function sameTeam(a, b) {                                        // même équipe ? (« Inter » = « Internazionale »), mais jamais l'équipe masculine avec sa section féminine, ses jeunes ou sa réserve
     if (TSPEC.test(String(a || '')) !== TSPEC.test(String(b || ''))) return false;
+    var ra = a, rb = b;
     a = normT(a); b = normT(b);
-    return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
+    return !!a && !!b && (a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0 || nameMatch(ra, rb));
+  }
+  var TSTOP = /^(fc|cf|ac|sc|afc|cd|ud|sk|fk|bk|if|as|us|ss|rc|club|de|del|la|le|los|the|stade|ca|cs|calcio)$/;
+  function nameTokens(x) { return String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(function (t) { return t && !TSTOP.test(t); }); }
+  function nameMatch(a, b) {                                       // tous les mots utiles du nom le plus court se retrouvent (début de mot) dans l'autre : « Man United » = « Manchester United », mais pas « Manchester City »
+    var na = a, nb = b, ta = nameTokens(a), tb = nameTokens(b);
+    if (!ta.length || !tb.length) return false;
+    var sh = ta.length <= tb.length ? ta : tb, lg = sh === ta ? tb : ta;
+    var rawN = String(sh === ta ? na : nb).split(/[^A-Za-z0-9À-ſ]+/).filter(Boolean).length;
+    if (sh.length === 1 && rawN > 1 && lg.length > 1) return false;          // « Paris FC » n'est pas « Paris Saint-Germain »
+    sh = sh.filter(function (t) { return t.length >= 3; });
+    return !!sh.length && sh.every(function (t) {
+      return lg.some(function (u) { return u.indexOf(t.slice(0, Math.min(t.length, 4))) === 0 || t.indexOf(u.slice(0, Math.min(u.length, 4))) === 0; });
+    });
   }
   function extFor(c) {           // prédiction API-Football du même match (même jour, une équipe en commun)
     var hit = D.ext.filter(function (e) { return e.date === c.date && (sameTeam(e.home, c.home) || sameTeam(e.away, c.away)); });
@@ -3420,7 +3434,7 @@
   function xTeam(name, score, live) { return '<span class="xtm">' + crest(name) + '<em>' + esc(nm(name)) + '</em>' + (score != null ? '<b class="' + (live ? 'lv' : '') + '">' + score + '</b>' : '') + '</span>'; }
   function xrow(m) {
     var on = !!favs[m.k], lv = m.state === 'live', dn = m.state === 'done', sc = m.sc;
-    var left = lv ? '<b class="lv">' + esc(sc && sc.clock ? sc.clock : 'Live') + '</b>' : dn ? '<b>FIN</b>' : '<b>' + esc(m.time || '–') + '</b>';
+    var left = lv ? '<b class="lv">' + esc(sc && sc.clock ? sc.clock : 'Live') + '</b>' + (m.time ? '<small class="kt">' + esc(m.time) + '</small>' : '') : dn ? '<b>FIN</b>' + (m.time ? '<small class="kt">' + esc(m.time) + '</small>' : '') : '<b>' + esc(m.time || '–') + '</b>';
     var right;
     if (lv) right = '<span class="xl lv"><i></i>EN DIRECT</span><span class="xv m">Live' + svg(IC.chev) + '</span>';
     else if (dn) right = (m.hit === true ? '<span class="xl ok">' + svg(IC.check) + 'Pronostic réussi</span>' : m.hit === false ? '<span class="xl ko">' + svg(IC.x) + 'Raté</span>' : (m.note ? '<span class="xl">' + esc(m.note) + '</span>' : '<span class="xl">Terminé</span>')) + (m.open ? '<span class="xv ' + (m.hit === true ? 'g' : m.hit === false ? 'r' : 'n') + '">Bilan' + svg(IC.chev) + '</span>' : '');
@@ -3658,21 +3672,23 @@
     return out;
   }
   function cmbGen() {
-    var T = parisToday();
-    if (CMB.gen[T] || !TODAY.ts) return;
-var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T)), more = (R.more || []).concat(cmbFootPool(T, true)), seen = {}, now = Date.now(), mk = function (kind, legs) { CMB.n++; CMB.list.push({ id: 'C' + CMB.n, kind: kind, d: T, legs: legs, un: 0, res: null, made: now }); };
-    var ok = function (r) { return r.bid && (!r.time || kickoff({ date: T, time: r.time }) > now + 20 * 60000); };
+    var T = parisToday(), now = Date.now(), last = CMB.gen[T];
+    if (!TODAY.ts || (last > 1e12 && now - last < 45 * 60000)) return;                // une passe au plus toutes les 45 min : les nouveaux matchs de la journée complètent la liste
+    var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T)), more = (R.more || []).concat(cmbFootPool(T, true)), seen = {},
+      mk = function (kind, legs) { CMB.n++; CMB.list.push({ id: 'C' + CMB.n, kind: kind, d: T, legs: legs, un: 0, res: null, made: now }); legs.forEach(function (l) { used[l.match] = 1; }); cnt[kind]++; },
+      used = {}, cnt = { safe: 0, bold: 0, ext: 0 };
+    CMB.list.forEach(function (c) { if (c.d === T) { cnt[c.kind]++; c.legs.forEach(function (l) { used[l.match] = 1; }); } });
+    var ok = function (r) { return r.bid && !used[r.match] && (!r.time || kickoff({ date: T, time: r.time }) > now + 20 * 60000); };
     pool = pool.filter(ok).sort(function (a, b) { return b.p - a.p; }).filter(function (r) { if (seen[r.match]) return false; seen[r.match] = 1; return true; });
     var safe = pool.filter(function (r) { return r.p >= 0.72; }), i;
-    for (i = 0; i + 1 < safe.length && i < 6; i += 2) mk('safe', [cmbLeg(safe[i], T), cmbLeg(safe[i + 1], T)]);
-    var used = {}; CMB.list.forEach(function (c) { if (c.d === T) c.legs.forEach(function (l) { used[l.match] = 1; }); });
+    for (i = 0; i + 1 < safe.length && cnt.safe < 4; i += 2) mk('safe', [cmbLeg(safe[i], T), cmbLeg(safe[i + 1], T)]);
     var mid = pool.filter(function (r) { return !used[r.match] && r.p >= 0.5 && r.p < 0.72; });
-    if (mid.length) mk('bold', [cmbLeg(mid[0], T)]);
-    if (mid.length > 2) mk('bold', [cmbLeg(mid[1], T), cmbLeg(mid[2], T)]);
+    if (cnt.bold < 3 && mid.length) mk('bold', [cmbLeg(mid.shift(), T)]);
+    if (cnt.bold < 3 && mid.length > 1) mk('bold', [cmbLeg(mid.shift(), T), cmbLeg(mid.shift(), T)]);
     var low = more.filter(function (r) { return ok(r) && r.p >= 0.3 && r.p < 0.55 && !used[r.match]; }).sort(function (a, b) { return b.p - a.p; });
-    if (low.length) mk('ext', [cmbLeg(low[0], T)]);
-    CMB.gen[T] = 1;
-    var keep = Date.now() - 45 * 864e5; CMB.list = CMB.list.filter(function (c) { return c.made > keep; });
+    if (cnt.ext < 2 && low.length) mk('ext', [cmbLeg(low[0], T)]);
+    CMB.gen[T] = now;
+    var keep = now - 45 * 864e5; CMB.list = CMB.list.filter(function (c) { return c.made > keep; });
     cmbSave();
   }
   function cmbPending() { return CMB.list.filter(function (c) { return (c.res === null || c.res === undefined) && !c.exp; }); }
@@ -3720,7 +3736,9 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
     var res = plRes(l), sc = plLive(l), tm = plLegTeams(l), ic;
     if (res === true) ic = '<span class="cx ok">' + svg(IC.okmark) + '</span>'; else if (res === false) ic = '<span class="cx ko">' + svg(IC.xmark) + '</span>'; else ic = '<span class="cx">' + svg(IC.clock) + '</span>';
     var scr = sc && isFinite(sc.hs) ? '<b class="csc ' + (res === true ? 'ok' : res === false ? 'ko' : '') + '">' + sc.hs + '-' + sc.as + '</b>' : '';
-    if (!un) return '<div class="cbr lk"><span class="cll">' + logoOf(l.id.split('|')[0], svg(IC.trophy)) + '<b>' + esc(l.lg || 'Match') + '</b></span><span class="clk">' + svg(IC.lock) + '<i></i></span></div>';
+    var when = sc && sc.st === 'in' ? '<small class="clk2 lv">● ' + esc(sc.clock || 'Live') + '</small>' : sc && sc.st === 'post' ? '<small class="clk2">Terminé</small>' : l.time ? '<small class="clk2">' + esc(l.time) + '</small>' : '';
+    scr = '<span class="cscw">' + scr + when + '</span>';
+    if (!un) return '<div class="cbr lk"><span class="cll">' + logoOf(l.id.split('|')[0], svg(IC.trophy)) + '<b>' + esc(l.lg || 'Match') + (l.time ? ' · ' + esc(l.time) : '') + '</b></span><span class="clk">' + svg(IC.lock) + '<i></i></span></div>';
     return '<div class="cbr"><div class="clm"><b>' + esc(tm ? nm(tm[0]) + ' - ' + nm(tm[1]) : l.match) + '</b><span class="cbk">' + esc(legTxt(l)) + '</span></div>' + scr + ic + '</div>';
   }
   function cmbCard(c) {
@@ -4426,12 +4444,12 @@ var R = todayRows(), pool = R.picks.concat(plCalPicks(T)).concat(cmbFootPool(T))
   function plansTick() {
     if (document.visibilityState !== 'visible') return;
     if (st.tab === 'today' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
-    if (st.tab === 'combo' && !st.detail && !typing() && cmbLiveWanted()) todayLoad();          // fin de match : combos réglés sans attendre
+    if (st.tab === 'combo' && !st.detail && !typing()) todayLoad();          // matchs et scores rechargés (au plus toutes les 3 min) : combos complétés et réglés sans attendre
     checkNewData(false);
   }
   setInterval(plansTick, 60000);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') { checkNewData(true); plansTick(); } });
-  setTimeout(liveTick, 2500); setInterval(liveTick, 90000);                    // scores en direct : seulement quand un match est en cours
+  setTimeout(liveTick, 2500); setInterval(liveTick, 30000);                    // scores en direct : seulement quand un match est en cours
   loadLazy('logos', function (err) { if (!err && !st.detail) { var yl = window.scrollY; render(); window.scrollTo(0, yl); } });          // logos des équipes : affichés dès qu'ils sont arrivés
   Alerts.sync(favItems(), true);                                              // programme les alertes des favoris (si le sujet ntfy est renseigné)
   if (AS.alert && Alerts.topic()) todayLoad();                                  // charge les matchs du jour pour programmer les alertes de l'assistant

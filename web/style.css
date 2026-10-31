@@ -1195,3 +1195,7 @@ button.chip small{display:block}
 .oxr{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:4px;padding:7px 0;border-top:1px solid var(--line);font-size:.82rem;text-align:right;font-variant-numeric:tabular-nums}
 .oxr .oxn{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.oxr.oxh{border-top:0;color:var(--mute);font-size:.68rem;font-weight:700}
 .oxr .ok{color:var(--green);font-weight:800}.oxr .ko{color:var(--red,#f4665e);font-weight:800}
+
+.cscw{display:flex;flex-direction:column;align-items:flex-end;gap:1px;margin-left:auto;padding-left:8px}
+.clk2{font-size:.68rem;color:var(--mute);font-weight:700;white-space:nowrap}.clk2.lv{color:var(--red,#f4665e)}
+.xt small.kt{display:block;font-size:.66rem;color:var(--mute);font-weight:600}
