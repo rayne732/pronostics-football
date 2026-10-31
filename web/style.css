@@ -1214,3 +1214,5 @@ button.chip small{display:block}
 .lgfoot{color:var(--mute)!important;font-size:.74rem!important;margin-top:18px}
 .lglinks{display:flex;flex-wrap:wrap;gap:6px 14px;margin:6px 0 10px}.lglinks .lnk{color:var(--gold);font-weight:700;font-size:.8rem}
 .xconsent{display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:.84rem;line-height:1.4}.xconsent input{margin-top:3px;width:18px;height:18px}.xconsent .lnk{color:var(--gold);font-weight:700}
+
+.prb:not(:disabled){opacity:1;box-shadow:0 6px 18px color-mix(in srgb,#f39a14 35%,transparent);cursor:pointer}.prb:not(:disabled):active{transform:translateY(1px)}
