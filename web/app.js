@@ -4197,7 +4197,8 @@
     return h;
   }
   /* ---- pages légales et paiement (Stripe via les fonctions serveur pf-checkout / pf-portal, voir supabase/README_paiement.md) */
-  var BILLING = { on: false };                                      // passer à true quand les fonctions de paiement sont déployées et testées
+  var BILLING = { on: false };                                      // passer à true pour ouvrir le paiement à tout le monde. Pour tester seul : ouvrir le site avec ?billing=1 (mémorisé sur cet appareil), ?billing=0 pour retirer
+  try { if (localStorage.getItem('pf-billing') === '1') BILLING.on = true; } catch (e) { /* ignoré */ }
   var SUB = null, SUBREQ = false;
   function subLoad() {
     if (SUBREQ || !Account.on() || !BILLING.on) return;
@@ -4563,6 +4564,7 @@
   (function () {                                                    // retour de Stripe (?paid=1) et lien direct vers une page légale (?legal=cgu)
     try {
       var qs = new URLSearchParams(location.search), clean = false;
+      if (qs.get('billing') === '1' || qs.get('billing') === '0') { try { if (qs.get('billing') === '1') localStorage.setItem('pf-billing', '1'); else localStorage.removeItem('pf-billing'); } catch (e) { /* ignoré */ } BILLING.on = qs.get('billing') === '1'; clean = true; }
       if (qs.get('legal') && /^(mentions|cgu|privacy|jeu)$/.test(qs.get('legal'))) { st.legal = qs.get('legal'); st.tab = 'legal'; clean = true; }
       if (qs.get('paid') === '1') {
         clean = true; st.tab = 'prem';
