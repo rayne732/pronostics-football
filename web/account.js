@@ -100,6 +100,14 @@ var Account = (function () {
       return null;
     }).catch(function () { return null; });
   }
+  function fn(name, body) {                                        // fonction serveur (paiement) appelée avec le jeton de l'utilisateur -> objet JSON { url } ou { error }
+    return token().then(function (t) {
+      if (!t) return { error: 'auth' };
+      return fetch(API + '/functions/v1/' + name, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) }).then(function (r) {
+        return r.text().then(function (x) { var j = null; try { j = x ? JSON.parse(x) : null; } catch (e) { j = null; } if (j && !r.ok && !j.error) j.error = 'http ' + r.status; return j || { error: 'http ' + r.status }; });
+      });
+    }).catch(function () { return { error: 'network' }; });
+  }
   function rpc(name, args) {
     return token().then(function (t) { if (!t) throw new Error('auth'); return call('/rest/v1/rpc/' + name, { method: 'POST', body: args || {} }, t); }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.body; });
   }
@@ -126,7 +134,7 @@ var Account = (function () {
   }
   return {
     on: function () { return !!S; }, email: function () { return S ? S.email : ''; }, role: function () { return role; }, loadRole: loadRole, profile: profile,
-    signUp: signUp, signIn: signIn, recover: recover, changePassword: changePassword, rpc: rpc, wipeState: wipeState,
+    fn: fn, signUp: signUp, signIn: signIn, recover: recover, changePassword: changePassword, rpc: rpc, wipeState: wipeState,
     rest: rest, uid: function () { return S ? S.uid : null; }, requestCode: requestCode, verify: verify, signOut: signOut, pull: pull, push: push,
     state: function () { return { last: last, busy: busy, msg: msg }; }, set: function (o) { if ('last' in o) last = o.last; if ('busy' in o) busy = o.busy; if ('msg' in o) msg = o.msg; }
   };

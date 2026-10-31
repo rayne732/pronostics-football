@@ -2292,7 +2292,7 @@
       }
       f = '<label class="acf">Email<input data-acemail type="email" autocomplete="email" value="' + esc(AUI.email) + '"></label><label class="acf">Mot de passe<input data-acpass type="password" autocomplete="' + (AUI.mode === 'signup' ? 'new-password' : 'current-password') + '" placeholder="8 caractères minimum" value="' + esc(AUI.pass) + '"></label>' +
         '<div class="plbtns"><button class="voir mid wide" data-ac' + (AUI.mode === 'signup' ? 'signup>Créer mon compte' : 'login>Se connecter') + '</button></div>' +
-        (AUI.mode === 'login' ? '<div class="plbtns"><button class="lnk" data-acforgot>Mot de passe oublié ?</button><button class="lnk" data-acmode="code">Recevoir un code par email</button></div>' : '<div class="sub">Réservé aux majeurs. En créant un compte, tu acceptes les conditions d’utilisation.</div>');
+        (AUI.mode === 'login' ? '<div class="plbtns"><button class="lnk" data-acforgot>Mot de passe oublié ?</button><button class="lnk" data-acmode="code">Recevoir un code par email</button></div>' : '<div class="sub">Réservé aux majeurs. En créant un compte, tu acceptes les <button class="lnk" data-xlegal="cgu">conditions d’utilisation</button>.</div>');
       return h + acBox(tabs + acMsg() + f) + acBox('<div class="acperks"><span>☁️ Tes paris sur tous tes appareils</span><span>📈 Ton plan et tes statistiques sauvegardés</span><span>⭐ Accès Premium bientôt</span></div>');
     }
     var A = Account.state(), r = Account.role() || 'free', since = PROF && PROF.created_at ? new Date(PROF.created_at).toLocaleDateString('fr-FR') : '';
@@ -3947,6 +3947,7 @@
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
     h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button><button class="xcr" data-toggle-txt><span class="xcn">Taille du texte : ' + (TXT === 'xl' ? 'très grande' : TXT === 'l' ? 'grande' : 'normale') + '</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Informations légales</h3>' + Legal.titles().map(function (t) { return '<button class="xcr" data-xlegal="' + t[0] + '"><span class="xcn">' + esc(t[1]) + '</span>' + svg(IC.chev) + '</button>'; }).join('') + '</div>';
     h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
   }
@@ -3989,7 +3990,7 @@
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xtier],[data-xrefcopy],[data-xrefshare],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xlegal],[data-xbuy],[data-xportal],[data-xconsent],[data-xtier],[data-xrefcopy],[data-xrefshare],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -4018,6 +4019,17 @@
       var rl = refLink();
       if (t.hasAttribute('data-xrefshare') && navigator.share) navigator.share({ title: 'Pronostics', text: 'Rejoins-moi sur Pronostics : on gagne des clés tous les deux avec ce lien.', url: rl }).catch(function () { /* partage annulé */ });
       else if (navigator.clipboard) navigator.clipboard.writeText(rl).then(function () { toast('Lien copié'); });
+      return;
+    }
+    if (t.hasAttribute('data-xlegal')) { st.legal = a('data-xlegal'); xGo('legal'); return; }
+    if (t.hasAttribute('data-xconsent')) { PREM.ok = !!t.checked; return; }
+    if (t.hasAttribute('data-xbuy') || t.hasAttribute('data-xportal')) {
+      if (t.hasAttribute('data-xbuy') && !PREM.ok) { toast('Coche d’abord la case pour accepter les conditions.'); return; }
+      toast('Ouverture de la page de paiement…');
+      (t.hasAttribute('data-xbuy') ? Account.fn('pf-checkout', { tier: PREM.tier, period: PREM.per }) : Account.fn('pf-portal', {})).then(function (res) {
+        if (res && res.url) { location.href = res.url; return; }
+        toast(res && res.error === 'already' ? 'Tu es déjà abonné : utilise « Gérer mon abonnement ».' : res && res.error === 'auth' ? 'Connecte-toi d’abord.' : 'Paiement indisponible pour l’instant, réessaie plus tard.');
+      });
       return;
     }
     if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
@@ -4163,7 +4175,7 @@
   });
 
   /* ---- Premium : un seul niveau, trois durées (le paiement n'est pas encore ouvert) */
-  var PREM = { per: 'month', tier: 'premium' };
+  var PREM = { per: 'month', tier: 'premium', ok: false };
   var PRICES = { premium: { week: ['Semaine', '2,99 €', 'par semaine', ''], month: ['Mois', '7,99 €', 'par mois', 'Le plus choisi'], year: ['Année', '59 €', 'par an', '2 mois offerts'] },
     supreme: { week: ['Semaine', '4,99 €', 'par semaine', ''], month: ['Mois', '12,99 €', 'par mois', 'Tout illimité'], year: ['Année', '99 €', 'par an', '2 mois offerts'] } };
   var PFEAT = [['Pronostics, favoris et ligues', 0], ['Suivi de tes paris, statistiques et synchronisation', 0], ['1 clé combo par jour (+ clés de parrainage)', 0], ['Fiche détaillée de tous les matchs (gratuit : 1 par jour)', 1],
@@ -4179,8 +4191,38 @@
     h += '<div class="cpc">' + PFEAT.map(function (f) { var inc = f[1] <= T; return '<div class="pfr ' + (inc && f[1] ? 'pm' : '') + '"><span class="cx ' + (inc ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + LEVELN[f[1]] + '</small></div>'; }).join('') + '</div>';
     h += '<button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button>';
     h += '<button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Voir les résultats réels du modèle</span>' + svg(IC.chev) + '</button>';
-    h += '<button class="cmbb prb" disabled>Paiement bientôt disponible</button><p class="xfine">Les prix sont indicatifs et pourront changer avant l’ouverture. Rien n’est débité pour l’instant. Les pronostics restent des estimations : aucun gain n’est garanti.</p>';
+    subLoad();
+    h += billingBlock(on, r);
+    h += '<p class="xfine">' + (BILLING.on ? 'Résiliable à tout moment, remboursement sous 14 jours.' : 'Les prix sont indicatifs et pourront changer avant l’ouverture. Rien n’est débité pour l’instant.') + ' Les pronostics restent des estimations : aucun gain n’est garanti. Jouer comporte des risques : 09 74 75 13 13.</p>' + legalLinks();
     return h;
+  }
+  /* ---- pages légales et paiement (Stripe via les fonctions serveur pf-checkout / pf-portal, voir supabase/README_paiement.md) */
+  var BILLING = { on: false };                                      // passer à true quand les fonctions de paiement sont déployées et testées
+  var SUB = null, SUBREQ = false;
+  function subLoad() {
+    if (SUBREQ || !Account.on() || !BILLING.on) return;
+    SUBREQ = true;
+    Account.rest('GET', '/rest/v1/pf_subscriptions?select=tier,period,status,current_period_end,cancel_at').then(function (r) {
+      if (r && r.ok && Array.isArray(r.body)) { SUB = r.body[0] || false; if (st.tab === 'prem' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+    }).catch(function () { /* ignoré */ });
+  }
+  function legalLinks() {
+    return '<div class="lglinks">' + Legal.titles().map(function (t) { return '<button class="lnk" data-xlegal="' + t[0] + '">' + esc(t[1]) + '</button>'; }).join('') + '</div>';
+  }
+  function legalHTML() {
+    var k = st.legal || 'cgu', todo = Legal.todo(), adm = Account.on() && Account.role() === 'admin';
+    return '<button class="xback own" data-xtab="set" aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button>' + legalLinks() +
+      (adm && todo.length ? '<div class="bt-warn">Admin : ' + todo.length + ' information' + (todo.length > 1 ? 's' : '') + ' à compléter dans web/legal.js (' + esc(todo.join(', ')) + ') avant d’ouvrir les paiements.</div>' : '') + Legal.page(k);
+  }
+  function billingBlock(on, r) {
+    if (!BILLING.on) return '<button class="cmbb prb" disabled>Paiement bientôt disponible</button>';
+    if (on && r !== 'admin' && SUB && SUB.status) {
+      var end = SUB.current_period_end ? new Date(SUB.current_period_end).toLocaleDateString('fr-FR') : '';
+      return '<div class="acok">Abonnement ' + esc(ROLES[SUB.tier] || SUB.tier) + ' · ' + esc({ active: 'actif', trialing: 'essai gratuit en cours', past_due: 'paiement en retard', canceled: 'résilié' }[SUB.status] || SUB.status) + (end ? ' · jusqu’au ' + end : '') + (SUB.cancel_at ? ' (résiliation programmée)' : '') + '</div><button class="cmbb prb" data-xportal>Gérer mon abonnement</button>';
+    }
+    if (!Account.on()) return '<button class="cmbb prb" data-xacct>Créer un compte pour s’abonner</button>';
+    return '<label class="xconsent"><input type="checkbox" data-xconsent' + (PREM.ok ? ' checked' : '') + '><span>J’ai 18 ans ou plus et j’accepte les <button class="lnk" data-xlegal="cgu">conditions générales</button>.</span></label>' +
+      '<button class="cmbb prb" data-xbuy>' + (SUB === false || !SUB ? 'Essayer 3 jours gratuits' : 'S’abonner') + ' · ' + esc(PRICES[PREM.tier][PREM.per][1]) + ' ' + esc(PRICES[PREM.tier][PREM.per][2]) + '</button>';
   }
   var FREE_POSTS = 3;
   function postsToday() { var T = new Date().toDateString(); return (CM.posts || []).filter(function (p) { return p.user_id === Account.uid() && new Date(p.created_at).toDateString() === T; }).length; }
@@ -4241,7 +4283,7 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', proof: 'home', ref: 'soc', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', legal: 'home', proof: 'home', ref: 'soc', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -4275,6 +4317,7 @@
     else if (st.tab === 'set') app.innerHTML = setHTML();
     else if (st.tab === 'proof') app.innerHTML = proofHTML();
     else if (st.tab === 'ref') app.innerHTML = refHTML();
+    else if (st.tab === 'legal') app.innerHTML = legalHTML();
     else if (st.tab === 'today') app.innerHTML = socHead() + todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsV2();
@@ -4517,6 +4560,20 @@
     if (tb === 'lig') X.lg = null;
     st.tab = tb === 'soc' ? X.lastSoc : tb; st.detail = null; st.pushed = false; render(); window.scrollTo(0, 0);
   });
+  (function () {                                                    // retour de Stripe (?paid=1) et lien direct vers une page légale (?legal=cgu)
+    try {
+      var qs = new URLSearchParams(location.search), clean = false;
+      if (qs.get('legal') && /^(mentions|cgu|privacy|jeu)$/.test(qs.get('legal'))) { st.legal = qs.get('legal'); st.tab = 'legal'; clean = true; }
+      if (qs.get('paid') === '1') {
+        clean = true; st.tab = 'prem';
+        setTimeout(function () {                                  // le webhook peut prendre quelques secondes : on relit le niveau plusieurs fois
+          toast('Merci ! Ton abonnement s’active…'); var n = 0;
+          (function again() { Account.loadRole().then(function () { n++; if (n < 8 && !premium()) setTimeout(again, 3000); else { SUBREQ = false; subLoad(); render(); } }); })();
+        }, 800);
+      } else if (qs.get('paid') === '0') { clean = true; setTimeout(function () { toast('Paiement annulé : rien n’a été débité.'); }, 800); }
+      if (clean) { history.replaceState(null, '', location.pathname + location.hash); render(); }
+    } catch (e) { /* ignoré */ }
+  })();
   setTimeout(refSync, 3000);
   Bets.resolver = function (id, m, sel) {
     if (!isLoaded('res') || !D.res) return null;

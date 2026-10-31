@@ -32,6 +32,15 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Tests du paiement (signature Stripe, webhook, abonnements)
+        id: billing
+        run: |
+          node tests/stripe_sig_test.mjs
+          node tests/billing_webhook_test.mjs
+        continue-on-error: true
       - name: Tests du moteur de marchés (probabilités valides, totaux à 100 %)
         id: tests
         run: node tests/engine_test.js
@@ -41,7 +50,7 @@ jobs:
         run: python tests/settlement_audit.py
         continue-on-error: true
       - name: Prévenir si un test échoue
-        if: steps.tests.outcome == 'failure' || steps.audit.outcome == 'failure'
+        if: steps.tests.outcome == 'failure' || steps.audit.outcome == 'failure' || steps.billing.outcome == 'failure'
         env:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: |
