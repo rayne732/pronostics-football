@@ -9,6 +9,7 @@ const calls = [];
 globalThis.fetch = async (url, init = {}) => {
   calls.push({ url: String(url), method: init.method ?? 'GET', body: init.body ? String(init.body) : '' });
   const u = String(url);
+  if (u.includes('pf_subscriptions?select=since')) return new Response(JSON.stringify([{ since: '2026-11-01T10:00:00.000Z' }]), { status: 200 });
   if (u.includes('pf_subscriptions?select=user_id')) return new Response(JSON.stringify([{ user_id: 'u-from-customer' }]), { status: 200 });
   if (u.startsWith('https://api.stripe.com/v1/subscriptions/')) return new Response(JSON.stringify(subFor('sub_9', 'active')), { status: 200 });
   return new Response('', { status: 200 });
@@ -31,7 +32,9 @@ let r = await send({ type: 'customer.subscription.created', data: { object: subF
 expect('abonnement en essai : 200', r.status === 200);
 expect('abonnement en essai : rôle supreme', patch() && JSON.parse(patch().body).role === 'supreme');
 expect('l’admin n’est jamais modifié', patch() && patch().url.includes('role=neq.admin') && patch().url.includes('user_id=eq.u1'));
+expect('ancienneté déjà connue conservée', upsert() && JSON.parse(upsert().body).since === '2026-11-01T10:00:00.000Z');
 expect('ligne d’abonnement enregistrée', upsert() && JSON.parse(upsert().body).tier === 'supreme' && JSON.parse(upsert().body).period === 'year');
+expect('date de début d’abonnement enregistrée', upsert() && !isNaN(Date.parse(JSON.parse(upsert().body).since)));
 
 r = await send({ type: 'customer.subscription.updated', data: { object: subFor('sub_1', 'canceled', 'pf_premium_month') } });
 expect('abonnement terminé : retour au gratuit', patch() && JSON.parse(patch().body).role === 'free');
@@ -55,4 +58,4 @@ r = await send({ type: 'customer.subscription.created', data: { object: subFor('
 expect('signature fausse : refusé', r.status === 400 && !patch());
 
 if (problems.length) { console.error('ÉCHECS :\n- ' + problems.join('\n- ')); process.exit(1); }
-console.log('webhook de paiement : 9 scénarios corrects');
+console.log('webhook de paiement : 10 scénarios corrects');

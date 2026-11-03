@@ -15,8 +15,9 @@ async function syncSubscription(sub: any) {
   if (!uid) uid = (await db(`pf_subscriptions?select=user_id&customer=eq.${sub.customer}`))?.[0]?.user_id;
   if (!uid) return;
   const end = sub.current_period_end ?? item?.current_period_end;
+  const prev = (await db(`pf_subscriptions?select=since&user_id=eq.${uid}`))?.[0];             // date du tout premier abonnement : sert aux badges d'ancienneté
   await db('pf_subscriptions?on_conflict=user_id', 'POST', {
-    user_id: uid, customer: sub.customer, subscription: sub.id, tier: m[1], period: m[2], status: sub.status,
+    user_id: uid, customer: sub.customer, subscription: sub.id, tier: m[1], period: m[2], status: sub.status, since: prev?.since ?? new Date().toISOString(),
     current_period_end: end ? new Date(end * 1000).toISOString() : null,
     cancel_at: sub.cancel_at ? new Date(sub.cancel_at * 1000).toISOString() : null, updated_at: new Date().toISOString(),
   }, 'resolution=merge-duplicates');

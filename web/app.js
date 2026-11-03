@@ -2216,7 +2216,12 @@
   function refCode() { var u = Account.uid(); return u ? u.replace(/-/g, '').slice(0, 8) : ''; }
   function refLink() { return location.origin + location.pathname + '?ref=' + refCode(); }
   function refSaveUsed() { try { localStorage.setItem('pf-bonus-used', String(REF.used)); } catch (e) { /* ignoré */ } if (window.pfChanged) pfChanged(); }
-  function bonusKeys() { if (!Account.on()) return 0; return Math.max(0, Math.min(REF.n, 10) * 3 + (REF.by ? 1 : 0) - REF.used); }
+  function bonusParts() {
+    var L = loyalty();
+    var p = { ref: Math.min(REF.n, 10) * 3 + (REF.by ? 1 : 0), gift: SUB && SUB.subscription ? 3 : 0, loyal: L ? L.reached : 0 };
+    p.total = p.ref + p.gift + p.loyal; return p;
+  }
+  function bonusKeys() { if (!Account.on()) return 0; return Math.max(0, bonusParts().total - REF.used); }
   function refSync() {                                              // valide un code reçu, puis recompte les amis parrainés
     if (!Account.on() || REF.busy || Date.now() - REF.last < 60000) return;          // au plus une fois par minute (sinon l'écran se redessine en boucle)
     REF.busy = true; REF.last = Date.now();
@@ -2248,7 +2253,7 @@
       '<div class="refbox"><small>Ton lien</small><b id="reflink">' + esc(link) + '</b></div>' +
       '<div class="plbtns"><button class="voir mid" data-xrefcopy>Copier le lien</button><button class="voir low" data-xrefshare>Partager</button></div></div>';
     h += '<div class="cpc"><div class="refst"><div><b>' + REF.n + '</b><small>ami' + (REF.n > 1 ? 's' : '') + ' parrainé' + (REF.n > 1 ? 's' : '') + '</small></div><div><b>' + (unlimitedKeys() ? '∞' : bonusKeys()) + '</b><small>clé' + (bonusKeys() > 1 ? 's' : '') + ' bonus</small></div></div>' +
-      (REF.by ? '<div class="sub">Tu as toi-même été parrainé : 1 clé bonus incluse.</div>' : '') + (REF.msg ? '<div class="acok">' + esc(REF.msg) + '</div>' : '') + '</div>';
+      (function () { var b = bonusParts(); return '<div class="sub">Origine de tes clés bonus : parrainage ' + b.ref + (b.gift ? ' · cadeau de bienvenue ' + b.gift : '') + (b.loyal ? ' · ancienneté ' + b.loyal : '') + (REF.used ? ' · déjà utilisées ' + REF.used : '') + '.</div>'; })() + (REF.msg ? '<div class="acok">' + esc(REF.msg) + '</div>' : '') + '</div>';
     h += '<div class="srcnote"><b>Règles.</b> Le parrainage compte quand l’ami crée un compte (moins de 7 jours avant) avec ton lien. 10 amis au maximum par personne, soit 30 clés. Les clés bonus ne périment pas et sont remboursées si le combo échoue. Un compte ne peut être parrainé qu’une fois. Les clés en plus de celle du jour servent après elle. Aucun gain d’argent n’est lié au parrainage.</div>';
     return h;
   }
@@ -2269,7 +2274,7 @@
       if (d.plan && (!PL || (d.plan.u || 0) > (PL.u || 0))) { PL = d.plan; try { localStorage.setItem('pf-plan', JSON.stringify(PL)); } catch (e) { /* ignoré */ } }
       if (typeof d.rk === 'number' && d.rk > REF.used) { REF.used = d.rk; try { localStorage.setItem('pf-bonus-used', String(REF.used)); } catch (e) { /* ignoré */ } }
       return Account.push({ v: 1, bets: Bets.dump(), plan: PL, rk: REF.used });
-    }).then(function () { Account.set({ last: Date.now(), msg: '' }); refSync(); }).catch(function (e) {
+    }).then(function () { Account.set({ last: Date.now(), msg: '' }); refSync(); subLoad(); }).catch(function (e) {
       Account.set({ msg: String(e && e.message) === 'auth' ? 'Session expirée : reconnecte-toi.' : 'Synchronisation impossible pour l’instant (tes données restent sur cet appareil).' });
     }).then(function () { Account.set({ busy: false }); acRefresh(); });
   }
@@ -2299,6 +2304,7 @@
     h += acBox('<div class="acid"><div class="acav">' + esc(initials()) + '</div><div><b>' + esc(Account.email()) + '</b><small>Niveau : <span class="acrole ' + r + '">' + esc(ROLES[r] || r) + '</span>' + (since ? ' · membre depuis le ' + since : '') + '</small></div></div>');
     h += acBox('<div class="sub">' + (A.busy ? 'Synchronisation…' : A.last ? 'Dernière synchronisation à ' + new Date(A.last).toTimeString().slice(0, 5) : 'Pas encore synchronisé') + '</div>' + (A.msg ? '<div class="bt-warn">' + esc(A.msg) + '</div>' : '') +
       '<div class="plbtns"><button class="voir mid" data-acsync>Synchroniser</button></div>', 'Synchronisation');
+    subLoad(); h += loyaltyBox();
     var isAdm = r === 'admin', cols = isAdm ? [1, 2, 3, 4] : [1, 2, 3];
     h += acBox('<table class="actab"><tr><th></th><th>Gratuit</th><th>Premium</th><th>Suprême</th>' + (isAdm ? '<th>Admin</th>' : '') + '</tr>' + ACCESS.filter(function (x) { return isAdm || x[1] || x[2] || x[3]; }).map(function (x) {
       return '<tr><td>' + esc(x[0]) + '</td>' + cols.map(function (i) { return '<td class="' + (['free', 'premium', 'supreme', 'admin'][i - 1] === r ? 'me' : '') + '">' + (x[i] ? '✓' : '–') + '</td>'; }).join('') + '</tr>';
@@ -3947,6 +3953,7 @@
     h += '<div class="xset"><h3>Sport</h3><div class="xchips wrap">' + SPORTS.map(function (x) { return '<button class="xchip' + (st.sport === x[0] ? ' on' : '') + '" data-sport="' + x[0] + '">' + x[1] + ' ' + esc(x[2]) + '</button>'; }).join('') + '</div></div>';
     var dark = curTheme() === 'dark';
     h += '<div class="xset"><h3>Affichage</h3><button class="xcr" data-toggle-theme>' + svg(THEME === 'auto' ? IC.auto : dark ? IC.sun : IC.moon) + '<span class="xcn">Thème : ' + (THEME === 'auto' ? 'automatique' : dark ? 'sombre' : 'clair') + '</span>' + svg(IC.chev) + '</button><button class="xcr" data-toggle-txt><span class="xcn">Taille du texte : ' + (TXT === 'xl' ? 'très grande' : TXT === 'l' ? 'grande' : 'normale') + '</span>' + svg(IC.chev) + '</button></div>';
+    h += '<div class="xset"><h3>Communauté</h3><button class="xcr" data-xtab="ideas">' + svg(IC.info || IC.check) + '<span class="xcn">Boîte à idées : propose et vote</span>' + svg(IC.chev) + '</button></div>';
     h += '<div class="xset"><h3>Informations légales</h3>' + Legal.titles().map(function (t) { return '<button class="xcr" data-xlegal="' + t[0] + '"><span class="xcn">' + esc(t[1]) + '</span>' + svg(IC.chev) + '</button>'; }).join('') + '</div>';
     h += '<div class="xset"><h3>Offre</h3><button class="xcr" data-xkeys>' + svg(IC.gem) + '<span class="xcn">Premium : fonctionnalités et prix</span>' + svg(IC.chev) + '</button></div><div class="xset"><h3>Outils</h3><button class="xcr" data-xtab="an">' + svg(IC.an || IC.search) + '<span class="xcn">Analyser un match</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Résultats du modèle : la preuve</span>' + svg(IC.chev) + '</button><button class="xcr" data-xtab="info">' + svg(IC.info || IC.check) + '<span class="xcn">Fiabilité du modèle</span>' + svg(IC.chev) + '</button><button class="xcr" data-xalerts>' + svg(IC.bell) + '<span class="xcn">Alertes sur mes favoris</span>' + svg(IC.chev) + '</button></div>';
     return h;
@@ -3990,7 +3997,7 @@
     var y0 = window.scrollY; render(); window.scrollTo(0, y0);
   });
   app.addEventListener('click', function (e) {
-    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xlegal],[data-xbuy],[data-xportal],[data-xconsent],[data-xtier],[data-xrefcopy],[data-xrefshare],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
+    var t = e.target.closest('[data-xfav],[data-xlf],[data-xgc],[data-xday],[data-xst],[data-xfo],[data-xsrch],[data-xsort],[data-xhc],[data-xff],[data-xfs],[data-xlgc],[data-xlgl],[data-xlv],[data-xidea-add],[data-xidea-vote],[data-xidea-del],[data-xlegal],[data-xbuy],[data-xportal],[data-xconsent],[data-xtier],[data-xrefcopy],[data-xrefshare],[data-xreload],[data-xpotd],[data-xlgback],[data-xcs],[data-xcsp],[data-xcbk],[data-cmbopen],[data-cmbun],[data-xhow],[data-xkeys],[data-xper],[data-xbk],[data-xacct],[data-xset],[data-xbell],[data-xsoc],[data-xback],[data-xtab],[data-xalerts],[data-calopen],[data-sport]');
     if (!t) return;
     var y0 = window.scrollY, a = function (n) { return t.getAttribute(n); };
     if (t.hasAttribute('data-xfav')) { e.stopPropagation(); xToggleFav(a('data-xfav')); render(); window.scrollTo(0, y0); return; }
@@ -4030,6 +4037,22 @@
         if (res && res.url) { location.href = res.url; return; }
         toast(res && res.error === 'already' ? 'Tu es déjà abonné : utilise « Gérer mon abonnement ».' : res && res.error === 'auth' ? 'Connecte-toi d’abord.' : 'Paiement indisponible pour l’instant, réessaie plus tard.');
       });
+      return;
+    }
+    if (t.hasAttribute('data-xidea-add')) {
+      var txt = (IDEAS.draft || '').trim();
+      if (txt.length < 10) { IDEAS.msg = 'Ton idée est trop courte (10 caractères au minimum).'; render(); window.scrollTo(0, y0); return; }
+      Account.rpc('pf_idea_add', { p_body: txt }).then(function () { IDEAS.draft = ''; IDEAS.msg = ''; toast('Idée ajoutée, merci !'); ideasLoad(true); })
+        .catch(function () { IDEAS.msg = 'Impossible d’ajouter l’idée (limite de 3 par jour, ou abonnement requis).'; render(); });
+      return;
+    }
+    if (t.hasAttribute('data-xidea-vote')) {
+      var vp = a('data-xidea-vote').split('|');
+      Account.rpc('pf_idea_vote', { p_idea: vp[0], p_on: vp[1] === '1' }).then(function () { ideasLoad(true); }).catch(function () { toast('Vote impossible : réservé aux abonnés.'); });
+      return;
+    }
+    if (t.hasAttribute('data-xidea-del')) {
+      Account.rpc('pf_idea_delete', { p_idea: a('data-xidea-del') }).then(function () { ideasLoad(true); }).catch(function () { toast('Suppression impossible'); });
       return;
     }
     if (t.hasAttribute('data-xlv')) { X.lv = a('data-xlv'); render(); return; }
@@ -4190,6 +4213,7 @@
     h += '<div class="prc"><b class="prp">' + P[1] + '</b><span>' + P[2] + '</span>' + (P[3] ? '<em>' + P[3] + '</em>' : '') + '<small>3 jours d’essai offerts · résiliable à tout moment</small></div>';
     h += '<div class="cpc">' + PFEAT.map(function (f) { var inc = f[1] <= T; return '<div class="pfr ' + (inc && f[1] ? 'pm' : '') + '"><span class="cx ' + (inc ? 'ok' : '') + '">' + svg(IC.okmark) + '</span><span>' + esc(f[0]) + '</span><small>' + LEVELN[f[1]] + '</small></div>'; }).join('') + '</div>';
     h += '<button class="xcr" data-xtab="ref">' + svg(IC.key) + '<span class="xcn">Parrainage : gagne des clés</span>' + svg(IC.chev) + '</button>';
+    h += '<button class="xcr" data-xtab="ideas">' + svg(IC.info || IC.check) + '<span class="xcn">Boîte à idées des abonnés</span>' + svg(IC.chev) + '</button>';
     h += '<button class="xcr" data-xtab="proof">' + svg(IC.shield) + '<span class="xcn">Voir les résultats réels du modèle</span>' + svg(IC.chev) + '</button>';
     subLoad();
     h += billingBlock(on, r);
@@ -4200,13 +4224,91 @@
   var BILLING = { on: false };                                      // passer à true pour ouvrir le paiement à tout le monde. Pour tester seul : ouvrir le site avec ?billing=1 (mémorisé sur cet appareil), ?billing=0 pour retirer
   try { if (localStorage.getItem('pf-billing') === '1') BILLING.on = true; } catch (e) { /* ignoré */ }
   var SUB = null, SUBREQ = false;
+  try { var sc0 = JSON.parse(localStorage.getItem('pf-subc') || 'null'); if (sc0 && sc0.subscription) SUB = sc0; } catch (e) { /* ignoré */ }          // dernière valeur connue (évite le clignotement)
   function subLoad() {
-    if (SUBREQ || !Account.on() || !BILLING.on) return;
+    if (SUBREQ || !Account.on()) return;
     SUBREQ = true;
-    Account.rest('GET', '/rest/v1/pf_subscriptions?select=tier,period,status,current_period_end,cancel_at').then(function (r) {
-      if (r && r.ok && Array.isArray(r.body)) { SUB = r.body[0] || false; if (st.tab === 'prem' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } }
+    Account.rest('GET', '/rest/v1/pf_subscriptions?select=subscription,tier,period,status,current_period_end,cancel_at,since').then(function (r) {
+      if (r && r.ok && Array.isArray(r.body)) {
+        SUB = r.body[0] || false;
+        try { localStorage.setItem('pf-subc', JSON.stringify(SUB ? { subscription: SUB.subscription, since: SUB.since } : null)); } catch (e) { /* ignoré */ }
+        welcomeCheck();
+        if ((st.tab === 'prem' || st.tab === 'account' || st.tab === 'ref') && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); }
+      }
     }).catch(function () { /* ignoré */ });
   }
+  var FOUNDER_UNTIL = '2027-03-01';                                 // abonné avant cette date = « Membre fondateur »
+  var LOYAL = [[12, 'Or', '🥇'], [6, 'Argent', '🥈'], [1, 'Bronze', '🥉']];      // mois d'ancienneté -> palier
+  function loyalty() {                                              // d'après la date du premier abonnement, enregistrée côté serveur
+    if (!SUB || !SUB.since) return null;
+    var since = new Date(SUB.since); if (isNaN(since)) return null;
+    var months = Math.floor((Date.now() - since) / (30.44 * 864e5)), t = LOYAL.filter(function (x) { return months >= x[0]; });
+    return { since: since, months: months, tier: t[0] || null, reached: t.length, founder: since < new Date(FOUNDER_UNTIL) };
+  }
+  function loyaltyBox() {
+    var L = loyalty();
+    if (!L) return '';
+    var next = LOYAL.slice().reverse().filter(function (x) { return L.months < x[0]; })[0];
+    return acBox('<div class="lyl">' + (L.founder ? '<span class="lyb">🏅 Membre fondateur</span>' : '') + (L.tier ? '<span class="lyb">' + L.tier[2] + ' ' + L.tier[1] + '</span>' : '') + '</div><div class="sub">Abonné depuis le ' + L.since.toLocaleDateString('fr-FR') + ' (' + L.months + ' mois). Chaque palier (1, 6 et 12 mois) offre 1 clé combo bonus.' +
+      (next ? ' Prochain palier : ' + next[2] + ' ' + next[1] + ' à ' + next[0] + ' mois.' : ' Tu as atteint tous les paliers, merci !') + '</div>', 'Mon ancienneté');
+  }
+  function welcomeCheck() {                                         // une seule fois par abonnement : remerciement et cadeau
+    if (!SUB || !SUB.subscription || ['trialing', 'active'].indexOf(SUB.status) < 0) return;
+    var seen = ''; try { seen = localStorage.getItem('pf-welcomed') || ''; } catch (e) { /* ignoré */ }
+    if (seen === SUB.subscription) return;
+    try { localStorage.setItem('pf-welcomed', SUB.subscription); } catch (e) { /* ignoré */ }
+    var old = document.getElementById('pw'); if (old) old.remove();
+    var el = document.createElement('div'); el.id = 'pw'; el.className = 'pw';
+    var name = (Account.email() || '').split('@')[0] || 'toi';
+    el.innerHTML = '<div class="pwb"><h3>Merci ' + esc(name) + ' ! 🎉</h3><p>Ton accès <b>' + esc(ROLES[SUB.tier] || 'Premium') + '</b> est actif. Pour te remercier :</p><ul class="wl"><li>🎁 <b>3 clés combo bonus</b> offertes (elles ne périment pas)</li><li>🏅 ' + (loyalty() && loyalty().founder ? 'le badge <b>Membre fondateur</b>' : 'des badges d’ancienneté (1, 6 et 12 mois)') + '</li><li>💡 la <b>boîte à idées</b> : propose et vote pour les prochaines nouveautés</li></ul>' +
+      '<button class="voir mid wide" data-w="ref">Voir mes clés bonus</button><button class="voir low wide" data-w="ideas" style="margin-top:8px">Proposer une idée</button><button class="lnk" data-w="x">Fermer</button></div>';
+    document.body.appendChild(el);
+    el.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-w]'); if (!b) return;
+      el.remove(); var w = b.getAttribute('data-w');
+      if (w === 'ref' || w === 'ideas') xGo(w);
+    });
+  }
+  /* ---- boîte à idées : les abonnés proposent et votent, tout le monde lit ; ce qui est réalisé forme le journal des nouveautés */
+  var IDEAS = { list: null, busy: false, msg: '', last: 0, draft: '' };
+  var ISTAT = { open: 'Proposée', planned: 'Prévu 🛠', done: 'Réalisé ✅', declined: 'Pas retenu' };
+  function ideasLoad(force) {
+    if (!Account.on() || IDEAS.busy || (!force && Date.now() - IDEAS.last < 30000)) return;
+    IDEAS.busy = true; IDEAS.last = Date.now();
+    Account.rpc('pf_ideas_list').then(function (rows) { IDEAS.list = Array.isArray(rows) ? rows : []; IDEAS.msg = IDEAS.msg === 'load' ? '' : IDEAS.msg; })
+      .catch(function () { if (IDEAS.list === null) IDEAS.msg = 'load'; })
+      .then(function () { IDEAS.busy = false; if (st.tab === 'ideas' && !st.detail && !typing()) { var y0 = window.scrollY; render(); window.scrollTo(0, y0); } });
+  }
+  function ideaRow(i, admin) {
+    var paid = premium();
+    return '<div class="idr ' + i.status + '"><button class="idv' + (i.voted ? ' on' : '') + '" data-xidea-vote="' + i.id + '|' + (i.voted ? 0 : 1) + '" aria-label="Voter"' + (paid ? '' : ' disabled') + '>▲<b>' + i.votes + '</b></button>' +
+      '<div class="idb"><p>' + esc(i.body) + '</p><small>par ' + esc(i.author) + ' · ' + dshort(isoDate(new Date(i.created_at))) + ' · <span class="ids ' + i.status + '">' + ISTAT[i.status] + '</span></small>' +
+      (admin ? '<select data-xidea-st="' + i.id + '">' + Object.keys(ISTAT).map(function (k) { return '<option value="' + k + '"' + (i.status === k ? ' selected' : '') + '>' + ISTAT[k] + '</option>'; }).join('') + '</select>' : '') +
+      (i.mine && i.status === 'open' || admin ? ' <button class="lnk" data-xidea-del="' + i.id + '">Supprimer</button>' : '') + '</div></div>';
+  }
+  function ideasHTML() {
+    var h = '<button class="xback own" data-xtab="set" aria-label="Retour">' + svg('<path d="M15 5l-7 7 7 7"/>') + '</button><header class="xhd col"><div><h1>💡 Boîte à idées</h1><small>Tu proposes, les abonnés votent, on construit</small></div></header>';
+    if (!Account.on()) return h + '<div class="cpc"><div class="hl3"><p>Connecte-toi pour lire les idées. Les <b>abonnés</b> peuvent en proposer et voter.</p></div><button class="voir mid wide" data-xacct>Se connecter</button></div>';
+    ideasLoad(false);
+    var paid = premium(), adm = Account.role() === 'admin';
+    if (paid) h += '<div class="cpc"><textarea id="idea-text" class="idt" maxlength="280" rows="3" placeholder="Ton idée pour améliorer Pronostics (10 à 280 caractères)">' + esc(IDEAS.draft) + '</textarea><button class="voir mid wide" data-xidea-add>Proposer mon idée</button><div class="sub">3 idées par jour au maximum. Les idées réalisées sont notées « Réalisé ✅ » avec ton nom si c’est toi qui l’as proposée.</div></div>';
+    else h += '<div class="cpc"><div class="hl3"><p>Proposer et voter est <b>réservé aux abonnés</b> Premium et Suprême. Tout le monde peut lire.</p></div><button class="voir mid wide" data-xtab="prem">Voir les offres</button></div>';
+    if (IDEAS.msg && IDEAS.msg !== 'load') h += '<div class="bt-warn">' + esc(IDEAS.msg) + '</div>';
+    if (IDEAS.msg === 'load') h += '<div class="bt-warn">Impossible de charger les idées (la base n’est pas encore prête ?).</div>';
+    var L = IDEAS.list;
+    if (L === null) return h + (IDEAS.msg === 'load' ? '' : skel(3));
+    var open = L.filter(function (i) { return i.status !== 'done' && i.status !== 'declined'; }), done = L.filter(function (i) { return i.status === 'done'; });
+    h += '<div class="sec"><span class="dot g"></span>Idées en cours <small>' + open.length + '</small></div>' + (open.length ? open.map(function (i) { return ideaRow(i, adm); }).join('') : '<div class="empty">Aucune idée pour l’instant. Sois le premier !</div>');
+    if (done.length) h += '<div class="sec"><span class="dot a"></span>Réalisé grâce à vous <small>' + done.length + '</small></div>' + done.map(function (i) { return ideaRow(i, adm); }).join('');
+    var dec = L.filter(function (i) { return i.status === 'declined'; });
+    if (adm && dec.length) h += '<div class="sec"><span class="dot b"></span>Pas retenues <small>' + dec.length + '</small></div>' + dec.map(function (i) { return ideaRow(i, adm); }).join('');
+    return h;
+  }
+  document.addEventListener('input', function (e) { if (e.target && e.target.id === 'idea-text') IDEAS.draft = e.target.value; });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-xidea-st')) return;
+    Account.rpc('pf_admin_idea_status', { p_idea: t.getAttribute('data-xidea-st'), p_status: t.value }).then(function () { ideasLoad(true); }).catch(function () { toast('Changement impossible'); });
+  });
   function legalLinks() {
     return '<div class="lglinks">' + Legal.titles().map(function (t) { return '<button class="lnk" data-xlegal="' + t[0] + '">' + esc(t[1]) + '</button>'; }).join('') + '</div>';
   }
@@ -4284,7 +4386,7 @@
       if (/^En (cours|direct)/.test(t)) els[i].classList.add('live'); else if (/^Terminé/.test(t)) els[i].classList.add('done');
     }
   }
-  var NAVOF = { home: 'home', set: 'home', legal: 'home', proof: 'home', ref: 'soc', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
+  var NAVOF = { home: 'home', set: 'home', legal: 'home', ideas: 'soc', proof: 'home', ref: 'soc', an: 'home', info: 'home', fav: 'fav', combo: 'combo', lig: 'lig', bets: 'soc', comm: 'soc', prem: 'soc', today: 'soc', account: 'soc', ticket: 'soc' };
   function renderNav() {
     var items = [['home', 'Découvrir'], ['fav', 'Favoris'], ['combo', 'Combo'], ['lig', 'Ligues'], ['soc', 'Social']], cur = NAVOF[st.tab] || 'home';
     nav.innerHTML = '<div class="in">' + items.map(function (x) {
@@ -4319,6 +4421,7 @@
     else if (st.tab === 'proof') app.innerHTML = proofHTML();
     else if (st.tab === 'ref') app.innerHTML = refHTML();
     else if (st.tab === 'legal') app.innerHTML = legalHTML();
+    else if (st.tab === 'ideas') app.innerHTML = ideasHTML();
     else if (st.tab === 'today') app.innerHTML = socHead() + todayHTML();
     else if (st.tab === 'an') app.innerHTML = anHTML();
     else if (st.tab === 'fav') app.innerHTML = favsV2();
@@ -4576,7 +4679,7 @@
       if (clean) { history.replaceState(null, '', location.pathname + location.hash); render(); }
     } catch (e) { /* ignoré */ }
   })();
-  setTimeout(refSync, 3000);
+  setTimeout(refSync, 3000); setTimeout(subLoad, 3500);
   Bets.resolver = function (id, m, sel) {
     if (!isLoaded('res') || !D.res) return null;
     var r = D.res.m && D.res.m[id], i;
